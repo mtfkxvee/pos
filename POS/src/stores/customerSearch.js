@@ -31,9 +31,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 				name: (customer.customer_name || "").toLowerCase(),
 				mobile: (customer.mobile_no || "").toLowerCase(),
 				email: (customer.email_id || "").toLowerCase(),
-				name: (customer.customer_name || "").toLowerCase(),
-				mobile: (customer.mobile_no || "").toLowerCase(),
-				email: (customer.email_id || "").toLowerCase(),
+
 				id: (customer.name || "").toLowerCase(),
 				code: (customer.custom_kode_pelanggan || "").toLowerCase(),
 				// Pre-compute word starts for super fast word matching

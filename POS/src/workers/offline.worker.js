@@ -1585,7 +1585,8 @@ async function fetchCustomers(posProfile) {
 			body: JSON.stringify({
 				pos_profile: posProfile,
 				start: 0,
-				limit: 0 // 0 means all
+				limit: 0, // 0 means all
+				fields: ['*', 'custom_kode_pelanggan']
 			}),
 			signal: controller.signal
 		})
