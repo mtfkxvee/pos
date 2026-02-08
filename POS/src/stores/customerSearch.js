@@ -31,7 +31,11 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 				name: (customer.customer_name || "").toLowerCase(),
 				mobile: (customer.mobile_no || "").toLowerCase(),
 				email: (customer.email_id || "").toLowerCase(),
+				name: (customer.customer_name || "").toLowerCase(),
+				mobile: (customer.mobile_no || "").toLowerCase(),
+				email: (customer.email_id || "").toLowerCase(),
 				id: (customer.name || "").toLowerCase(),
+				code: (customer.custom_kode_pelanggan || "").toLowerCase(),
 				// Pre-compute word starts for super fast word matching
 				nameWords: (customer.customer_name || "").toLowerCase().split(" "),
 			}
@@ -60,6 +64,10 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (cached.email.includes(term)) return 120
 
 		// ID checks
+		if (cached.code === term) return 290 // Custom Code match (Very High Priority)
+		if (cached.code.startsWith(term)) return 260
+		if (cached.code.includes(term)) return 140
+
 		if (cached.id.startsWith(term)) return 135
 		if (cached.id.includes(term)) return 90
 
