@@ -2401,6 +2401,9 @@ async function handleItemsSynced() {
 }
 
 async function handleCustomersSynced() {
+	// Reload customers into memory so they appear in search immediately
+	await customerSearchStore.loadAllCustomers(shiftStore.profileName, true);
+	
 	const stats = await offlineWorker.getCacheStats();
 	itemStore.cacheStats = stats;
 }
