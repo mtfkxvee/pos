@@ -2,6 +2,19 @@
 	<Dialog v-model="show" :options="{ title: isEditMode ? __('Edit Customer') : __('Create New Customer'), size: 'md' }">
 		<template #body-content>
 			<div class="flex flex-col gap-6">
+				<!-- Customer Code (Required) -->
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Customer Code") }} <span class="text-red-500">*</span>
+					</label>
+					<Input
+						v-model="customerData.custom_kode_pelanggan"
+						type="text"
+						:placeholder="__('Enter customer code')"
+						required
+					/>
+				</div>
+
 				<!-- Customer Name (Required) -->
 				<div>
 					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
@@ -159,7 +172,7 @@
 						variant="solid"
 						@click="handleCreate"
 						:loading="createCustomerResource.loading || updateCustomerResource.loading || checkingPermission"
-						:disabled="!customerData.customer_name || !hasPermission"
+						:disabled="!customerData.customer_name || !customerData.custom_kode_pelanggan || !hasPermission"
 					>
 						{{ isEditMode ? __("Save Changes") : __("Create Customer") }}
 					</Button>
@@ -231,6 +244,7 @@ const territories = ref(["All Territories"])
 
 const customerData = ref({
 	customer_name: "",
+	custom_kode_pelanggan: "",
 	mobile_no: "",
 	email_id: "",
 	customer_group: "Individual",
@@ -337,6 +351,7 @@ const createCustomerResource = createResource({
 		doc: {
 			doctype: "Customer",
 			customer_name: customerData.value.customer_name,
+			custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
 			customer_type: "Individual",
 			customer_group: customerData.value.customer_group || __("Individual"),
 			territory: customerData.value.territory || __("All Territories"),
@@ -362,6 +377,7 @@ const updateCustomerResource = createResource({
 		name: props.customer?.name,
 		fieldname: {
 			customer_name: customerData.value.customer_name,
+			custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
 			customer_group: customerData.value.customer_group || __("Individual"),
 			territory: customerData.value.territory || __("All Territories"),
 			mobile_no: customerData.value.mobile_no || "",
@@ -449,6 +465,9 @@ const handleCreate = async () => {
 	if (!customerData.value.customer_name) {
 		return showError(__("Customer Name is required"))
 	}
+	if (!customerData.value.custom_kode_pelanggan) {
+		return showError(__("Customer Code is required"))
+	}
 	if (isEditMode.value) {
 		await updateCustomerResource.submit()
 	} else {
@@ -459,6 +478,7 @@ const handleCreate = async () => {
 const resetForm = () => {
 	Object.assign(customerData.value, {
 		customer_name: "",
+		custom_kode_pelanggan: "",
 		mobile_no: "",
 		email_id: "",
 		customer_group: "Individual",
@@ -483,6 +503,7 @@ watch(
 	(customer) => {
 		if (customer?.name) {
 			customerData.value.customer_name = customer.customer_name || ""
+			customerData.value.custom_kode_pelanggan = customer.custom_kode_pelanggan || ""
 			customerData.value.email_id = customer.email_id || ""
 			customerData.value.customer_group = customer.customer_group || "Individual"
 			customerData.value.territory = customer.territory || "All Territories"
