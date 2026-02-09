@@ -311,65 +311,19 @@
 										-{{ formatCurrency(calculatedAdditionalDiscount) }}
 									</span>
 								</div>
-								<!-- Grid: 1/2 Counter Input, 1/4 Percentage, 1/4 Amount -->
-								<div class="grid grid-cols-4 gap-1.5">
-									<!-- Counter Input (2/4 = 1/2) -->
-									<div class="col-span-2 flex items-center border border-orange-300 rounded-lg bg-white overflow-hidden">
-										<!-- Decrement Button -->
+								<!-- Discount / Compliment Button -->
+								<div class="flex items-center gap-2">
+									<div class="flex-1">
 										<button
-											@click="decrementDiscount"
-											:disabled="localAdditionalDiscount <= 0"
-											class="h-9 w-9 flex items-center justify-center text-orange-600 hover:bg-orange-50 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors flex-shrink-0"
+											@click="showDiscountDialog = true"
+											class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-orange-300 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors text-sm font-medium"
 										>
 											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
 											</svg>
-										</button>
-										<!-- Input -->
-										<input
-											type="number"
-											v-model.number="localAdditionalDiscount"
-											@input="handleAdditionalDiscountChange"
-											:placeholder="additionalDiscountType === 'percentage' ? '0' : '0.00'"
-											min="0"
-											:max="additionalDiscountType === 'percentage' ? 100 : subtotal"
-											step="1"
-											class="flex-1 h-9 px-1 text-sm font-semibold text-center bg-transparent border-none focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-										/>
-										<!-- Increment Button -->
-										<button
-											@click="incrementDiscount"
-											class="h-9 w-9 flex items-center justify-center text-orange-600 hover:bg-orange-50 transition-colors flex-shrink-0"
-										>
-											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-											</svg>
+											{{ additionalDiscount > 0 ? __('Edit Discount / Compliment') : __('Add Discount / Compliment') }}
 										</button>
 									</div>
-									<!-- Percentage Button (1/4) -->
-									<button
-										@click="additionalDiscountType = 'percentage'; handleAdditionalDiscountTypeChange()"
-										:class="[
-											'h-9 rounded-lg text-sm font-bold transition-colors',
-											additionalDiscountType === 'percentage'
-												? 'bg-orange-500 text-white'
-												: 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
-										]"
-									>
-										%
-									</button>
-									<!-- Amount Button (1/4) -->
-									<button
-										@click="additionalDiscountType = 'amount'; handleAdditionalDiscountTypeChange()"
-										:class="[
-											'h-9 rounded-lg text-sm font-bold transition-colors',
-											additionalDiscountType === 'amount'
-												? 'bg-orange-500 text-white'
-												: 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
-										]"
-									>
-										{{ currencySymbol }}
-									</button>
 								</div>
 							</div>
 							<!-- Subtotal -->
@@ -915,9 +869,15 @@
 			<!-- End Two Column Layout -->
 		</template>
 	</Dialog>
+	<DiscountComplimentDialog
+		v-model="showDiscountDialog"
+		:subtotal="subtotal"
+		@apply="handleAdditionalDiscountChange"
+	/>
 </template>
 
 <script setup>
+import DiscountComplimentDialog from "@/components/sale/DiscountComplimentDialog.vue"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import {
 	DEFAULT_CURRENCY,
@@ -1027,6 +987,7 @@ const show = computed({
 const paymentMethods = ref([])
 const loadingPaymentMethods = ref(false)
 const lastSelectedMethod = ref(null)
+const showDiscountDialog = ref(false)
 const customAmount = ref("")
 const paymentEntries = ref([])
 const customerCredit = ref([])
@@ -2357,9 +2318,17 @@ watch(
 	() => props.modelValue,
 	(isOpen) => {
 		if (isOpen) {
-			// Only sync when dialog opens, not continuously
+			// Only sync when dialog opens, not continuousl
 			localAdditionalDiscount.value = props.additionalDiscount || 0
 		}
 	},
+)
+
+// Sync local discount when prop changes (needed for external updates like Compliment)
+watch(
+	() => props.additionalDiscount,
+	(newVal) => {
+		localAdditionalDiscount.value = newVal || 0
+	}
 )
 </script>
