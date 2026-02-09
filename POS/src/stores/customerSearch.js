@@ -337,6 +337,26 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		}
 	}
 
+
+	async function searchOnlineCustomers(searchTerm, limit = 20) {
+		if (isOffline()) {
+			throw new Error("Cannot search online customers in offline mode")
+		}
+
+		try {
+			const response = await call("pos_next.api.customers.get_customers", {
+				pos_profile: "", // Optional, can be empty
+				search_term: searchTerm,
+				start: 0,
+				limit: limit,
+			})
+			return response?.message || response || []
+		} catch (error) {
+			log.error("Error searching online customers:", error)
+			throw error
+		}
+	}
+
 	return {
 		// State
 		allCustomers,
@@ -359,5 +379,6 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		resetSelectedIndex,
 		trackCustomerSelection,
 		loadCustomerHistory,
+		searchOnlineCustomers, // New action
 	}
 })

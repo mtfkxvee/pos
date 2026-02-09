@@ -253,28 +253,62 @@
 						</button>
 					</div>
 
-					<!-- Left: Items Selector (Desktop) / Tab Content (Mobile) -->
-					<keep-alive>
-						<div
-							v-if="uiStore.isDesktop || uiStore.mobileActiveTab === 'items'"
-							:style="{
-								width: uiStore.isDesktop ? uiStore.leftPanelWidth + 'px' : '100%',
-							}"
-							:class="[
-								'flex flex-col bg-white overflow-hidden',
-								uiStore.isDesktop ? 'flex-shrink-0' : 'flex-1',
-							]"
-							style="contain: layout style paint"
-						>
-							<ItemsSelector
-								ref="itemsSelectorRef"
+					<!-- Left: Items Selector / Customer Selector -->
+					<div
+						v-if="uiStore.isDesktop || uiStore.mobileActiveTab === 'items'"
+						:style="{
+							width: uiStore.isDesktop ? uiStore.leftPanelWidth + 'px' : '100%',
+						}"
+						:class="[
+							'flex flex-col bg-white overflow-hidden',
+							uiStore.isDesktop ? 'flex-shrink-0' : 'flex-1',
+						]"
+						style="contain: layout style paint"
+					>
+						<!-- Desktop Tabs -->
+						<div v-if="uiStore.isDesktop" class="flex border-b border-gray-200 bg-white sticky top-0 z-10">
+							<button 
+								@click="activeLeftTab = 'items'" 
+								:class="[
+									'flex-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center justify-center gap-2',
+									activeLeftTab === 'items' ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+								]"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+								{{ __('Products') }}
+							</button>
+							<button 
+								@click="activeLeftTab = 'customers'" 
+								:class="[
+									'flex-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center justify-center gap-2',
+									activeLeftTab === 'customers' ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+								]"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+								{{ __('Customers (Online)') }}
+							</button>
+						</div>
+
+						<!-- Content Area -->
+						<div class="flex-1 flex flex-col min-h-0 relative">
+							<keep-alive>
+								<ItemsSelector
+									v-if="activeLeftTab === 'items'"
+									ref="itemsSelectorRef"
+									:pos-profile="shiftStore.profileName"
+									:cart-items="cartStore.invoiceItems"
+									:currency="shiftStore.profileCurrency"
+									@item-selected="handleItemSelected"
+								/>
+							</keep-alive>
+							
+							<CustomerSelector
+								v-if="activeLeftTab === 'customers'"
 								:pos-profile="shiftStore.profileName"
-								:cart-items="cartStore.invoiceItems"
-								:currency="shiftStore.profileCurrency"
-								@item-selected="handleItemSelected"
+								@customer-selected="handleCustomerSelected" 
 							/>
 						</div>
-					</keep-alive>
+					</div>
 
 					<!-- Draggable Divider (Desktop Only) -->
 					<div
@@ -974,6 +1008,7 @@ import DraftInvoicesDialog from "@/components/sale/DraftInvoicesDialog.vue";
 import InvoiceCart from "@/components/sale/InvoiceCart.vue";
 import InvoiceHistoryDialog from "@/components/sale/InvoiceHistoryDialog.vue";
 import ItemSelectionDialog from "@/components/sale/ItemSelectionDialog.vue";
+import CustomerSelector from "@/components/sale/CustomerSelector.vue"
 import ItemsSelector from "@/components/sale/ItemsSelector.vue";
 import OffersDialog from "@/components/sale/OffersDialog.vue";
 import OfflineInvoicesDialog from "@/components/sale/OfflineInvoicesDialog.vue";
@@ -1089,11 +1124,13 @@ const showStockLookup = ref(false);
 // Invoice Management dialog
 const showInvoiceManagement = ref(false);
 
-// Invoice Detail dialog
-const showInvoiceDetail = ref(false);
-const selectedInvoiceForView = ref(null);
+// Warehouse availability dialog state
+const showWarehouseDialog = ref(false)
+const warehouseDialogItem = ref(null)
 
-// Invoice history data (used by InvoiceManagement component)
+const activeLeftTab = ref('items')
+
+// Infinite scroll refstory data (used by InvoiceManagement component)
 const invoiceHistoryData = ref([]);
 
 // Sync Status Dialog
