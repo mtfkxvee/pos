@@ -872,7 +872,6 @@
 	<DiscountComplimentDialog
 		v-model="showDiscountDialog"
 		:subtotal="subtotal"
-		@apply="handleAdditionalDiscountChange"
 	/>
 </template>
 
