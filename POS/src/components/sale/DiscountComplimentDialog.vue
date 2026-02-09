@@ -201,7 +201,8 @@ function applyDiscount() {
 			code: 'MANUAL'
 		}
 		
-		cartStore.applyDiscount(discount)
+
+		cartStore.applyDiscountToCart(discount)
 		emit('apply')
 		closeDialog()
 	} catch (e) {
@@ -222,7 +223,7 @@ function applyCompliment() {
 			description: complimentReason.value
 		}
 		
-		cartStore.applyDiscount(discount)
+		cartStore.applyDiscountToCart(discount)
 		emit('apply')
 		closeDialog()
 	} catch (e) {
