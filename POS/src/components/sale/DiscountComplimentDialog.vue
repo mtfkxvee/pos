@@ -94,6 +94,16 @@
 				<!-- Action Buttons -->
 				<div class="flex gap-3 pt-6 mt-2 border-t border-gray-100">
 					<Button
+						v-if="hasAppliedDiscount"
+						variant="subtle"
+						theme="red"
+						class="flex-1"
+						size="lg"
+						@click="removeDiscount"
+					>
+						{{ __('Remove') }}
+					</Button>
+					<Button
 						variant="subtle"
 						class="flex-1"
 						size="lg"
@@ -151,7 +161,11 @@ const complimentValue = ref(0)
 const complimentType = ref('Percentage')
 const complimentReason = ref('')
 
-const currencySymbol = computed(() => settingsStore.currencySymbol || '$')
+const currencySymbol = computed(() => settingsStore.currencySymbol || 'Rp')
+
+const hasAppliedDiscount = computed(() => {
+	return cartStore.additionalDiscount > 0 || cartStore.appliedCoupon
+})
 
 const calculatedDiscountAmount = computed(() => {
 	if (discountType.value === 'Percentage') {
@@ -183,6 +197,12 @@ function closeDialog() {
 	show.value = false
 }
 
+function removeDiscount() {
+	cartStore.removeDiscountFromCart()
+	emit('apply') // Trigger update in parent if needed
+	closeDialog()
+}
+
 function handleApply() {
 	if (activeTab.value === 'discount') {
 		applyDiscount()
@@ -201,7 +221,6 @@ function applyDiscount() {
 			code: 'MANUAL'
 		}
 		
-
 		cartStore.applyDiscountToCart(discount)
 		emit('apply')
 		closeDialog()
