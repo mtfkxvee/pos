@@ -120,6 +120,10 @@ import { useCustomerSearchStore } from '@/stores/customerSearch'
 import { isOffline as getIsOffline } from '@/utils/offline'
 import CustomerDetailsDialog from './CustomerDetailsDialog.vue'
 
+const props = defineProps({
+	posProfile: String,
+})
+
 const emit = defineEmits(['customer-selected'])
 
 const customerStore = useCustomerSearchStore()
@@ -144,7 +148,7 @@ const handleSearch = debounce(async (e) => {
 	loading.value = true
 	try {
 		// Use the new online-only search action
-		const results = await customerStore.searchOnlineCustomers(term)
+		const results = await customerStore.searchOnlineCustomers(term, props.posProfile)
 		customers.value = results
 	} catch (error) {
 		console.error("Search failed:", error)
