@@ -1,12 +1,12 @@
 <template>
 	<Dialog
 		v-model="show"
-		:options="{ title: __('Apply Check / Compliment'), size: 'sm' }"
+		:options="{ title: __('Apply Check / Compliment'), size: 'md' }"
 	>
 		<template #body-content>
-			<div class="flex flex-col h-full bg-white rounded-lg">
+			<div class="space-y-4">
 				<!-- Tabs -->
-				<div class="flex-shrink-0 p-1 mb-4 bg-gray-100/80 rounded-xl">
+				<div class="flex p-1 space-x-1 bg-gray-100/80 rounded-xl">
 					<button
 						v-for="tab in tabs"
 						:key="tab.value"
@@ -23,9 +23,9 @@
 				</div>
 
 				<!-- Content Area -->
-				<div class="flex-1 min-h-0 overflow-y-auto px-1">
+				<div>
 					<!-- Discount Content -->
-					<div v-if="activeTab === 'discount'" class="space-y-4">
+					<div v-show="activeTab === 'discount'" class="space-y-4">
 						<div class="space-y-2">
 							<label class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Discount Value') }}</label>
 							<div class="flex rounded-lg shadow-sm">
@@ -53,7 +53,7 @@
 					</div>
 
 					<!-- Compliment Content -->
-					<div v-else class="space-y-4">
+					<div v-show="activeTab === 'compliment'" class="space-y-4">
 						<div class="space-y-2">
 							<label class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Compliment Value') }}</label>
 							<div class="flex rounded-lg shadow-sm">
@@ -91,32 +91,24 @@
 					</div>
 				</div>
 
-				<!-- Action Buttons (Sticky Footer) -->
-				<div class="flex-shrink-0 flex gap-3 pt-4 mt-4 border-t border-gray-100">
+				<!-- Action Buttons -->
+				<div class="flex gap-3 pt-6 mt-2 border-t border-gray-100">
 					<Button
 						variant="subtle"
 						class="flex-1"
+						size="lg"
 						@click="closeDialog"
 					>
 						{{ __('Cancel') }}
 					</Button>
 					<Button
-						v-if="activeTab === 'discount'"
 						variant="solid"
 						class="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all active:scale-[0.98]"
-						@click="applyDiscount"
+						size="lg"
+						@click="handleApply"
 						:loading="loading"
 					>
-						{{ __('Apply Discount') }}
-					</Button>
-					<Button
-						v-else
-						variant="solid"
-						class="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all active:scale-[0.98]"
-						@click="applyCompliment"
-						:loading="loading"
-					>
-						{{ __('Apply Compliment') }}
+						{{ activeTab === 'discount' ? __('Apply Discount') : __('Apply Compliment') }}
 					</Button>
 				</div>
 			</div>
@@ -189,6 +181,14 @@ function toggleComplimentType() {
 
 function closeDialog() {
 	show.value = false
+}
+
+function handleApply() {
+	if (activeTab.value === 'discount') {
+		applyDiscount()
+	} else {
+		applyCompliment()
+	}
 }
 
 function applyDiscount() {
