@@ -344,13 +344,21 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		}
 
 		try {
-			const response = await call("pos_next.api.customers.get_customers", {
-				pos_profile: posProfile || "",
-				search_term: searchTerm,
-				start: 0,
-				limit: limit,
+			console.log("Searching online customers with:", { searchTerm, posProfile })
+
+			// Fallback to standard Frappe API for robust searching
+			const searchFilters = searchTerm
+				? [["customer_name", "like", "%" + searchTerm + "%"]]
+				: []
+
+			const response = await call("frappe.client.get_list", {
+				doctype: "Customer",
+				filters: searchFilters,
+				fields: ["name", "customer_name", "mobile_no", "email_id", "image", "loyalty_program", "customer_group", "tax_id"],
+				limit_page_length: limit,
+				order_by: "creation desc"
 			})
-			return response?.message || response || []
+			return response || []
 		} catch (error) {
 			log.error("Error searching online customers:", error)
 			throw error
