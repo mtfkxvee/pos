@@ -22,6 +22,10 @@ import {
 	cacheInvoiceHistory,
 	cacheUnpaidInvoices,
 	cacheUnpaidSummary,
+	getOfflineInvoiceCount,
+	getOfflineInvoices,
+	saveOfflineInvoice as saveOfflineInvoiceUtil,
+	deleteOfflineInvoice as deleteOfflineInvoiceUtil,
 } from "@/utils/offline"
 import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
@@ -105,7 +109,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 	 */
 	async function updatePendingCount() {
 		try {
-			pendingInvoicesCount.value = await offlineWorker.getOfflineInvoiceCount()
+			pendingInvoicesCount.value = await getOfflineInvoiceCount()
 		} catch (error) {
 			log.error('Failed to get pending invoice count', error)
 		}
@@ -137,7 +141,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 	 * Get all pending invoices from the worker
 	 */
 	async function getPending() {
-		return await offlineWorker.getOfflineInvoices()
+		return await getOfflineInvoices()
 	}
 
 	/**
@@ -145,7 +149,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 	 * @param {string} id - Invoice ID to delete
 	 */
 	async function deletePending(id) {
-		await offlineWorker.deleteOfflineInvoice(id)
+		await deleteOfflineInvoiceUtil(id)
 		await updatePendingCount()
 	}
 
@@ -179,7 +183,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 	 */
 	async function saveInvoiceOffline(invoiceData) {
 		try {
-			await offlineWorker.saveOfflineInvoice(invoiceData)
+			await saveOfflineInvoiceUtil(invoiceData)
 			await updatePendingCount()
 			log.info('Invoice saved offline successfully')
 			return true
