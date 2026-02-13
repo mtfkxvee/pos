@@ -101,23 +101,19 @@ watch(() => props.customer, async (newCustomer) => {
 async function fetchLoyaltyDetails(customerName) {
 	loadingLoyalty.value = true
 	try {
-		// Fetch loyalty points using frappe.client.get_value or specific method
-		// Assuming standard ERPNext structure or using get_customer_details
-		// For now, let's fetch the full customer doc to be safe
-		const customerDoc = await call('frappe.client.get', {
-			doctype: 'Customer',
-			name: customerName
+		// Use the dedicated ERPNext method for fetching loyalty details including points
+		const result = await call('erpnext.accounts.doctype.loyalty_program.loyalty_program.get_loyalty_program_details_with_points', {
+			customer: customerName,
+			loyalty_program: props.customer.loyalty_program,
+			silent: true
 		})
 
-		if (customerDoc) {
-			loyaltyPoints.value = customerDoc.loyalty_program_details?.loyalty_points || 0
-			// Alternatively check simplified field if present
-			if (!loyaltyPoints.value && customerDoc.loyalty_points) {
-				loyaltyPoints.value = customerDoc.loyalty_points
-			}
-			
-			loyaltyProgram.value = customerDoc.loyalty_program || ''
+		if (result) {
+			loyaltyPoints.value = result.loyalty_points || 0
+			loyaltyProgram.value = result.loyalty_program || props.customer.loyalty_program || ''
 		}
+
+
 	} catch (error) {
 		console.error('Failed to fetch loyalty details:', error)
 		loyaltyPoints.value = 0

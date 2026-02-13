@@ -348,16 +348,26 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 
 			// Fallback to standard Frappe API for robust searching
 			const searchFilters = searchTerm
-				? [["customer_name", "like", "%" + searchTerm + "%"]]
+				? [
+					["name", "like", "%" + searchTerm + "%"],
+					["customer_name", "like", "%" + searchTerm + "%"],
+					["mobile_no", "like", "%" + searchTerm + "%"],
+					["email_id", "like", "%" + searchTerm + "%"]
+				]
 				: []
 
-			const response = await call("frappe.client.get_list", {
+			const apiArgs = {
 				doctype: "Customer",
-				filters: searchFilters,
 				fields: ["name", "customer_name", "mobile_no", "email_id", "image", "loyalty_program", "customer_group", "tax_id"],
 				limit_page_length: limit,
 				order_by: "creation desc"
-			})
+			}
+
+			if (searchTerm) {
+				apiArgs.or_filters = searchFilters
+			}
+
+			const response = await call("frappe.client.get_list", apiArgs)
 			return response || []
 		} catch (error) {
 			log.error("Error searching online customers:", error)
