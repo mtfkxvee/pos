@@ -5,7 +5,7 @@ import { logger } from "../logger"
 const log = logger.create("OfflineDB")
 
 /**
- * @fileoverview IndexedDB persistence layer for POS Next offline functionality.
+ * @fileoverview IndexedDB persistence layer for NURSA POS offline functionality.
  *
  * This module provides:
  * - Auto-versioned Dexie database with schema migration
@@ -138,7 +138,7 @@ db.version(schemaVersion).stores(CURRENT_SCHEMA)
 export const initDB = async () => {
 	try {
 		await db.open()
-		log.success("POS Next offline database initialized")
+		log.success("NURSA POS offline database initialized")
 		return true
 	} catch (error) {
 		log.error("Failed to initialize offline database:", error)

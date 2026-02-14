@@ -275,7 +275,7 @@ export function printInvoiceCustom(invoiceData) {
 			<div class="receipt">
 				<!-- Header -->
 				<div class="header">
-					<div class="company-name">${invoiceData.company || "POS Next"}</div>
+					<div class="company-name">${invoiceData.company || "NURSA POS"}</div>
 					<div style="font-size: 12px;">${__('TAX INVOICE')}</div>
 				</div>
 

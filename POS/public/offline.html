@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>No Internet - POSNext</title>
+  <title>No Internet - NURSA POS</title>
   <style>
     * {
       margin: 0;
@@ -43,8 +44,15 @@
     }
 
     @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.05);
+      }
     }
 
     .icon svg {
@@ -89,8 +97,15 @@
     }
 
     @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
     }
 
     button {
@@ -177,11 +192,14 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <div class="icon">
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4zm10 16H4V9h16v11z"></path>
+        <path
+          d="M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4zm10 16H4V9h16v11z">
+        </path>
       </svg>
     </div>
 
@@ -196,7 +214,7 @@
     </div>
 
     <h1>No Internet Connection</h1>
-    <p>Unable to connect to POS Next. Please check your internet connection and try again.</p>
+    <p>Unable to connect to NURSA POS. Please check your internet connection and try again.</p>
 
     <button onclick="location.reload()">Try Again</button>
 
@@ -228,14 +246,15 @@
           method: 'GET',
           cache: 'no-cache'
         })
-        .then(() => {
-          location.reload();
-        })
-        .catch(() => {
-          // Still offline
-        });
+          .then(() => {
+            location.reload();
+          })
+          .catch(() => {
+            // Still offline
+          });
       }
     }, 3000);
   </script>
 </body>
+
 </html>
