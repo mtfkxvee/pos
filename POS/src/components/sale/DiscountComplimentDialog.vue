@@ -218,7 +218,8 @@ function applyDiscount() {
 			percentage: discountType.value === 'Percentage' ? discountValue.value : 0,
 			amount: discountType.value === 'Amount' ? discountValue.value : 0,
 			name: 'Manual Discount',
-			code: 'MANUAL'
+			code: 'MANUAL',
+			is_manual: true
 		}
 		
 		cartStore.applyDiscountToCart(discount)
@@ -239,6 +240,7 @@ function applyCompliment() {
 			amount: complimentType.value === 'Amount' ? complimentValue.value : 0,
 			name: 'Compliment',
 			code: 'COMPLIMENT',
+			is_manual: true,
 			description: complimentReason.value
 		}
 		

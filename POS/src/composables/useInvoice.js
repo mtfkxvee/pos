@@ -468,7 +468,14 @@ export function useInvoice() {
 		if (!discount) return
 
 		// Store coupon code for tracking
-		couponCode.value = discount.code || discount.name
+
+		// Store coupon code for tracking, but not for manual discounts/compliments
+		// Manual discounts should NOT be sent as coupon codes to prevent validation errors
+		if (discount.is_manual || discount.code === 'MANUAL' || discount.code === 'COMPLIMENT') {
+			couponCode.value = null
+		} else {
+			couponCode.value = discount.code || discount.name
+		}
 
 		// Use centralized calculation to handle percentage/amount and clamping
 		let discountAmount = calculateDiscountAmount(discount, subtotal.value)
