@@ -497,6 +497,15 @@
           >
             {{ submitResource.loading ? __('Closing Shift...') : __('Close Shift') }}
           </Button>
+
+          <!-- Print Button (only shown in report view) -->
+          <Button
+            v-if="showSuccessReport"
+            variant="outline"
+            @click="handlePrintReport"
+          >
+            {{ __('Print Report') }}
+          </Button>
         </div>
       </div>
     </template>
@@ -512,6 +521,7 @@ import { useFormatters } from "../composables/useFormatters"
 import { usePOSSettingsStore } from "../stores/posSettings"
 import { usePOSShiftStore } from "../stores/posShift"
 import TranslatedHTML from "./common/TranslatedHTML.vue"
+import { printShiftClosing } from "@/utils/printInvoice"
 
 const props = defineProps({
 	modelValue: {
@@ -660,22 +670,22 @@ async function submitClosing() {
 		// Submit to server
 		await submitResource.submit({ closing_shift: closingData.value })
 
-		// If hideExpectedAmount is enabled, show success report before closing
-		if (hideExpectedAmount.value) {
-			showSuccessReport.value = true
-			// Auto-expand invoice details in success report
-			if (invoiceCount.value > 0 && invoiceCount.value <= 10) {
-				showInvoiceDetails.value = true
-			}
-		} else {
-			// Normal mode: close immediately
-			emit("shift-closed")
-			closeDialog()
+		// Always show success report to allow printing
+		showSuccessReport.value = true
+
+		// Auto-expand invoice details in success report
+		if (invoiceCount.value > 0 && invoiceCount.value <= 10) {
+			showInvoiceDetails.value = true
 		}
 	} catch (error) {
 		console.error("Error submitting closing shift:", error)
 		errorMessage.value = 'Failed to close shift. Please verify all amounts and try again.'
 	}
+}
+
+function handlePrintReport() {
+	if (!closingData.value) return
+	printShiftClosing(closingData.value)
 }
 
 function closeDialog() {

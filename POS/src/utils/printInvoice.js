@@ -289,47 +289,45 @@ export function printInvoiceCustom(invoiceData) {
 						<span>${__('Date:')}</span>
 						<span>${new Date(invoiceData.posting_date || Date.now()).toLocaleString()}</span>
 					</div>
-					${
-						invoiceData.customer_name
-							? `
+					${invoiceData.customer_name
+			? `
 					<div>
 						<span>${__('Customer:')}</span>
 						<span>${invoiceData.customer_name}</span>
 					</div>
 					`
-							: ""
-					}
-					${
-						(invoiceData.status === "Partly Paid" || (invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0 && invoiceData.outstanding_amount < invoiceData.grand_total))
-							? `
+			: ""
+		}
+					${(invoiceData.status === "Partly Paid" || (invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0 && invoiceData.outstanding_amount < invoiceData.grand_total))
+			? `
 					<div class="partial-status">
 						<span>${__('Status:')}</span>
 						<span>${__('PARTIAL PAYMENT')}</span>
 					</div>
 					`
-							: ""
-					}
+			: ""
+		}
 				</div>
 
 				<!-- Items -->
 				<div class="items-table">
 					${invoiceData.items
-						.map((item) => {
-							// Determine if item has promotional pricing
-							const hasItemDiscount =
-								(item.discount_percentage &&
-									Number.parseFloat(item.discount_percentage) > 0) ||
-								(item.discount_amount &&
-									Number.parseFloat(item.discount_amount) > 0)
-							const isFree = item.is_free_item
-							const qty = item.quantity || item.qty
+			.map((item) => {
+				// Determine if item has promotional pricing
+				const hasItemDiscount =
+					(item.discount_percentage &&
+						Number.parseFloat(item.discount_percentage) > 0) ||
+					(item.discount_amount &&
+						Number.parseFloat(item.discount_amount) > 0)
+				const isFree = item.is_free_item
+				const qty = item.quantity || item.qty
 
-							// Display original list price for transparency
-							const displayRate = item.price_list_rate || item.rate
-							// Calculate subtotal before any price reductions
-							const subtotal = qty * displayRate
+				// Display original list price for transparency
+				const displayRate = item.price_list_rate || item.rate
+				// Calculate subtotal before any price reductions
+				const subtotal = qty * displayRate
 
-							return `
+				return `
 						<div class="item-row">
 							<div class="item-name">
 								${item.item_name || item.item_code} ${isFree ? __('(FREE)') : ""}
@@ -338,38 +336,35 @@ export function printInvoiceCustom(invoiceData) {
 								<span>${qty} × ${formatCurrency(displayRate)}</span>
 								<span><strong>${formatCurrency(subtotal)}</strong></span>
 							</div>
-							${
-								hasItemDiscount
-									? `
+							${hasItemDiscount
+						? `
 							<div class="item-discount">
 								<span>Discount ${item.discount_percentage ? `(${Number(item.discount_percentage).toFixed(2)}%)` : ""}</span>
 								<span>-${formatCurrency(item.discount_amount || 0)}</span>
 							</div>
 							`
-									: ""
-							}
-							${
-								item.serial_no
-									? `
+						: ""
+					}
+							${item.serial_no
+						? `
 							<div class="item-serials">
 								<div class="item-serials-label">${__('Serial No:')}</div>
 								<div class="item-serials-list">${item.serial_no.replace(/\n/g, ', ')}</div>
 							</div>
 							`
-									: ""
-							}
+						: ""
+					}
 						</div>
 						`
-						})
-						.join("")}
+			})
+			.join("")}
 				</div>
 
 				<!-- Totals -->
 				<div class="totals">
-					${
-						invoiceData.total_taxes_and_charges &&
-						invoiceData.total_taxes_and_charges > 0
-							? `
+					${invoiceData.total_taxes_and_charges &&
+			invoiceData.total_taxes_and_charges > 0
+			? `
 					<div class="total-row">
 						<span>${__('Subtotal:')}</span>
 						<span>${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0))}</span>
@@ -379,18 +374,17 @@ export function printInvoiceCustom(invoiceData) {
 						<span>${formatCurrency(invoiceData.total_taxes_and_charges)}</span>
 					</div>
 					`
-							: ""
-					}
-					${
-						invoiceData.discount_amount
-							? `
+			: ""
+		}
+					${invoiceData.discount_amount
+			? `
 					<div class="total-row" style="color: #28a745;">
 						<span>Additional Discount${invoiceData.additional_discount_percentage ? ` (${Number(invoiceData.additional_discount_percentage).toFixed(1)}%)` : ""}:</span>
 						<span>-${formatCurrency(Math.abs(invoiceData.discount_amount))}</span>
 					</div>
 					`
-							: ""
-					}
+			: ""
+		}
 					<div class="total-row grand-total">
 						<span>${__('TOTAL:')}</span>
 						<span>${formatCurrency(invoiceData.grand_total)}</span>
@@ -398,49 +392,46 @@ export function printInvoiceCustom(invoiceData) {
 				</div>
 
 				<!-- Payments -->
-				${
-					invoiceData.payments && invoiceData.payments.length > 0
-						? `
+				${invoiceData.payments && invoiceData.payments.length > 0
+			? `
 				<div class="payments">
 					<div style="font-weight: bold; margin-bottom: 5px; font-size: 12px;">Payments:</div>
 					${invoiceData.payments
-						.map(
-							(payment) => `
+				.map(
+					(payment) => `
 						<div class="payment-row">
 							<span>${payment.mode_of_payment}:</span>
 							<span>${formatCurrency(payment.amount)}</span>
 						</div>
 					`,
-						)
-						.join("")}
+				)
+				.join("")}
 					<div class="payment-row total-paid">
 						<span>${__('Total Paid:')}</span>
 						<span>${formatCurrency(invoiceData.paid_amount || 0)}</span>
 					</div>
-					${
-						invoiceData.change_amount && invoiceData.change_amount > 0
-							? `
+					${invoiceData.change_amount && invoiceData.change_amount > 0
+				? `
 					<div class="payment-row" style="font-weight: bold; margin-top: 5px;">
 						<span>${__('Change:')}</span>
 						<span>${formatCurrency(invoiceData.change_amount)}</span>
 					</div>
 					`
-							: ""
-					}
-					${
-						invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
-							? `
+				: ""
+			}
+					${invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
+				? `
 					<div class="outstanding-row">
 						<span>${__('BALANCE DUE:')}</span>
 						<span>${formatCurrency(invoiceData.outstanding_amount)}</span>
 					</div>
 					`
-							: ""
-					}
+				: ""
+			}
 				</div>
 				`
-						: ""
-				}
+			: ""
+		}
 
 				<!-- Footer -->
 				<div class="footer">
@@ -520,5 +511,224 @@ export async function printInvoiceByName(
 	} catch (error) {
 		log.error("Error fetching invoice for print:", error)
 		throw error
+	}
+}
+
+/**
+ * Generates and prints a Shift Closing Receipt
+ * @param {Object} closingData - The shift closing data
+ */
+export function printShiftClosing(closingData) {
+	// Open print window with receipt size dimensions (80mm ≈ 302px at 96 DPI)
+	const printWindow = window.open("", "_blank", "width=350,height=600")
+
+	const salesTotal = closingData.sales_total ?? closingData.grand_total ?? 0;
+	const taxesTotal = closingData.taxes ? closingData.taxes.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0) : 0;
+	const paymentReconciliation = closingData.payment_reconciliation || [];
+
+	const totalExpected = paymentReconciliation.reduce((acc, p) => acc + (parseFloat(p.expected_amount) || 0), 0);
+	const totalActual = paymentReconciliation.reduce((acc, p) => acc + (parseFloat(p.closing_amount) || 0), 0);
+	const totalDifference = totalActual - totalExpected;
+
+	const printContent = `
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="UTF-8">
+			<title>${__('Shift Report - {0}', [closingData.pos_profile])}</title>
+			<style>
+				* {
+					margin: 0;
+					padding: 0;
+					box-sizing: border-box;
+				}
+
+				body {
+					font-family: 'Courier New', monospace;
+					padding: 10px;
+					width: 80mm;
+					margin: 0;
+					max-width: 80mm;
+					font-weight: bold;
+					color: black;
+				}
+
+				.header {
+					text-align: center;
+					margin-bottom: 20px;
+					border-bottom: 2px dashed #000;
+					padding-bottom: 10px;
+				}
+
+                .title {
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }
+
+                .subtitle {
+                    font-size: 12px;
+                }
+
+                .section {
+                    margin-bottom: 15px;
+                    border-bottom: 1px dashed #000;
+                    padding-bottom: 10px;
+                }
+
+                .section-title {
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                    font-size: 12px;
+                    border-bottom: 1px solid #000;
+                    display: inline-block;
+                }
+
+                .row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 3px;
+                    font-size: 12px;
+                }
+
+                .row.bold {
+                    font-weight: bold;
+                }
+
+                .footer {
+                    text-align: center;
+                    margin-top: 20px;
+                    font-size: 10px;
+                }
+
+				@media print {
+					@page {
+						size: 80mm auto;
+						margin: 0;
+					}
+
+					body {
+						width: 80mm;
+						padding: 5mm;
+						margin: 0;
+					}
+
+					.no-print {
+						display: none;
+					}
+				}
+			</style>
+		</head>
+		<body>
+            <div class="header">
+                <div class="title">${__('SHIFT CLOSING REPORT')}</div>
+                <div class="title">${closingData.pos_profile}</div>
+                <div class="subtitle">${new Date().toLocaleString()}</div>
+            </div>
+
+            <div class="section">
+                <div class="row">
+                    <span>${__('Start:')}</span>
+                    <span>${new Date(closingData.period_start_date).toLocaleString()}</span>
+                </div>
+                <div class="row">
+                    <span>${__('End:')}</span>
+                    <span>${new Date().toLocaleString()}</span>
+                </div>
+                  <div class="row">
+                    <span>${__('User:')}</span>
+                    <span>${closingData.owner || 'User'}</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">${__('SALES SUMMARY')}</div>
+                <div class="row">
+                    <span>${__('Gross Sales:')}</span>
+                    <span>${formatCurrency(salesTotal)}</span>
+                </div>
+                <div class="row">
+                    <span>${__('Returns:')}</span>
+                    <span>${formatCurrency(closingData.returns_total)}</span>
+                </div>
+                <div class="row">
+                    <span>${__('Tax Collected:')}</span>
+                    <span>${formatCurrency(taxesTotal)}</span>
+                </div>
+                <div class="row bold" style="margin-top: 5px; border-top: 1px solid #000; padding-top: 2px;">
+                    <span>${__('NET SALES:')}</span>
+                    <span>${formatCurrency(closingData.grand_total)}</span>
+                </div>
+            </div>
+
+             <div class="section">
+                <div class="section-title">${__('PAYMENTS')}</div>
+                ${paymentReconciliation.map(p => `
+                    <div style="margin-bottom: 5px;">
+                        <div class="row bold">
+                            <span>${p.mode_of_payment}</span>
+                        </div>
+                        <div class="row">
+                            <span>Open:</span>
+                            <span>${formatCurrency(p.opening_amount)}</span>
+                        </div>
+                        <div class="row">
+                            <span>Expected:</span>
+                            <span>${formatCurrency(p.expected_amount)}</span>
+                        </div>
+                         <div class="row">
+                            <span>Actual:</span>
+                            <span>${formatCurrency(p.closing_amount)}</span>
+                        </div>
+                         <div class="row">
+                            <span>Diff:</span>
+                            <span>${formatCurrency(parseFloat(p.closing_amount || 0) - parseFloat(p.expected_amount || 0))}</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+             <div class="section">
+                 <div class="row bold">
+                    <span>${__('TOTAL EXPECTED:')}</span>
+                    <span>${formatCurrency(totalExpected)}</span>
+                </div>
+                <div class="row bold">
+                    <span>${__('TOTAL ACTUAL:')}</span>
+                    <span>${formatCurrency(totalActual)}</span>
+                </div>
+                 <div class="row bold">
+                    <span>${__('VARIANCE:')}</span>
+                    <span>${formatCurrency(totalDifference)}</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                ${__('Printed on')} ${new Date().toLocaleString()}
+                <br>
+                Powered by BrainWise
+            </div>
+
+			<div class="no-print" style="text-align: center; margin-top: 20px;">
+				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
+					${__('Print Report')}
+				</button>
+				<button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
+					${__('Close')}
+				</button>
+			</div>
+		</body>
+		</html>
+	`
+
+	printWindow.document.write(printContent)
+	printWindow.document.close()
+
+	// Auto print after load
+	printWindow.onload = () => {
+		setTimeout(() => {
+			printWindow.print()
+		}, 250)
 	}
 }
