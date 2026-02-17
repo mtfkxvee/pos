@@ -1124,6 +1124,19 @@ const showStockLookup = ref(false);
 // Invoice Management dialog
 const showInvoiceManagement = ref(false);
 
+// Invoice Detail View
+const showInvoiceDetail = ref(false)
+const selectedInvoiceForView = ref(null)
+
+function handleViewInvoice(invoice) {
+	if (invoice && typeof invoice === 'object') {
+		selectedInvoiceForView.value = invoice.name
+	} else {
+		selectedInvoiceForView.value = invoice
+	}
+	showInvoiceDetail.value = true
+}
+
 // Warehouse availability dialog state
 const showWarehouseDialog = ref(false)
 const warehouseDialogItem = ref(null)
