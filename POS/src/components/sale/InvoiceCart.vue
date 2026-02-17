@@ -981,7 +981,20 @@
 									</div>
 
 									<!-- Price -->
-									<span class="text-[10px] sm:text-xs font-bold text-gray-700">
+									<div v-if="settingsStore.allowPriceEdit" class="relative group/price">
+										<input
+											:value="item.rate"
+											@click.stop
+											@input="updatePrice(item, $event.target.value)"
+											type="number"
+											step="0.01"
+											:disabled="item.is_resolved_barcode"
+											class="w-16 h-6 sm:h-7 text-end border text-[10px] sm:text-xs font-bold rounded px-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+											:class="item.is_resolved_barcode ? 'bg-amber-50 text-amber-700 border-amber-300 cursor-not-allowed' : 'bg-white text-gray-900 border-gray-200'"
+											placeholder="Price"
+										/>
+									</div>
+									<span v-else class="text-[10px] sm:text-xs font-bold text-gray-700">
 										{{ formatCurrency(item.rate) }}
 									</span>
 								</div>
@@ -1252,6 +1265,7 @@ const props = defineProps({
  */
 const emit = defineEmits([
 	"update-quantity", // (itemCode, newQty, uom?) - Update item quantity
+	"update-rate", // (itemCode, newRate) - Update item rate
 	"remove-item", // (itemCode, uom?) - Remove item from cart
 	"select-customer", // (customer) - Select/change customer
 	"edit-customer", // (customer) - Open edit customer dialog
@@ -1749,6 +1763,22 @@ function updateQuantity(item, value) {
 
 	// For positive numbers, update quantity immediately (no rounding here while typing)
 	emit("update-quantity", item.item_code, qty, item.uom);
+}
+
+/**
+ * Update rate from direct input (manual typing).
+ *
+ * @param {Object} item - Cart item to update
+ * @param {String} value - New rate value from input
+ */
+function updatePrice(item, value) {
+    if (item.is_resolved_barcode) return;
+    const price = parseFloat(value);
+    // Allow empty/invalid during typing (or maybe not? standard behavior is usually restrict)
+    // Here we'll just emit if valid.
+    if (!isNaN(price) && price >= 0) {
+        emit("update-rate", item.item_code, price);
+    }
 }
 
 /**

@@ -96,6 +96,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		addItem: addItemToInvoice,
 		removeItem,
 		updateItemQuantity,
+		updateItemRate,
 		submitInvoice: baseSubmitInvoice,
 		clearCart: clearInvoiceCart,
 		loadTaxRules,
@@ -406,7 +407,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Find matching cart item by item_code and uom
 			const cartItem = invoiceItems.value.find(
 				item => item.item_code === freeItem.item_code &&
-				(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom)
+					(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom)
 			)
 
 			if (cartItem) {
@@ -1700,6 +1701,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		addItem,
 		removeItem,
 		updateItemQuantity,
+		updateItemRate,
 		clearCart,
 		setCustomer,
 		setDefaultCustomer,

@@ -19,6 +19,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		use_percentage_discount: 0,
 		allow_user_to_edit_additional_discount: 0,
 		allow_user_to_edit_item_discount: 1, // Allow item-level discounts
+		allow_user_to_edit_price: 0, // Allow item price editing
 		disable_rounded_total: 1, // Disable rounding for accurate totals
 		allow_credit_sale: 0,
 		allow_customer_credit_payment: 0,
@@ -98,6 +99,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 	const allowItemDiscount = computed(() =>
 		Boolean(settings.value.allow_user_to_edit_item_discount),
+	)
+	const allowPriceEdit = computed(() =>
+		Boolean(settings.value.allow_user_to_edit_price),
 	)
 	const disableRoundedTotal = computed(() =>
 		Boolean(settings.value.disable_rounded_total),
@@ -393,6 +397,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		usePercentageDiscount,
 		allowAdditionalDiscount,
 		allowItemDiscount,
+		allowPriceEdit,
 		disableRoundedTotal,
 		allowCreditSale,
 		allowCustomerCreditPayment,

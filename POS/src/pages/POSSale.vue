@@ -360,6 +360,7 @@
 								:applied-offers="cartStore.appliedOffers"
 								:warehouses="profileWarehouses"
 								@update-quantity="cartStore.updateItemQuantity"
+								@update-rate="cartStore.updateItemRate"
 								@remove-item="
 									(itemCode, uom) => cartStore.removeItem(itemCode, uom)
 								"
