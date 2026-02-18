@@ -2688,11 +2688,7 @@ async function loadInvoiceHistoryData() {
 	}
 }
 
-// Handle invoice actions from InvoiceManagement
-function handleViewInvoice(invoice) {
-	selectedInvoiceForView.value = invoice.name || invoice;
-	showInvoiceDetail.value = true;
-}
+
 
 // Centralized print handler - uses printInvoice.js utilities
 async function handlePrintInvoice(invoiceData) {
