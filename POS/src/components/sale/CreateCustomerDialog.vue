@@ -143,6 +143,22 @@
 						</option>
 					</select>
 				</div>
+
+				<!-- Loyalty Program -->
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Loyalty Program") }}
+					</label>
+					<select
+						v-model="customerData.loyalty_program"
+						class="w-full px-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="">{{ __("Select Loyalty Program") }}</option>
+						<option v-for="program in loyaltyPrograms" :key="program" :value="program">
+							{{ program }}
+						</option>
+					</select>
+				</div>
 			</div>
 		</template>
 
@@ -241,6 +257,7 @@ const countrySearchRef = ref(null)
 
 const customerGroups = ref(["Commercial", "Individual", "Non Profit", "Government"])
 const territories = ref(["All Territories"])
+const loyaltyPrograms = ref([])
 
 const customerData = ref({
 	customer_name: "",
@@ -249,6 +266,7 @@ const customerData = ref({
 	email_id: "",
 	customer_group: "Individual",
 	territory: "All Territories",
+	loyalty_program: "",
 })
 
 // =============================================================================
@@ -357,6 +375,7 @@ const createCustomerResource = createResource({
 			territory: customerData.value.territory || __("All Territories"),
 			mobile_no: customerData.value.mobile_no || "",
 			email_id: customerData.value.email_id || "",
+			loyalty_program: customerData.value.loyalty_program || "",
 		},
 	}),
 	onSuccess: (data) => {
@@ -382,6 +401,7 @@ const updateCustomerResource = createResource({
 			territory: customerData.value.territory || __("All Territories"),
 			mobile_no: customerData.value.mobile_no || "",
 			email_id: customerData.value.email_id || "",
+			loyalty_program: customerData.value.loyalty_program || "",
 		},
 	}),
 	onSuccess: (data) => {
@@ -412,6 +432,7 @@ const createListResource = (doctype, onSuccess) =>
 
 const customerGroupsResource = createListResource("Customer Group", (names) => (customerGroups.value = names))
 const territoriesResource = createListResource("Territory", (names) => (territories.value = names))
+const loyaltyProgramsResource = createListResource("Loyalty Program", (names) => (loyaltyPrograms.value = names))
 
 const posProfileResource = createResource({
 	url: "frappe.client.get_value",
@@ -439,6 +460,7 @@ const loadDialogData = async () => {
 	// Load form options
 	await territoriesResource.reload()
 	customerGroupsResource.reload()
+	loyaltyProgramsResource.reload()
 	checkPermissions()
 
 	// Set country from POS Profile
@@ -483,6 +505,7 @@ const resetForm = () => {
 		email_id: "",
 		customer_group: "Individual",
 		territory: "All Territories",
+		loyalty_program: "",
 	})
 	selectedCountryCode.value = ""
 	phoneNumber.value = ""
@@ -507,6 +530,7 @@ watch(
 			customerData.value.email_id = customer.email_id || ""
 			customerData.value.customer_group = customer.customer_group || "Individual"
 			customerData.value.territory = customer.territory || "All Territories"
+			customerData.value.loyalty_program = customer.loyalty_program || ""
 			// Handle mobile_no with country code
 			if (customer.mobile_no) {
 				customerData.value.mobile_no = customer.mobile_no
