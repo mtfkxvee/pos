@@ -768,15 +768,28 @@ export function useInvoice() {
 			posa_pos_opening_shift: posOpeningShift.value,
 			customer: customer.value?.name || customer.value,
 			items: formatItemsForSubmission(rawItems),
-			payments: rawPayments.map((p) => ({
-				mode_of_payment: p.mode_of_payment,
-				amount: p.amount,
-				type: p.type,
-			})),
+			payments: rawPayments
+				.filter(p => !p.is_loyalty_redemption) // Filter out loyalty payment from payments table
+				.map((p) => ({
+					mode_of_payment: p.mode_of_payment,
+					amount: p.amount,
+					type: p.type,
+				})),
 			discount_amount: additionalDiscount.value || 0,
 			coupon_code: couponCode.value,
 			is_pos: 1,
 			update_stock: 1,
+		}
+
+		// Handle Loyalty Redemption
+		const loyaltyPayment = rawPayments.find(p => p.is_loyalty_redemption)
+		if (loyaltyPayment) {
+			invoiceData.redeem_loyalty_points = 1
+			invoiceData.loyalty_points = loyaltyPayment.loyalty_points
+			invoiceData.loyalty_amount = loyaltyPayment.amount
+			if (loyaltyPayment.loyalty_redemption_account) {
+				invoiceData.loyalty_redemption_account = loyaltyPayment.loyalty_redemption_account
+			}
 		}
 
 		if (targetDoctype === "Sales Order") {

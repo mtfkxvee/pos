@@ -437,6 +437,46 @@
 					]"
 					:style="isMobileView ? {} : { minHeight: rightColumnMinHeight }"
 				>
+					<!-- Loyalty Redemption -->
+					<div v-if="walletInfo.wallet_enabled && walletInfo.wallet_balance > 0" class="mb-3 bg-purple-50 rounded-lg p-3 border border-purple-100">
+						<div class="flex items-center justify-between mb-2">
+							<div class="flex items-center gap-2">
+								<span class="text-lg">🎁</span>
+								<span class="font-semibold text-purple-800 text-sm">{{ __('Redeem Loyalty Points') }}</span>
+							</div>
+							<div class="text-xs text-purple-700 bg-white px-2 py-0.5 rounded border border-purple-200 shadow-sm">
+								{{ __('Available: {0} pts', [walletInfo.wallet_balance]) }}
+							</div>
+						</div>
+						
+						<div class="flex items-center gap-2">
+							<div class="relative flex-1">
+								<input
+									v-model.number="pointsToRedeem"
+									type="number"
+									:max="maxRedeemablePoints"
+									min="0"
+									class="w-full px-3 py-1.5 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-white"
+									:placeholder="__('Enter points')"
+								/>
+                                <span class="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">pts</span>
+								<button 
+									v-if="pointsToRedeem > 0"
+									@click="pointsToRedeem = 0"
+									class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+								>
+									✕
+								</button>
+							</div>
+							<div class="font-bold text-sm text-purple-900 min-w-[60px] text-end bg-purple-100 px-2 py-1.5 rounded-lg border border-purple-200">
+								-{{ formatCurrency(pointsToRedeem * walletInfo.conversion_factor) }}
+							</div>
+						</div>
+                        <div class="text-[10px] text-purple-600 mt-1 text-end">
+                            {{ __('1 Point = {0}', [formatCurrency(walletInfo.conversion_factor)]) }}
+                        </div>
+					</div>
+
 					<!-- Payment Methods -->
 					<div :class="isSmallMobile ? 'mb-1' : 'mb-1.5 lg:mb-3'">
 						<div :class="['flex items-center justify-between', isSmallMobile ? 'mb-0.5' : 'mb-1 lg:mb-2']">
@@ -1003,7 +1043,10 @@ const walletInfo = ref({
 	wallet_exists: false,
 	wallet_balance: 0,
 	wallet_name: null,
+	conversion_factor: 1,
+	redemption_account: null
 })
+const pointsToRedeem = ref(0)
 const loadingWallet = ref(false)
 const walletPaymentMethods = ref(new Set()) // Set of mode_of_payment names that are wallet payments
 
@@ -1188,38 +1231,46 @@ const customerBalanceResource = createResource({
 })
 
 // Wallet resource
-const walletInfoResource = createResource({
-	url: "pos_next.api.wallet.get_wallet_info",
+// Loyalty Program Resource (Standard ERPNext)
+const loyaltyDetailsResource = createResource({
+	url: "erpnext.accounts.doctype.loyalty_program.loyalty_program.get_loyalty_program_details_with_points",
 	makeParams() {
 		const customerName = props.customer?.name || props.customer
-		log.debug(
-			"[PaymentDialog] Fetching wallet info for customer:",
-			customerName,
-		)
 		return {
 			customer: customerName,
 			company: props.company,
-			pos_profile: props.posProfile,
+			silent: true
 		}
 	},
 	auto: false,
 	onSuccess(data) {
-		log.debug("[PaymentDialog] Wallet info loaded:", data)
-		walletInfo.value = data || {
-			wallet_enabled: false,
-			wallet_exists: false,
-			wallet_balance: 0,
-			wallet_name: null,
+		log.debug("[PaymentDialog] Loyalty details loaded:", data)
+		if (data && data.loyalty_program) {
+			walletInfo.value = {
+				wallet_enabled: true,
+				wallet_exists: true,
+				wallet_balance: data.loyalty_points || 0,
+				wallet_name: data.loyalty_program,
+				conversion_factor: data.conversion_factor || 1, // Amount per point
+				redemption_account: data.expense_account
+			}
+		} else {
+			walletInfo.value = {
+				wallet_enabled: false,
+				wallet_exists: false,
+				wallet_balance: 0,
+				wallet_name: null
+			}
 		}
 		loadingWallet.value = false
 	},
 	onError(error) {
-		log.error("[PaymentDialog] Error loading wallet info:", error)
+		log.error("[PaymentDialog] Error loading loyalty details:", error)
 		walletInfo.value = {
 			wallet_enabled: false,
 			wallet_exists: false,
 			wallet_balance: 0,
-			wallet_name: null,
+			wallet_name: null
 		}
 		loadingWallet.value = false
 	},
@@ -1293,6 +1344,49 @@ const filteredPaymentMethods = computed(() => {
 		}
 		return true
 	})
+})
+
+// Max points customer can redeem for this transaction
+const maxRedeemablePoints = computed(() => {
+	if (!walletInfo.value.wallet_enabled) return 0
+	
+	// Max based on balance
+	const maxBalance = walletInfo.value.wallet_balance
+	
+	// Max based on invoice total (cannot redeem more than total)
+	// Deduct other non-loyalty payments first? No, usually native POS allows redeeming for full amount.
+	// But we should subtract already paid amount if we want to be strict, 
+	// but usually users redeem first then pay remainder.
+	// Let's limit to remaining amount + current redemption amount (to allow editing)
+	
+	const currentRedemption = paymentEntries.value.find(p => p.is_loyalty_redemption)?.amount || 0
+	const maxAmount = remainingAmount.value + currentRedemption
+	
+	const maxPointsByAmount = maxAmount / walletInfo.value.conversion_factor
+	
+	return Math.floor(Math.min(maxBalance, maxPointsByAmount))
+})
+
+// Update payment entry when points change
+watch(pointsToRedeem, (points) => {
+	const amount = roundCurrency(points * walletInfo.value.conversion_factor)
+	
+	// Remove existing loyalty entry
+	const existingIndex = paymentEntries.value.findIndex(p => p.is_loyalty_redemption)
+	if (existingIndex > -1) {
+		paymentEntries.value.splice(existingIndex, 1)
+	}
+	
+	if (amount > 0) {
+		paymentEntries.value.push({
+			mode_of_payment: "Loyalty Points", // Dummy MOP, will be handled in backend
+			amount: amount,
+			type: "Loyalty",
+			is_loyalty_redemption: true,
+			loyalty_points: points,
+            loyalty_redemption_account: walletInfo.value.redemption_account
+		})
+	}
 })
 
 // Sales Persons state
@@ -1834,11 +1928,11 @@ watch(show, (newVal) => {
 			log.debug("[PaymentDialog] Customer credit/balance should be pre-loaded, current balance:", customerBalance.value)
 		}
 
-		// Load wallet info if customer is selected
+			// Load wallet info if customer is selected
 		if (props.customer && props.company) {
-			log.debug("[PaymentDialog] Loading wallet info...")
+			log.debug("[PaymentDialog] Loading loyalty info...")
 			loadingWallet.value = true
-			walletInfoResource.fetch()
+			loyaltyDetailsResource.fetch()
 		} else {
 			// Reset wallet info only if no customer
 			walletInfo.value = {
@@ -1846,6 +1940,8 @@ watch(show, (newVal) => {
 				wallet_exists: false,
 				wallet_balance: 0,
 				wallet_name: null,
+				conversion_factor: 1,
+				redemption_account: null
 			}
 		}
 	}
