@@ -1238,6 +1238,7 @@ const loyaltyDetailsResource = createResource({
 		const customerName = props.customer?.name || props.customer
 		return {
 			customer: customerName,
+			loyalty_program: props.customer?.loyalty_program,
 			company: props.company,
 			silent: true
 		}
@@ -1245,12 +1246,14 @@ const loyaltyDetailsResource = createResource({
 	auto: false,
 	onSuccess(data) {
 		log.debug("[PaymentDialog] Loyalty details loaded:", data)
-		if (data && data.loyalty_program) {
+		const programName = data?.loyalty_program || (props.customer?.loyalty_program);
+		
+		if (data && programName) {
 			walletInfo.value = {
 				wallet_enabled: true,
 				wallet_exists: true,
 				wallet_balance: data.loyalty_points || 0,
-				wallet_name: data.loyalty_program,
+				wallet_name: programName,
 				conversion_factor: data.conversion_factor || 1, // Amount per point
 				redemption_account: data.expense_account
 			}
