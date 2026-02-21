@@ -506,13 +506,12 @@ async function searchCachedItems(searchTerm = "", limit = 50, offset = 0) {
 		const term = searchTerm.toLowerCase().trim()
 		const searchWords = term.split(/\s+/).filter(Boolean)
 
-		// Optimize: Use indexes for single-word searches
+		// Optimize: if single word and matches exact barcode, return early
 		if (searchWords.length === 1) {
-			// Try barcode index first (most specific)
 			const barcodeResults = await db.table("items")
 				.where("barcodes")
 				.equals(term)
-				.filter(item => !item.disabled)
+				.filter(item => !item.disabled && !item.variant_of)
 				.limit(limit)
 				.toArray()
 
@@ -521,62 +520,31 @@ async function searchCachedItems(searchTerm = "", limit = 50, offset = 0) {
 				recordMetric('searchCachedItems', performance.now() - startTime, false)
 				return barcodeResults
 			}
-
-			// Try item_code index (second most specific)
-			const codeResults = await db.table("items")
-				.where("item_code")
-				.startsWithIgnoreCase(term)
-				.filter(item => !item.disabled)
-				.limit(limit)
-				.toArray()
-
-			if (codeResults.length > 0) {
-				cacheQueryResult(cacheKey, codeResults)
-				recordMetric('searchCachedItems', performance.now() - startTime, false)
-				return codeResults
-			}
-
-			// Try item_name index
-			const nameResults = await db.table("items")
-				.where("item_name")
-				.startsWithIgnoreCase(term)
-				.filter(item => !item.disabled)
-				.limit(limit)
-				.toArray()
-
-			if (nameResults.length > 0) {
-				cacheQueryResult(cacheKey, nameResults)
-				recordMetric('searchCachedItems', performance.now() - startTime, false)
-				return nameResults
-			}
 		}
 
-		// Fallback: Multi-word or complex search
-		// Fetch larger sample and filter in memory (trade memory for speed)
-		const allItems = await db.table("items")
-			.filter(item => !item.disabled)
-			.limit(limit * 10)
-			.toArray()
+		// Full database scan with substring matching
+		// Dexie iterator acts efficiently by stopping once `limit` is reached.
+		let results = []
 
-		const results = allItems
-			.map(item => {
+		await db.table("items")
+			.filter(item => {
+				if (item.disabled || item.variant_of) return false;
 				const searchable = `${item.item_code || ""} ${item.item_name || ""} ${item.description || ""}`.toLowerCase()
-
 				// All words must match
-				if (!searchWords.every(word => searchable.includes(word))) {
-					return null
-				}
-
-				// Score for relevance ranking
+				return searchWords.every(word => searchable.includes(word))
+			})
+			.limit(limit * 3) // Fetch slightly more to sort and get the best matches
+			.each(item => {
 				let score = 100
 				if (item.item_name?.toLowerCase() === term) score = 1000
 				else if (item.item_code?.toLowerCase() === term) score = 900
 				else if (item.item_name?.toLowerCase().startsWith(term)) score = 500
 				else if (item.item_code?.toLowerCase().startsWith(term)) score = 400
 
-				return { item, score }
+				results.push({ item, score })
 			})
-			.filter(Boolean)
+
+		results = results
 			.sort((a, b) => b.score - a.score)
 			.slice(0, limit)
 			.map(({ item }) => item)
