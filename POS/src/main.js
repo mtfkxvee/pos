@@ -174,8 +174,8 @@ async function initializeApp() {
 			await userResource.promise
 			return sessionUser()
 		} catch (error) {
-			log.debug("User not logged in", error?.message || "No session")
-			return null
+			log.debug("User fetch failed (offline or logged out), falling back to cookie", error?.message)
+			return sessionUser()
 		}
 	})()
 
