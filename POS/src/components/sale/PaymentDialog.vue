@@ -1463,6 +1463,9 @@ async function loadPaymentMethods() {
 					const defaultMethod = paymentMethods.value.find((m) => m.default)
 					lastSelectedMethod.value = defaultMethod || paymentMethods.value[0]
 				}
+			} else {
+				log.warn("PaymentDialog: Offline cache empty, trying to fetch from server...")
+				await paymentMethodsResource.fetch()
 			}
 		} else {
 			// Load from server when online
