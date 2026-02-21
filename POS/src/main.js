@@ -53,7 +53,7 @@ if ("serviceWorker" in navigator) {
 	window.addEventListener(
 		"load",
 		() => {
-			navigator.serviceWorker.register("/pos_sw.js", { scope: "/" })
+			navigator.serviceWorker.register("/api/method/pos_next.api.pwa.get_sw", { scope: "/" })
 				.then((reg) => {
 					log.info("Service Worker registered successfully", reg)
 					// Auto update logic
