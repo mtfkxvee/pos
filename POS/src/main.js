@@ -53,15 +53,27 @@ if ("serviceWorker" in navigator) {
 	window.addEventListener(
 		"load",
 		() => {
-			import("virtual:pwa-register").then(({ registerSW }) => {
-				registerSW({
-					immediate: true,
-					onNeedRefresh: () => log.info("New content available, reloading..."),
-					onOfflineReady: () => log.info("App ready to work offline"),
-					onRegistered: (reg) => log.info("Service Worker registered", reg),
-					onRegisterError: (err) => log.error("Service Worker registration error", err),
+			navigator.serviceWorker.register("/pos_sw.js", { scope: "/" })
+				.then((reg) => {
+					log.info("Service Worker registered successfully", reg)
+					// Auto update logic
+					reg.addEventListener('updatefound', () => {
+						const newWorker = reg.installing;
+						if (newWorker) {
+							newWorker.addEventListener('statechange', () => {
+								if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+									log.info("New content available, reloading...")
+									// Note: VitePWA autoUpdate will handle the actual skipWaiting automatically
+									// if generateSW autoUpdate is true in vite.config.js, 
+									// but we can also manually reload if needed.
+								}
+							});
+						}
+					});
 				})
-			})
+				.catch((err) => {
+					log.error("Service Worker registration error", err)
+				})
 		},
 		{ passive: true },
 	)
