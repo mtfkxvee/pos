@@ -17,10 +17,18 @@ self.addEventListener('fetch', (event) => {
     if (event.request.mode === 'navigate' && !event.request.url.includes('/api/') && !event.request.url.includes('/app/')) {
         event.respondWith(
             fetch(event.request).catch(async () => {
-                let cacheMatch = await caches.match('/assets/pos_next/pos/index.html', { ignoreSearch: true });
-                if (!cacheMatch) cacheMatch = await caches.match('/pos/index.html', { ignoreSearch: true });
-                if (!cacheMatch) cacheMatch = await caches.match('index.html', { ignoreSearch: true });
-                return cacheMatch || new Response('Offline', { status: 503 });
+                const cacheNames = await caches.keys();
+                for (const cacheName of cacheNames) {
+                    const cache = await caches.open(cacheName);
+                    const requests = await cache.keys();
+                    for (const req of requests) {
+                        if (req.url.endsWith('index.html') || req.url.includes('index.html')) {
+                            const match = await cache.match(req);
+                            if (match) return match;
+                        }
+                    }
+                }
+                return new Response('Offline - App Shell not found', { status: 503, headers: { 'Content-Type': 'text/html' } });
             })
         );
     }

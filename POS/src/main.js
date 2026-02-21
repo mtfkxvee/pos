@@ -170,7 +170,9 @@ async function initializeApp() {
 
 	const userPromise = (async () => {
 		try {
-			if (!userResource.loading) userResource.fetch()
+			if (!userResource.loading) {
+				userResource.fetch().catch(e => log.debug("User fetch network rejected:", e?.message))
+			}
 			await userResource.promise
 			return sessionUser()
 		} catch (error) {

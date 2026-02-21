@@ -80,53 +80,8 @@ const CURRENT_SCHEMA = {
 	unpaid_invoices: "&name, pos_profile, outstanding_amount, customer",
 }
 
-/**
- * Generates a 32-bit hash of the schema for change detection.
- * Uses djb2 algorithm for fast, deterministic hashing.
- * @param {Object} schema - Schema object to hash
- * @returns {number} Positive 32-bit integer hash
- * @private
- */
-function getSchemaHash(schema) {
-	const schemaString = JSON.stringify(schema)
-	let hash = 0
-	for (let i = 0; i < schemaString.length; i++) {
-		const char = schemaString.charCodeAt(i)
-		hash = (hash << 5) - hash + char
-		hash = hash & hash // Convert to 32-bit integer
-	}
-	return Math.abs(hash)
-}
-
-/**
- * Determines the current schema version using localStorage tracking.
- * Compares stored hash against current schema hash to detect changes.
- * Auto-increments version when schema changes are detected.
- *
- * @returns {number} Current schema version number
- * @private
- */
-function getSchemaVersion() {
-	const schemaHash = getSchemaHash(CURRENT_SCHEMA)
-	const storedHash = localStorage.getItem("pos_next_schema_hash")
-	const storedVersion = Number.parseInt(
-		localStorage.getItem("pos_next_schema_version") || "1",
-	)
-
-	if (storedHash !== schemaHash.toString()) {
-		// Schema changed, increment version
-		const newVersion = storedVersion + 1
-		log.info(`Schema changed detected. Upgrading from v${storedVersion} to v${newVersion}`)
-		localStorage.setItem("pos_next_schema_hash", schemaHash.toString())
-		localStorage.setItem("pos_next_schema_version", newVersion.toString())
-		return newVersion
-	}
-
-	return storedVersion
-}
-
-// Apply schema with auto-versioning
-const schemaVersion = getSchemaVersion()
+// Apply schema with static versioning (prevents localStorage/worker desync bugs)
+const schemaVersion = 10
 log.debug(`Initializing database with schema version: ${schemaVersion}`)
 db.version(schemaVersion).stores(CURRENT_SCHEMA)
 
