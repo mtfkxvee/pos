@@ -183,19 +183,6 @@ export default defineConfig({
 							},
 						},
 					},
-					{
-						urlPattern: ({ request, url }) =>
-							request.mode === "navigate" && url.pathname.startsWith("/pos"),
-						handler: "NetworkFirst",
-						options: {
-							cacheName: "pos-page-cache",
-							networkTimeoutSeconds: 3,
-							expiration: {
-								maxEntries: 1,
-								maxAgeSeconds: 60 * 60 * 24, // 24 hours
-							},
-						},
-					},
 				],
 				cleanupOutdatedCaches: true,
 				skipWaiting: true,
