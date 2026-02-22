@@ -1796,17 +1796,16 @@ watch(show, (newVal) => {
 			posProfile: props.posProfile,
 		})
 
+		// Fetch loyalty points when dialog opens
+		if (settingsStore.redeemLoyaltyPoints && props.customer && props.company) {
+			loadingLoyalty.value = true
+			loyaltyPointsResource.fetch()
+		}
+
 		// Set default payment method if already loaded
 		if (paymentMethods.value.length > 0 && !lastSelectedMethod.value) {
 			const defaultMethod = paymentMethods.value.find((m) => m.default)
 			lastSelectedMethod.value = defaultMethod || paymentMethods.value[0]
-		}
-
-		// Customer credit and balance is pre-fetched when customer changes (see watcher above)
-		// Just log for debugging
-		const creditEnabled = props.allowCreditSale || props.allowCustomerCreditPayment
-		if (creditEnabled) {
-			log.debug("[PaymentDialog] Customer credit/balance should be pre-loaded, current balance:", customerBalance.value)
 		}
 
 	}
