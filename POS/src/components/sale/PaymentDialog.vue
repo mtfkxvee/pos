@@ -1225,18 +1225,21 @@ const customerBalanceResource = createResource({
 })
 // Loyalty Points resource
 const loyaltyPointsResource = createResource({
-	url: "pos_next.api.customers.get_loyalty_points",
+	url: "erpnext.accounts.doctype.loyalty_program.loyalty_program.get_loyalty_program_details_with_points",
 	makeParams() {
 		const customerName = props.customer?.name || props.customer
+		const loyaltyProgram = props.customer?.loyalty_program || null
 		return {
 			customer: customerName,
-			company: props.company,
+			loyalty_program: loyaltyProgram,
+			silent: true
 		}
 	},
 	auto: false,
 	onSuccess(data) {
-		log.debug("[PaymentDialog] Loyalty info loaded:", data)
-		loyaltyPointInfo.value = data || { loyalty_points: 0 }
+		const result = data?.message || data || null;
+		log.debug("[PaymentDialog] Loyalty info loaded:", result)
+		loyaltyPointInfo.value = result || { loyalty_points: 0 }
 		loadingLoyalty.value = false
 	},
 	onError(error) {
