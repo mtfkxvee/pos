@@ -1948,6 +1948,16 @@ async function handlePaymentCompleted(paymentData) {
 			cartStore.setWriteOffAmount(paymentData.write_off_amount);
 		}
 
+		// Set loyalty data if provided
+		cartStore.setLoyaltyData({
+			redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
+			loyalty_points: paymentData.loyalty_points || 0,
+			loyalty_amount: paymentData.loyalty_amount || 0,
+			loyalty_program: paymentData.loyalty_program || null,
+			loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
+			loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
+		});
+
 		// Delete draft if it exists (since we're submitting/saving invoice)
 		const draftIdToDelete = cartStore.currentDraftId;
 
@@ -1968,6 +1978,12 @@ async function handlePaymentCompleted(paymentData) {
 				total_tax: cartStore.totalTax,
 				total_discount: cartStore.totalDiscount,
 				write_off_amount: paymentData.write_off_amount || 0,
+				redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
+				loyalty_points: paymentData.loyalty_points || 0,
+				loyalty_amount: paymentData.loyalty_amount || 0,
+				loyalty_program: paymentData.loyalty_program || null,
+				loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
+				loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 			};
 
 			await offlineStore.saveInvoiceOffline(invoiceData);

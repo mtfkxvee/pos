@@ -793,6 +793,7 @@ export function useInvoice() {
 		targetDoctype = "Sales Invoice",
 		deliveryDate = null,
 		writeOffAmount = 0,
+		loyaltyData = {},
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -841,6 +842,7 @@ export function useInvoice() {
 					coupon_code: couponCode.value,
 					is_pos: 1,
 					update_stock: 1, // Critical: Ensures stock is updated
+					...loyaltyData,
 				}
 
 				if (targetDoctype === "Sales Order" && deliveryDate) {

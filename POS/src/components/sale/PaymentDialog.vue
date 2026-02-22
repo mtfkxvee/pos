@@ -326,6 +326,50 @@
 									</div>
 								</div>
 							</div>
+							<!-- Loyalty Points Redemption Row -->
+							<div v-if="settingsStore.redeemLoyaltyPoints && loyaltyPointInfo && loyaltyPointInfo.loyalty_points > 0" class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
+								<div class="flex items-center justify-between gap-2 mb-1.5">
+									<div class="flex items-center gap-1.5 min-w-0">
+										<svg class="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+										</svg>
+										<span class="text-xs font-medium text-amber-700">{{ __('Redeem Loyalty Points') }}</span>
+									</div>
+									<span v-if="isPointsRedemptionActive && redeemedLoyaltyAmount > 0" class="text-xs font-bold text-amber-600">
+										-{{ formatCurrency(redeemedLoyaltyAmount) }}
+									</span>
+								</div>
+								
+								<div v-if="!isPointsRedemptionActive" class="flex gap-2">
+									<button
+										@click="isPointsRedemptionActive = true; pointsToRedeem = loyaltyPointInfo.loyalty_points"
+										class="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors text-sm font-medium"
+									>
+										{{ __('Use Points') }} ({{ loyaltyPointInfo.loyalty_points }} {{ __('available') }})
+									</button>
+								</div>
+								<div v-else class="flex flex-col gap-1.5">
+									<div class="flex items-center gap-2">
+										<input
+											v-model.number="pointsToRedeem"
+											type="number"
+											min="0"
+											:max="loyaltyPointInfo.loyalty_points"
+											class="w-full h-8 px-2 text-sm border border-amber-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+										/>
+										<button
+											@click="isPointsRedemptionActive = false; pointsToRedeem = 0"
+											class="p-1.5 text-red-500 hover:bg-red-50 rounded"
+										>
+											<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+											</svg>
+										</button>
+									</div>
+									<span class="text-[10px] text-gray-500">{{ __('1 point =') }} {{ formatCurrency(loyaltyPointInfo.conversion_factor) }}</span>
+								</div>
+							</div>
+
 							<!-- Subtotal -->
 							<div class="flex items-center justify-between text-sm">
 								<span class="text-gray-600 text-start">{{ __('Subtotal') }}</span>
@@ -997,7 +1041,7 @@ const customerBalance = ref({
 })
 const loadingCredit = ref(false)
 
-// Wallet state
+// Wallet & Loyalty state
 const walletInfo = ref({
 	wallet_enabled: false,
 	wallet_exists: false,
@@ -1006,6 +1050,16 @@ const walletInfo = ref({
 })
 const loadingWallet = ref(false)
 const walletPaymentMethods = ref(new Set()) // Set of mode_of_payment names that are wallet payments
+
+const loyaltyPointInfo = ref(null)
+const loadingLoyalty = ref(false)
+const pointsToRedeem = ref(0)
+const isPointsRedemptionActive = ref(false)
+
+const redeemedLoyaltyAmount = computed(() => {
+	if (!isPointsRedemptionActive.value || !loyaltyPointInfo.value) return 0
+	return pointsToRedeem.value * (loyaltyPointInfo.value.conversion_factor || 1)
+})
 
 // Delivery date for Sales Orders
 const deliveryDate = ref("")
@@ -1223,6 +1277,29 @@ const walletInfoResource = createResource({
 		}
 		loadingWallet.value = false
 	},
+})
+
+// Loyalty Points resource
+const loyaltyPointsResource = createResource({
+	url: "pos_next.api.customers.get_loyalty_points",
+	makeParams() {
+		const customerName = props.customer?.name || props.customer
+		return {
+			customer: customerName,
+			company: props.company,
+		}
+	},
+	auto: false,
+	onSuccess(data) {
+		log.debug("[PaymentDialog] Loyalty info loaded:", data)
+		loyaltyPointInfo.value = data || null
+		loadingLoyalty.value = false
+	},
+	onError(error) {
+		log.error("[PaymentDialog] Error loading loyalty points:", error)
+		loyaltyPointInfo.value = null
+		loadingLoyalty.value = false
+	}
 })
 
 // Identify which payment methods are wallet payments (batch query)
@@ -1518,12 +1595,12 @@ const calculatedAdditionalDiscount = computed(() => {
 })
 
 const remainingAmount = computed(() => {
-	const remaining = roundCurrency(props.grandTotal) - totalPaid.value
+	const remaining = roundCurrency(props.grandTotal) - totalPaid.value - redeemedLoyaltyAmount.value
 	return remaining > 0 ? roundCurrency(remaining) : 0
 })
 
 const changeAmount = computed(() => {
-	const change = totalPaid.value - roundCurrency(props.grandTotal)
+	const change = totalPaid.value + redeemedLoyaltyAmount.value - roundCurrency(props.grandTotal)
 	return change > 0 ? roundCurrency(change) : 0
 })
 
@@ -1799,7 +1876,7 @@ watch(
 
 watch(show, (newVal) => {
 	if (newVal) {
-		// Reset state when dialog opens (but NOT customerBalance - it's pre-fetched)
+		// Reset state when dialog opens
 		paymentEntries.value = []
 		customAmount.value = ""
 		numpadClear()
@@ -1810,6 +1887,10 @@ watch(show, (newVal) => {
 		selectedSalesPersons.value = []
 		salesPersonSearch.value = ""
 		applyWriteOff.value = false // Reset write-off state
+		// Reset loyalty state
+		isPointsRedemptionActive.value = false
+		pointsToRedeem.value = 0
+		
 		// Set default delivery date to today for Sales Orders
 		deliveryDate.value = isSalesOrder.value ? today : ""
 
@@ -2205,6 +2286,13 @@ function completePayment() {
 		// Write-off data
 		write_off_amount: writeOffAmount.value,
 		is_write_off: writeOffAmount.value > 0,
+		// Loyalty Points data
+		redeem_loyalty_points: isPointsRedemptionActive.value && redeemedLoyaltyAmount.value > 0 ? 1 : 0,
+		loyalty_points: isPointsRedemptionActive.value ? pointsToRedeem.value : 0,
+		loyalty_amount: isPointsRedemptionActive.value ? redeemedLoyaltyAmount.value : 0,
+		loyalty_program: isPointsRedemptionActive.value && loyaltyPointInfo.value ? loyaltyPointInfo.value.loyalty_program : null,
+		loyalty_redemption_account: isPointsRedemptionActive.value ? settingsStore.loyaltyRedemptionAccount : null,
+		loyalty_redemption_cost_center: isPointsRedemptionActive.value ? settingsStore.loyaltyRedemptionCostCenter : null,
 	}
 
 	log.debug("[PaymentDialog] Emitting payment-completed:", paymentData)

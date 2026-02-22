@@ -196,3 +196,16 @@ def get_customer_details(customer):
         frappe.throw(_("Customer is required"))
 
     return frappe.get_cached_doc("Customer", customer).as_dict()
+
+
+@frappe.whitelist()
+def get_loyalty_points(customer, company, loyalty_program=None):
+    """
+    Get loyalty program details including points balance
+    """
+    try:
+        from erpnext.accounts.doctype.loyalty_program.loyalty_program import get_loyalty_program_details_with_points
+        return get_loyalty_program_details_with_points(customer, company, loyalty_program=loyalty_program)
+    except Exception as e:
+        frappe.log_error("Failed to get loyalty points", str(e))
+        return None

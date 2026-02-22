@@ -14,6 +14,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		wallet_account: "",
 		auto_create_wallet: 1,
 		loyalty_to_wallet: 1,
+		redeem_loyalty_points: 0,
+		loyalty_redemption_account: "",
+		loyalty_redemption_cost_center: "",
 		// General Settings
 		max_discount_allowed: 0,
 		use_percentage_discount: 0,
@@ -83,6 +86,15 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 	const loyaltyToWallet = computed(() =>
 		Boolean(settings.value.loyalty_to_wallet),
+	)
+	const redeemLoyaltyPoints = computed(() =>
+		Boolean(settings.value.redeem_loyalty_points),
+	)
+	const loyaltyRedemptionAccount = computed(() =>
+		settings.value.loyalty_redemption_account || "",
+	)
+	const loyaltyRedemptionCostCenter = computed(() =>
+		settings.value.loyalty_redemption_cost_center || "",
 	)
 
 	// Computed - General Settings
@@ -281,6 +293,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			wallet_account: "",
 			auto_create_wallet: 1,
 			loyalty_to_wallet: 1,
+			redeem_loyalty_points: 0,
+			loyalty_redemption_account: "",
+			loyalty_redemption_cost_center: "",
 			// General Settings
 			max_discount_allowed: 0,
 			use_percentage_discount: 0,
@@ -386,6 +401,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		walletAccount,
 		autoCreateWallet,
 		loyaltyToWallet,
+		redeemLoyaltyPoints,
+		loyaltyRedemptionAccount,
+		loyaltyRedemptionCostCenter,
 
 		// Computed - General Settings
 		isEnabled,

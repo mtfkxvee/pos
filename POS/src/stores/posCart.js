@@ -133,6 +133,15 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		retryCount: 0,            // Number of consecutive failures
 	})
 
+	const loyaltyData = ref({
+		redeem_loyalty_points: 0,
+		loyalty_points: 0,
+		loyalty_amount: 0,
+		loyalty_program: null,
+		loyalty_redemption_account: null,
+		loyalty_redemption_cost_center: null,
+	})
+
 	// Generation counter to track cart changes and invalidate stale operations
 	let cartGeneration = 0
 
@@ -253,6 +262,17 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		writeOffAmount.value = amount || 0
 	}
 
+	function setLoyaltyData(data) {
+		loyaltyData.value = {
+			redeem_loyalty_points: data.redeem_loyalty_points || 0,
+			loyalty_points: data.loyalty_points || 0,
+			loyalty_amount: data.loyalty_amount || 0,
+			loyalty_program: data.loyalty_program || null,
+			loyalty_redemption_account: data.loyalty_redemption_account || null,
+			loyalty_redemption_cost_center: data.loyalty_redemption_cost_center || null,
+		}
+	}
+
 	async function submitInvoice() {
 		if (invoiceItems.value.length === 0) {
 			showWarning(__("Cart is empty"))
@@ -263,10 +283,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
-		const result = await baseSubmitInvoice(targetDoctype.value, deliveryDate.value, writeOffAmount.value)
-		// Reset write-off amount after successful submission
+		const result = await baseSubmitInvoice(targetDoctype.value, deliveryDate.value, writeOffAmount.value, toRaw(loyaltyData.value))
+		// Reset write-off and loyalty amount after successful submission
 		if (result) {
 			writeOffAmount.value = 0
+			loyaltyData.value = { redeem_loyalty_points: 0, loyalty_points: 0, loyalty_amount: 0, loyalty_program: null, loyalty_redemption_account: null, loyalty_redemption_cost_center: null }
 		}
 		return result
 	}
@@ -406,7 +427,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Find matching cart item by item_code and uom
 			const cartItem = invoiceItems.value.find(
 				item => item.item_code === freeItem.item_code &&
-				(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom)
+					(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom)
 			)
 
 			if (cartItem) {
@@ -1733,6 +1754,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Write-off feature
 		writeOffAmount,
 		setWriteOffAmount,
+
+		// Loyalty feature
+		loyaltyData,
+		setLoyaltyData,
 
 		// Utilities
 		cancelPendingOfferProcessing: () => {
