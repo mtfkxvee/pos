@@ -11,10 +11,6 @@
         "section_break_wallet",
         "enable_loyalty_program",
         "default_loyalty_program",
-        "wallet_account",
-        "column_break_wallet",
-        "auto_create_wallet",
-        "loyalty_to_wallet",
         "redeem_loyalty_points",
         "loyalty_redemption_account",
         "loyalty_redemption_cost_center",
@@ -105,7 +101,7 @@
         {
             "fieldname": "section_break_wallet",
             "fieldtype": "Section Break",
-            "label": "Wallet & Loyalty"
+            "label": "Loyalty"
         },
         {
             "default": "0",
@@ -122,37 +118,6 @@
             "label": "Loyalty Program",
             "mandatory_depends_on": "enable_loyalty_program",
             "options": "Loyalty Program"
-        },
-        {
-            "depends_on": "enable_loyalty_program",
-            "description": "Receivable account for customer wallets",
-            "fieldname": "wallet_account",
-            "fieldtype": "Link",
-            "label": "Wallet Account",
-            "mandatory_depends_on": "enable_loyalty_program",
-            "options": "Account"
-        },
-        {
-            "fieldname": "column_break_wallet",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "1",
-            "depends_on": "enable_loyalty_program",
-            "description": "Automatically create wallet for new customers (always enabled when loyalty program is active)",
-            "fieldname": "auto_create_wallet",
-            "fieldtype": "Check",
-            "label": "Auto Create Wallet",
-            "read_only_depends_on": "enable_loyalty_program"
-        },
-        {
-            "default": "1",
-            "depends_on": "enable_loyalty_program",
-            "description": "Automatically convert earned loyalty points to wallet balance. Uses Conversion Factor from Loyalty Program (always enabled when loyalty program is active)",
-            "fieldname": "loyalty_to_wallet",
-            "fieldtype": "Check",
-            "label": "Convert Loyalty Points to Wallet",
-            "read_only_depends_on": "enable_loyalty_program"
         },
         {
             "default": "0",

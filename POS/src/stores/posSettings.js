@@ -78,15 +78,6 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const defaultLoyaltyProgram = computed(() =>
 		settings.value.default_loyalty_program || "",
 	)
-	const walletAccount = computed(() =>
-		settings.value.wallet_account || "",
-	)
-	const autoCreateWallet = computed(() =>
-		Boolean(settings.value.auto_create_wallet),
-	)
-	const loyaltyToWallet = computed(() =>
-		Boolean(settings.value.loyalty_to_wallet),
-	)
 	const redeemLoyaltyPoints = computed(() =>
 		Boolean(settings.value.redeem_loyalty_points),
 	)
@@ -398,9 +389,6 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		// Computed - Wallet & Loyalty Settings
 		enableLoyaltyProgram,
 		defaultLoyaltyProgram,
-		walletAccount,
-		autoCreateWallet,
-		loyaltyToWallet,
 		redeemLoyaltyPoints,
 		loyaltyRedemptionAccount,
 		loyaltyRedemptionCostCenter,
