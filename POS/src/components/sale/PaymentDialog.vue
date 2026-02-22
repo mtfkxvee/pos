@@ -327,13 +327,13 @@
 								</div>
 							</div>
 							<!-- Loyalty Points Redemption Row -->
-							<div v-if="settingsStore.redeemLoyaltyPoints && loyaltyPointInfo && loyaltyPointInfo.loyalty_points > 0" class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
+							<div v-if="settingsStore.redeemLoyaltyPoints && loyaltyPointInfo" class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
 								<div class="flex items-center justify-between gap-2 mb-1.5">
 									<div class="flex items-center gap-1.5 min-w-0">
-										<svg class="w-3.5 h-3.5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<svg class="w-3.5 h-3.5 flex-shrink-0" :class="loyaltyPointInfo.loyalty_points > 0 ? 'text-amber-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 										</svg>
-										<span class="text-xs font-medium text-amber-700">{{ __('Redeem Loyalty Points') }}</span>
+										<span class="text-xs font-medium" :class="loyaltyPointInfo.loyalty_points > 0 ? 'text-amber-700' : 'text-gray-500'">{{ __('Redeem Loyalty Points') }}</span>
 									</div>
 									<span v-if="isPointsRedemptionActive && redeemedLoyaltyAmount > 0" class="text-xs font-bold text-amber-600">
 										-{{ formatCurrency(redeemedLoyaltyAmount) }}
@@ -343,7 +343,13 @@
 								<div v-if="!isPointsRedemptionActive" class="flex gap-2">
 									<button
 										@click="isPointsRedemptionActive = true; pointsToRedeem = loyaltyPointInfo.loyalty_points"
-										class="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors text-sm font-medium"
+										:disabled="loyaltyPointInfo.loyalty_points === 0"
+										:class="[
+											'w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
+											loyaltyPointInfo.loyalty_points > 0 
+												? 'bg-white border-amber-300 text-amber-600 hover:bg-amber-50' 
+												: 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-70'
+										]"
 									>
 										{{ __('Use Points') }} ({{ loyaltyPointInfo.loyalty_points }} {{ __('available') }})
 									</button>
