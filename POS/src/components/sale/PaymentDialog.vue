@@ -327,7 +327,7 @@
 								</div>
 							</div>
 							<!-- Loyalty Points Redemption Row -->
-							<div v-if="settingsStore.redeemLoyaltyPoints && loyaltyPointInfo" class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
+							<div v-if="loyaltyPointInfo" class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
 								<div class="flex items-center justify-between gap-2 mb-1.5">
 									<div class="flex items-center gap-1.5 min-w-0">
 										<svg class="w-3.5 h-3.5 flex-shrink-0" :class="loyaltyPointInfo.loyalty_points > 0 ? 'text-amber-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1797,7 +1797,7 @@ watch(show, (newVal) => {
 		})
 
 		// Fetch loyalty points when dialog opens
-		if (settingsStore.redeemLoyaltyPoints && props.customer && props.company) {
+		if (props.customer && props.company) {
 			loadingLoyalty.value = true
 			loyaltyPointsResource.fetch()
 		}
