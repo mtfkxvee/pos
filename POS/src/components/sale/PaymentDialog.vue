@@ -326,8 +326,8 @@
 									</div>
 								</div>
 							</div>
-							<!-- Loyalty Points Redemption Row -->
-							<div v-if="loyaltyPointInfo" class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
+							<!-- Loyalty Points Redemption Row (forced to show) -->
+							<div class="pb-1.5 mb-1 border-b border-dashed border-amber-200">
 								<div class="flex items-center justify-between gap-2 mb-1.5">
 									<div class="flex items-center gap-1.5 min-w-0">
 										<svg class="w-3.5 h-3.5 flex-shrink-0" :class="loyaltyPointInfo.loyalty_points > 0 ? 'text-amber-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1036,7 +1036,7 @@ const customerBalance = ref({
 const loadingCredit = ref(false)
 
 // Loyalty state
-const loyaltyPointInfo = ref(null)
+const loyaltyPointInfo = ref({ loyalty_points: 0 })
 const loadingLoyalty = ref(false)
 const pointsToRedeem = ref(0)
 const isPointsRedemptionActive = ref(false)
@@ -1236,12 +1236,12 @@ const loyaltyPointsResource = createResource({
 	auto: false,
 	onSuccess(data) {
 		log.debug("[PaymentDialog] Loyalty info loaded:", data)
-		loyaltyPointInfo.value = data || null
+		loyaltyPointInfo.value = data || { loyalty_points: 0 }
 		loadingLoyalty.value = false
 	},
 	onError(error) {
 		log.error("[PaymentDialog] Error loading loyalty points:", error)
-		loyaltyPointInfo.value = null
+		loyaltyPointInfo.value = { loyalty_points: 0 }
 		loadingLoyalty.value = false
 	}
 })
