@@ -68,6 +68,10 @@ const props = defineProps({
 	customer: {
 		type: Object,
 		required: true
+	},
+	isOffline: {
+		type: Boolean,
+		default: false
 	}
 })
 
@@ -94,7 +98,13 @@ const loyaltyProgram = ref('')
 
 watch(() => props.customer, async (newCustomer) => {
 	if (newCustomer) {
-		await fetchLoyaltyDetails(newCustomer.name)
+		if (props.isOffline) {
+			console.log("Using offline loyalty points for", newCustomer.name);
+			loyaltyPoints.value = newCustomer.loyalty_points || 0;
+			loyaltyProgram.value = newCustomer.loyalty_program || '';
+		} else {
+			await fetchLoyaltyDetails(newCustomer.name)
+		}
 	}
 }, { immediate: true })
 

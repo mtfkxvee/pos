@@ -1801,8 +1801,16 @@ watch(show, (newVal) => {
 
 		// Fetch loyalty points when dialog opens
 		if (props.customer && props.company) {
-			loadingLoyalty.value = true
-			loyaltyPointsResource.fetch()
+			if (props.isOffline) {
+				log.debug("[PaymentDialog] Using offline cached loyalty points");
+				loyaltyPointInfo.value = {
+					loyalty_points: props.customer.loyalty_points || 0,
+					loyalty_program: props.customer.loyalty_program || null
+				}
+			} else {
+				loadingLoyalty.value = true
+				loyaltyPointsResource.fetch()
+			}
 		}
 
 		// Set default payment method if already loaded

@@ -8,7 +8,7 @@ from frappe import _
 
 
 @frappe.whitelist()
-def get_customers(search_term="", pos_profile=None, limit=20):
+def get_customers(search_term="", pos_profile=None, limit=20, fields=None):
 
     """
     Search customers for inline customer selection in POS.
@@ -37,16 +37,57 @@ def get_customers(search_term="", pos_profile=None, limit=20):
                 filters["customer_group"] = profile_doc.customer_group
                 frappe.logger().debug(f"Filtering by customer_group: {profile_doc.customer_group}")
 
+        # Determine fields to fetch
+        fetch_fields = ["name", "customer_name", "mobile_no", "email_id", "loyalty_program"]
+        if fields:
+            import json
+            if isinstance(fields, str):
+                try:
+                    fields = json.loads(fields)
+                except Exception:
+                    fields = [fields]
+            if isinstance(fields, list):
+                # Always ensure we have 'name' for the dict lookup
+                if 'name' not in fields and '*' not in fields:
+                    fields.append('name')
+                fetch_fields = fields
+
         # Return all customers (for client-side filtering)
         filters["disabled"] = 0
-        customer_limit = limit if limit not in (None, 0) else frappe.db.count("Customer", filters)
+        customer_limit = limit if limit not in (None, 0, "0", "") else frappe.db.count("Customer", filters)
+        
         result = frappe.get_all(
             "Customer",
             filters=filters,
-            fields=["name", "customer_name", "mobile_no", "email_id"],
+            fields=fetch_fields,
             limit=customer_limit,
             order_by="customer_name asc",
         )
+
+        # Batch fetch loyalty points for all retrieved customers
+        # To avoid performance issues, we do a single aggregate query
+        if result:
+            customer_names = [c.name for c in result]
+            
+            # Fetch total points grouped by customer
+            points_data = frappe.db.sql(
+                """
+                SELECT customer, sum(loyalty_points) as total_points
+                FROM `tabLoyalty Point Entry`
+                WHERE customer IN %s
+                GROUP BY customer
+                """,
+                (tuple(customer_names),),
+                as_dict=True
+            )
+            
+            # Map points back to customers
+            points_map = {row.customer: row.total_points for row in points_data}
+            
+            for customer in result:
+                # Add loyalty_points property, default to 0
+                customer.loyalty_points = points_map.get(customer.name, 0)
+
         frappe.logger().debug(f"get_customers returned {len(result)} customers")
         return result
     except Exception as e:

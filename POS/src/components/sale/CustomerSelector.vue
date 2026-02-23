@@ -109,6 +109,7 @@
 		v-if="selectedCustomer"
 		v-model="showDetails"
 		:customer="selectedCustomer"
+		:is-offline="isOffline"
 		@select="confirmSelection"
 	/>
 </template>

@@ -2197,7 +2197,12 @@ async function handleSaveDraft() {
 		cartStore.customer,
 		cartStore.posProfile,
 		cartStore.appliedOffers,
-		cartStore.currentDraftId
+		cartStore.currentDraftId,
+		{
+			additionalDiscount: cartStore.additionalDiscount,
+			appliedCoupon: cartStore.appliedCoupon,
+			loyaltyData: cartStore.loyaltyData
+		}
 	);
 	if (savedDraft) {
 		cartStore.clearCart();
@@ -2215,7 +2220,12 @@ async function handleLoadDraft(draft) {
 				cartStore.customer,
 				cartStore.posProfile,
 				cartStore.appliedOffers,
-				cartStore.currentDraftId
+				cartStore.currentDraftId,
+				{
+					additionalDiscount: cartStore.additionalDiscount,
+					appliedCoupon: cartStore.appliedCoupon,
+					loyaltyData: cartStore.loyaltyData
+				}
 			);
 
 			if (!saved) {
@@ -2233,6 +2243,13 @@ async function handleLoadDraft(draft) {
 		cartStore.invoiceItems = draftData.items;
 		cartStore.setCustomer(draftData.customer);
 		cartStore.currentDraftId = draft.draft_id; // Set current draft ID
+		
+		// Restore additional state
+		cartStore.additionalDiscount = draftData.additionalDiscount || 0;
+		cartStore.appliedCoupon = draftData.appliedCoupon || null;
+		if (draftData.loyaltyData && Object.keys(draftData.loyaltyData).length > 0) {
+			cartStore.setLoyaltyData(draftData.loyaltyData);
+		}
 
 		// Rebuild incremental cache to recalculate totals
 		cartStore.rebuildIncrementalCache();
