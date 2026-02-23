@@ -1071,6 +1071,27 @@ def submit_invoice(invoice=None, data=None):
                         "POS Write-Off Error"
                     )
 
+        # Handle loyalty point redemption missing accounts
+        loyalty_amount = flt(data.get("loyalty_amount") or invoice.get("loyalty_amount") or 0)
+        if loyalty_amount > 0 and doctype == "Sales Invoice":
+            if not invoice_doc.get("loyalty_redemption_account"):
+                # Try getting from POS Settings
+                pos_settings = frappe.get_all(
+                    "POS Settings",
+                    filters={"enabled": 1, "loyalty_redemption_account": ["is", "set"]},
+                    fields=["loyalty_redemption_account", "loyalty_redemption_cost_center"],
+                    limit=1
+                )
+                if pos_settings:
+                    invoice_doc.loyalty_redemption_account = pos_settings[0].loyalty_redemption_account
+                    if not invoice_doc.get("loyalty_redemption_cost_center"):
+                        invoice_doc.loyalty_redemption_cost_center = pos_settings[0].loyalty_redemption_cost_center
+                elif invoice_doc.get("loyalty_program"):
+                    # Fallback to the loyalty program's expense account
+                    expense_account = frappe.db.get_value("Loyalty Program", invoice_doc.loyalty_program, "expense_account")
+                    if expense_account:
+                        invoice_doc.loyalty_redemption_account = expense_account
+
         # Check if POS Settings allows negative stock
         pos_settings_allow_negative = False
         if pos_profile:
