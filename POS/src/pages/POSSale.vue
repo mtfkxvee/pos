@@ -1027,7 +1027,7 @@ import { useUserData } from "@/data/user";
 import { parseError } from "@/utils/errorHandler";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sync";
-import { printInvoice, printInvoiceByName } from "@/utils/printInvoice";
+import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
 import { Button, Dialog, createResource } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -1912,8 +1912,16 @@ async function handleErrorRetry() {
 
 async function handlePaymentCompleted(paymentData) {
 	try {
+		// Open print window right away synchronously from the button click event
+		// to prevent the browser's popup blocker from blocking window.open after async operations.
+		let targetPrintWindow = null;
+		if (offlineStore.isOffline && (shiftStore.autoPrintEnabled || posSettingsStore.silentPrint)) {
+			targetPrintWindow = window.open("", "_blank", "width=350,height=600");
+		}
+
 		const customerValue = cartStore.customer?.name || cartStore.customer;
 		if (!customerValue && !shiftStore.profileCustomer) {
+			if (targetPrintWindow) targetPrintWindow.close();
 			showWarning(__("Please select a customer before proceeding"));
 			uiStore.showPaymentDialog = false;
 			uiStore.showCustomerDialog = true;
@@ -1986,12 +1994,11 @@ async function handlePaymentCompleted(paymentData) {
 				loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 			};
 
+			const invoiceName = `OFFLINE-${Date.now()}`;
+			invoiceData.name = invoiceName;
+
 			await offlineStore.saveInvoiceOffline(invoiceData);
-			uiStore.showSuccess(
-				`OFFLINE-${Date.now()}`,
-				cartStore.grandTotal,
-				paymentData.paid_amount
-			);
+			
 			uiStore.showPaymentDialog = false;
 			cartStore.clearCart();
 			// Reset cart hash after successful payment
@@ -2002,7 +2009,23 @@ async function handlePaymentCompleted(paymentData) {
 				draftsStore.deleteDraft(draftIdToDelete);
 			}
 
-			showSuccess(__("Invoice saved offline. Will sync when online"));
+			if (shiftStore.autoPrintEnabled || posSettingsStore.silentPrint) {
+				try {
+					printInvoiceCustom(invoiceData, targetPrintWindow);
+					showSuccess(__("Invoice {0} saved offline and sent to printer", [invoiceName]));
+				} catch (error) {
+					if (targetPrintWindow) targetPrintWindow.close();
+					log.error("Offline auto-print error:", error);
+					showWarning(__("Invoice {0} saved offline but print failed", [invoiceName]));
+				}
+			} else {
+				uiStore.showSuccess(
+					invoiceName,
+					cartStore.grandTotal,
+					paymentData.paid_amount
+				);
+				showSuccess(__("Invoice saved offline. Will sync when online"));
+			}
 		} else {
 			// Get item codes from cart before clearing
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
@@ -2032,21 +2055,26 @@ async function handlePaymentCompleted(paymentData) {
 					log.debug("Background invoice cache refresh failed:", err)
 				);
 
-				if (shiftStore.autoPrintEnabled) {
+				if (shiftStore.autoPrintEnabled || posSettingsStore.silentPrint) {
 					try {
-						await handlePrintInvoice({ name: invoiceName });
+						await handlePrintInvoice({ name: invoiceName }, targetPrintWindow);
 						showSuccess(__("Invoice {0} created and sent to printer", [invoiceName]));
 					} catch (error) {
+						if (targetPrintWindow) targetPrintWindow.close();
 						log.error("Auto-print error:", error);
 						showWarning(__("Invoice {0} created but print failed", [invoiceName]));
 					}
 				} else {
+					if (targetPrintWindow) targetPrintWindow.close();
 					uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
 					showSuccess(__("Invoice {0} created successfully", [invoiceName]));
 				}
+			} else {
+				if (targetPrintWindow) targetPrintWindow.close();
 			}
 		}
 	} catch (error) {
+		if (targetPrintWindow) targetPrintWindow.close();
 		log.error("Error submitting invoice:", error);
 		uiStore.showPaymentDialog = false;
 
@@ -2714,15 +2742,15 @@ function handleViewInvoice(invoice) {
 }
 
 // Centralized print handler - uses printInvoice.js utilities
-async function handlePrintInvoice(invoiceData) {
+async function handlePrintInvoice(invoiceData, targetWindow = null) {
 	try {
 		// If invoiceData is a full document with items, use printInvoice directly
 		if (invoiceData.items && Array.isArray(invoiceData.items)) {
-			await printInvoice(invoiceData);
+			await printInvoice(invoiceData, null, null, targetWindow);
 		} else {
 			// If it's just an invoice object with name, fetch and print
 			// printInvoiceByName will automatically fetch the print format from the invoice's POS Profile
-			await printInvoiceByName(invoiceData.name);
+			await printInvoiceByName(invoiceData.name, null, null, targetWindow);
 		}
 	} catch (error) {
 		log.error("Error printing invoice:", error);

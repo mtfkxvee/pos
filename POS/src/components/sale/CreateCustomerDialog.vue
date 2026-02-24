@@ -205,6 +205,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 const log = logger.create("CreateCustomerDialog")
 
+import { offlineState, saveOfflineCustomer } from "@/utils/offline"
+
 // =============================================================================
 // Composables & Stores
 // =============================================================================
@@ -468,6 +470,33 @@ const handleCreate = async () => {
 	if (!customerData.value.custom_kode_pelanggan) {
 		return showError(__("Customer Code is required"))
 	}
+
+	if (offlineState.isOffline) {
+		if (isEditMode.value) {
+			return showError(__("Cannot edit customers while offline"))
+		}
+		try {
+			const doc = {
+				doctype: "Customer",
+				customer_name: customerData.value.customer_name,
+				custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
+				customer_type: "Individual",
+				customer_group: customerData.value.customer_group || "Individual",
+				territory: customerData.value.territory || "All Territories",
+				mobile_no: customerData.value.mobile_no || "",
+				email_id: customerData.value.email_id || "",
+			}
+			const result = await saveOfflineCustomer(doc)
+			showSuccess(__("Customer {0} created offline", [result.customer.customer_name]))
+			emit("customer-created", result.customer)
+			show.value = false
+		} catch (error) {
+			log.error("Error creating customer offline", error)
+			showError(error.message || __("Failed to save customer offline"))
+		}
+		return
+	}
+
 	if (isEditMode.value) {
 		await updateCustomerResource.submit()
 	} else {

@@ -42,6 +42,9 @@ const CURRENT_SCHEMA = {
 	// offline_id is a unique UUID for deduplication across syncs
 	invoice_queue: "++id, &offline_id, timestamp, synced",
 
+	// Customer queue for offline creations
+	customer_queue: "++id, &offline_id, timestamp, synced",
+
 	// Items cache with searchable fields
 	// variant_of index allows querying variants by their template item
 	items: "&item_code, item_name, item_group, variant_of, *barcodes",
@@ -81,7 +84,7 @@ const CURRENT_SCHEMA = {
 }
 
 // Apply schema with static versioning (prevents localStorage/worker desync bugs)
-const schemaVersion = 10
+const schemaVersion = 11
 log.debug(`Initializing database with schema version: ${schemaVersion}`)
 db.version(schemaVersion).stores(CURRENT_SCHEMA)
 

@@ -14,6 +14,7 @@ export async function printInvoice(
 	invoiceData,
 	printFormat = null,
 	letterhead = null,
+	targetWindow = null
 ) {
 	try {
 		if (!invoiceData || !invoiceData.name) {
@@ -40,7 +41,11 @@ export async function printInvoice(
 
 		// Open PDF in new window - browser will handle print dialog
 		const printUrl = `/printview?${params.toString()}`
-		const printWindow = window.open(printUrl, "_blank", "width=800,height=600")
+		const printWindow = targetWindow || window.open(printUrl, "_blank", "width=800,height=600")
+
+		if (targetWindow) {
+			targetWindow.location.href = printUrl;
+		}
 
 		if (!printWindow) {
 			throw new Error(
@@ -52,7 +57,7 @@ export async function printInvoice(
 	} catch (error) {
 		log.error("Error printing with Frappe print format:", error)
 		// Fallback to custom print format
-		return printInvoiceCustom(invoiceData)
+		return printInvoiceCustom(invoiceData, targetWindow)
 	}
 }
 
@@ -78,9 +83,14 @@ export async function printInvoice(
  * @param {Array} invoiceData.payments - Payment records
  * @param {number} invoiceData.grand_total - Invoice total amount
  */
-export function printInvoiceCustom(invoiceData) {
+export function printInvoiceCustom(invoiceData, targetWindow = null) {
 	// Open print window with receipt size dimensions (80mm ≈ 302px at 96 DPI)
-	const printWindow = window.open("", "_blank", "width=350,height=600")
+	const printWindow = targetWindow || window.open("", "_blank", "width=350,height=600")
+
+	if (!printWindow) {
+		console.error("Popup blocked! Could not open print window.");
+		return;
+	}
 
 	const printContent = `
 		<!DOCTYPE html>
@@ -455,12 +465,11 @@ export function printInvoiceCustom(invoiceData) {
 	printWindow.document.write(printContent)
 	printWindow.document.close()
 
-	// Auto print after load
-	printWindow.onload = () => {
-		setTimeout(() => {
-			printWindow.print()
-		}, 250)
-	}
+	// Auto print after a short delay (onload doesn't always fire for document.write)
+	setTimeout(() => {
+		printWindow.focus()
+		printWindow.print()
+	}, 500)
 }
 
 function formatCurrency(amount) {
@@ -477,6 +486,7 @@ export async function printInvoiceByName(
 	invoiceName,
 	printFormat = null,
 	letterhead = null,
+	targetWindow = null
 ) {
 	try {
 		// Fetch the invoice document using proper POS API endpoint
@@ -507,7 +517,7 @@ export async function printInvoiceByName(
 		}
 
 		// Print the invoice
-		return await printInvoice(invoiceDoc, printFormat, letterhead)
+		return await printInvoice(invoiceDoc, printFormat, letterhead, targetWindow)
 	} catch (error) {
 		log.error("Error fetching invoice for print:", error)
 		throw error

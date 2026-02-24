@@ -152,6 +152,57 @@ export const deleteOfflineInvoice = async (id) => {
 }
 
 // ============================================================================
+// OFFLINE CUSTOMER QUEUE OPERATIONS
+// ============================================================================
+
+/**
+ * Save customer to offline queue
+ * @param {Object} customerData - Customer data to save
+ * @returns {Promise<{success: boolean, id: number, offline_id: string}>}
+ */
+export const saveOfflineCustomer = async (customerData) => {
+	if (!customerData.customer_name) {
+		throw new Error("Cannot save customer without a name")
+	}
+
+	const cleanData = JSON.parse(JSON.stringify(customerData))
+	const offlineId = generateOfflineId()
+	cleanData.offline_id = offlineId
+
+	// Add mock name to be used across the app until it syncs
+	if (!cleanData.name) {
+		cleanData.name = `OFL-CUST-${Date.now()}`
+	}
+
+	const id = await db.customer_queue.add({
+		offline_id: offlineId,
+		data: cleanData,
+		timestamp: Date.now(),
+		synced: false,
+		retry_count: 0,
+	})
+
+	// Add to local customers cache as well so it's searchable immediately
+	await db.customers.put(cleanData)
+
+	log.info(`Customer saved to offline queue`, { offline_id: offlineId })
+	return { success: true, id, offline_id: offlineId, customer: cleanData }
+}
+
+/**
+ * Get all pending (unsynced) offline customers
+ * @returns {Promise<Array>}
+ */
+export const getOfflineCustomers = async () => {
+	try {
+		return await db.customer_queue.filter((cust) => !cust.synced).toArray()
+	} catch (error) {
+		log.error("Failed to get offline customers", error)
+		return []
+	}
+}
+
+// ============================================================================
 // DEDUPLICATION CHECK
 // ============================================================================
 
@@ -686,7 +737,7 @@ export const getCachedUnpaidInvoices = async (posProfile, options = {}) => {
 export const cacheUnpaidSummary = async (summary, posProfile) => {
 	try {
 		await db.settings.put({
-			key: `unpaid_summary_${posProfile}`,
+			key: `unpaid_summary_${posProfile} `,
 			value: {
 				...summary,
 				cached_at: Date.now(),
@@ -707,7 +758,7 @@ export const cacheUnpaidSummary = async (summary, posProfile) => {
  */
 export const getCachedUnpaidSummary = async (posProfile) => {
 	try {
-		const result = await db.settings.get(`unpaid_summary_${posProfile}`)
+		const result = await db.settings.get(`unpaid_summary_${posProfile} `)
 		return result?.value || { count: 0, total_outstanding: 0, total_paid: 0 }
 	} catch (error) {
 		log.error("Failed to get cached unpaid summary", error)
