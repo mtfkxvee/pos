@@ -202,6 +202,67 @@ export const getOfflineCustomers = async () => {
 	}
 }
 
+/**
+ * Sync all pending offline customers to server.
+ * Updates offline invoices with the real customer ID before invoice sync.
+ */
+export const syncOfflineCustomers = async () => {
+	if (isOffline()) return;
+
+	const pendingCustomers = await getOfflineCustomers();
+	if (!pendingCustomers.length) return;
+
+	log.info(`Starting sync of ${pendingCustomers.length} offline customer(s)`);
+
+	for (const customer of pendingCustomers) {
+		try {
+			const doc = { ...customer.data, doctype: "Customer" };
+			// Remove offline IDs to avoid conflicting with server database
+			delete doc.offline_id;
+			delete doc.name;
+
+			const response = await call("frappe.client.insert", { doc });
+			if (response && response.name) {
+				const serverCustomerName = response.name;
+
+				// Update any offline invoices pointing to this mock offline customer
+				await db.invoice_queue
+					.filter(inv => inv.data.customer === customer.data.name)
+					.modify(inv => {
+						inv.data.customer = serverCustomerName;
+						// Update customer_name as well if it matches
+						if (inv.data.customer_name === customer.data.customer_name) {
+							inv.data.customer_name = response.customer_name || serverCustomerName;
+						}
+					});
+
+				// Mark as synced
+				await db.customer_queue.update(customer.id, {
+					synced: true,
+					server_customer: serverCustomerName
+				});
+
+				// Update local customer cache so references are correct
+				const oldCustomer = await db.customers.where("name").equals(customer.data.name).first();
+				if (oldCustomer) {
+					await db.customers.where("name").equals(customer.data.name).delete();
+					await db.customers.put({
+						...oldCustomer,
+						name: serverCustomerName,
+						offline_id: undefined
+					});
+				}
+
+				log.success(`Offline customer synced: ${customer.data.name} -> ${serverCustomerName}`);
+			}
+		} catch (error) {
+			log.error("Failed to sync offline customer", { id: customer.id, error });
+			const newRetryCount = (customer.retry_count || 0) + 1;
+			await db.customer_queue.update(customer.id, { retry_count: newRetryCount });
+		}
+	}
+}
+
 // ============================================================================
 // DEDUPLICATION CHECK
 // ============================================================================
@@ -409,6 +470,9 @@ export const syncOfflineInvoices = async () => {
 	}
 
 	return await syncMutex.withLock(async () => {
+		// Ensure customers are synced before invoices so invoices have valid customer links
+		await syncOfflineCustomers()
+
 		const pendingInvoices = await getOfflineInvoices()
 
 		if (!pendingInvoices.length) {
