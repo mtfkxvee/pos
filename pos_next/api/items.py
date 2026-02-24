@@ -673,6 +673,19 @@ def _build_item_base_conditions(pos_profile_doc, item_group=None, exclude_varian
 		conditions.append("IFNULL(i.custom_company, '') IN (%s, '')")
 		params.append(pos_profile_doc.company)
 
+	# Apply item group filters from POS Profile if configured
+	# This ensures we only load items from allowed groups
+	allowed_item_groups = []
+	if getattr(pos_profile_doc, "item_groups", []):
+		for row in pos_profile_doc.item_groups:
+			allowed_item_groups.extend(_get_item_group_with_descendants(row.item_group))
+	
+	if allowed_item_groups:
+		placeholders = ", ".join(["%s"] * len(allowed_item_groups))
+		conditions.append(f"i.item_group IN ({placeholders})")
+		params.extend(allowed_item_groups)
+
+	# If a specific item group is requested (e.g. from UI filter)
 	if item_group:
 		item_groups = _get_item_group_with_descendants(item_group)
 		placeholders = ", ".join(["%s"] * len(item_groups))
