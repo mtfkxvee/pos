@@ -2,7 +2,7 @@ import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { CoalescingMutex } from "@/utils/mutex"
 import { db } from "./db"
-import { offlineState } from "./offlineState"
+import { offlineState, isOffline } from "./offlineState"
 import { generateOfflineId } from "./uuid"
 
 // Re-export for backwards compatibility

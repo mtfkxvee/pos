@@ -1,6 +1,7 @@
 import { syncOfflineInvoices } from "@/utils/offline"
 import { offlineState } from "@/utils/offline/offlineState"
 import { offlineWorker } from "@/utils/offline/workerClient"
+import { forceRefreshCSRFToken } from "@/utils/csrf"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 
 export function useOffline() {
@@ -117,12 +118,37 @@ export function useOffline() {
 
 		// Detect transition from offline to online
 		if (wasOffline && !nowOffline) {
-			console.log("[useOffline] Transition to online detected, syncing...")
-			try {
-				await syncPending()
-			} catch (error) {
-				console.error("[useOffline] Auto-sync failed:", error)
-			}
+			console.log("[useOffline] Transition to online detected, waiting for session...")
+			// Give session a moment to re-establish before syncing
+			setTimeout(async () => {
+				// Ensure CSRF token is valid before syncing (prevents 403/404)
+				let csrfReady = false
+				for (let attempt = 0; attempt < 5; attempt++) {
+					try {
+						const refreshed = await forceRefreshCSRFToken()
+						if (refreshed) {
+							csrfReady = true
+							break
+						}
+					} catch (e) {
+						console.warn("[useOffline] CSRF refresh attempt failed:", e)
+					}
+					// Wait before retrying
+					await new Promise(r => setTimeout(r, 1500))
+				}
+
+				if (!csrfReady) {
+					console.warn("[useOffline] Could not refresh CSRF, skipping auto-sync")
+					return
+				}
+
+				console.log("[useOffline] Session ready, starting sync...")
+				try {
+					await syncPending()
+				} catch (error) {
+					console.error("[useOffline] Auto-sync failed:", error)
+				}
+			}, 1000) // 1 second initial delay
 		}
 
 		wasOffline = nowOffline
