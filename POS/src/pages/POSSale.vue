@@ -1027,7 +1027,7 @@ import { useUserData } from "@/data/user";
 import { parseError } from "@/utils/errorHandler";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sync";
-import { printInvoice, printInvoiceByName } from "@/utils/printInvoice";
+import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
 import { Button, Dialog, createResource } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -2003,6 +2003,25 @@ async function handlePaymentCompleted(paymentData) {
 			}
 
 			showSuccess(__("Invoice saved offline. Will sync when online"));
+
+			// Print offline receipt if auto-print is enabled
+			if (shiftStore.autoPrintEnabled) {
+				try {
+					const offlinePrintData = {
+						...invoiceData,
+						name: `OFFLINE-${Date.now()}`,
+						company: shiftStore.company || invoiceData.company || "POS",
+						customer_name: cartStore.customerName || invoiceData.customer,
+						posting_date: new Date().toISOString().split("T")[0],
+						paid_amount: paymentData.paid_amount || 0,
+						change_amount: paymentData.change_amount || 0,
+						outstanding_amount: paymentData.outstanding_amount || 0,
+					};
+					printInvoiceCustom(offlinePrintData);
+				} catch (printError) {
+					log.warn("Offline print failed:", printError);
+				}
+			}
 		} else {
 			// Get item codes from cart before clearing
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
