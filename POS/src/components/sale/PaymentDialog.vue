@@ -580,7 +580,7 @@
 								: __('Quick amounts for {0}', [__(lastSelectedMethod.mode_of_payment)])
 							}}
 						</div>
-						<div class="grid grid-cols-4 gap-1.5">
+						<div class="grid grid-cols-3 gap-1.5">
 							<button
 								v-for="amount in quickAmounts"
 								:key="amount"
@@ -607,7 +607,7 @@
 						<!-- Mobile Quick Amounts + Custom Input (consistent layout for all payment methods) -->
 						<div v-if="lastSelectedMethod && remainingAmount > 0" :class="['space-y-1 flex-shrink-0', isSmallMobile ? 'mb-1' : 'mb-1.5']">
 							<!-- Quick Amounts Row (4 columns, responsive sizing) -->
-							<div class="grid grid-cols-4" :class="isSmallMobile ? 'gap-0.5' : 'gap-1'">
+							<div class="grid grid-cols-3" :class="isSmallMobile ? 'gap-0.5' : 'gap-1'">
 								<button
 									v-for="amount in quickAmounts"
 									:key="amount"
@@ -1819,6 +1819,45 @@ watch(show, (newVal) => {
 			lastSelectedMethod.value = defaultMethod || paymentMethods.value[0]
 		}
 
+	}
+})
+
+// ===========================================
+// Keyboard Shortcuts for Payment Dialog
+// I = exact amount, O = round 1, P = round 2
+// ===========================================
+
+let paymentKeyHandler = null
+
+watch(show, (isOpen) => {
+	if (isOpen) {
+		paymentKeyHandler = (e) => {
+			// Skip if typing in input
+			const tag = e.target?.tagName?.toLowerCase()
+			if (tag === "input" || tag === "textarea") return
+			if (!lastSelectedMethod.value || remainingAmount.value <= 0) return
+
+			const key = e.key.toLowerCase()
+			let amountIndex = -1
+
+			if (key === "i") amountIndex = 0 // exact amount
+			else if (key === "o") amountIndex = 1 // round 1
+			else if (key === "p") amountIndex = 2 // round 2
+
+			if (amountIndex >= 0 && quickAmounts.value[amountIndex] !== undefined) {
+				e.preventDefault()
+				const amount = quickAmounts.value[amountIndex]
+				if (!isQuickAmountDisabled(amount)) {
+					addCustomPayment(lastSelectedMethod.value, amount)
+				}
+			}
+		}
+		window.addEventListener("keydown", paymentKeyHandler)
+	} else {
+		if (paymentKeyHandler) {
+			window.removeEventListener("keydown", paymentKeyHandler)
+			paymentKeyHandler = null
+		}
 	}
 })
 

@@ -1203,6 +1203,37 @@ onMounted(async () => {
 	};
 	window.addEventListener("resize", handleResize, { passive: true });
 
+	// Keyboard shortcuts for POS operations
+	const handleKeyboard = (e) => {
+		// Skip if user is typing in an input/textarea
+		const tag = e.target?.tagName?.toLowerCase();
+		if (tag === "input" || tag === "textarea" || tag === "select") return;
+		// Skip if any dialog is open (payment dialog has its own shortcuts)
+		if (uiStore.showPaymentDialog) return;
+
+		switch (e.key) {
+			case "End":
+				e.preventDefault();
+				handleProceedToPayment();
+				break;
+			case "F5":
+				e.preventDefault();
+				if (!cartStore.isEmpty) handleSaveDraft();
+				break;
+			case "F6":
+				e.preventDefault();
+				uiStore.showDraftDialog = true;
+				break;
+		}
+	};
+	window.addEventListener("keydown", handleKeyboard);
+
+	// Clean up keyboard listener
+	onUnmounted(() => {
+		window.removeEventListener("keydown", handleKeyboard);
+		window.removeEventListener("resize", handleResize);
+	});
+
 	// Set up real-time stock update listener
 	const cleanup = onStockUpdate(async (stockUpdates) => {
 		// Filter updates to only include items from our warehouse(s)
