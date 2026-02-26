@@ -200,6 +200,8 @@ import { usePOSPermissions } from "@/composables/usePermissions"
 import { useToast } from "@/composables/useToast"
 import { useCountriesStore } from "@/stores/countries"
 import { logger } from "@/utils/logger"
+import { saveOfflineCustomer } from "@/utils/offline"
+import { offlineState } from "@/utils/offline/offlineState"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 
@@ -470,6 +472,29 @@ const handleCreate = async () => {
 	}
 	if (isEditMode.value) {
 		await updateCustomerResource.submit()
+	} else if (offlineState.isOffline) {
+		// Save customer offline
+		try {
+			const result = await saveOfflineCustomer({
+				customer_name: customerData.value.customer_name,
+				custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
+				customer_type: "Individual",
+				customer_group: customerData.value.customer_group || __("Individual"),
+				territory: customerData.value.territory || __("All Territories"),
+				mobile_no: customerData.value.mobile_no || "",
+				email_id: customerData.value.email_id || "",
+			})
+			showSuccess(__("Customer {0} saved offline. Will sync when online.", [result.customer_name]))
+			emit("customer-created", {
+				name: result.name,
+				customer_name: result.customer_name,
+				offline: true,
+			})
+			show.value = false
+		} catch (error) {
+			log.error("Error saving customer offline", error)
+			showError(error.message || __("Failed to save customer offline"))
+		}
 	} else {
 		await createCustomerResource.submit()
 	}

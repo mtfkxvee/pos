@@ -78,10 +78,14 @@ const CURRENT_SCHEMA = {
 	// Unpaid invoices cache for offline viewing
 	// Stores invoices with outstanding amounts for partial payment management
 	unpaid_invoices: "&name, pos_profile, outstanding_amount, customer",
+
+	// Customer queue for offline-created customers
+	// Offline customers are synced to server when back online
+	customer_queue: "++id, &offline_id, timestamp, synced",
 }
 
 // Apply schema with static versioning (prevents localStorage/worker desync bugs)
-const schemaVersion = 10
+const schemaVersion = 11
 log.debug(`Initializing database with schema version: ${schemaVersion}`)
 db.version(schemaVersion).stores(CURRENT_SCHEMA)
 

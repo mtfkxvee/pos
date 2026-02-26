@@ -78,6 +78,125 @@ export const isOffline = () => {
 }
 
 // ============================================================================
+// OFFLINE CUSTOMER QUEUE OPERATIONS
+// ============================================================================
+
+/**
+ * Save a new customer to the offline queue
+ * @param {Object} customerData - Customer data to save
+ * @returns {Promise<{success: boolean, offline_id: string, name: string}>}
+ */
+export const saveOfflineCustomer = async (customerData) => {
+	if (!customerData.customer_name) {
+		throw new Error("Customer name is required")
+	}
+
+	const cleanData = JSON.parse(JSON.stringify(customerData))
+	const offlineId = generateOfflineId()
+
+	// Create a temporary local name for this customer
+	const tempName = `OFL-CUST-${Date.now()}`
+	cleanData.name = tempName
+	cleanData.offline_id = offlineId
+
+	const id = await db.customer_queue.add({
+		offline_id: offlineId,
+		data: cleanData,
+		timestamp: Date.now(),
+		synced: false,
+		retry_count: 0,
+	})
+
+	// Also add to local customer cache so it appears in search
+	await db.customers.put({
+		name: tempName,
+		customer_name: cleanData.customer_name,
+		customer_group: cleanData.customer_group || "Individual",
+		territory: cleanData.territory || "All Territories",
+		mobile_no: cleanData.mobile_no || "",
+		email_id: cleanData.email_id || "",
+		custom_kode_pelanggan: cleanData.custom_kode_pelanggan || "",
+		offline_id: offlineId,
+	})
+
+	log.info("Customer saved offline", { offline_id: offlineId, name: tempName })
+	return { success: true, offline_id: offlineId, name: tempName, customer_name: cleanData.customer_name }
+}
+
+/**
+ * Get all pending (unsynced) offline customers
+ * @returns {Promise<Array>}
+ */
+export const getOfflineCustomers = async () => {
+	try {
+		return await db.customer_queue.filter((cust) => !cust.synced).toArray()
+	} catch (error) {
+		log.error("Failed to get offline customers", error)
+		return []
+	}
+}
+
+/**
+ * Sync all pending offline customers to server.
+ * Updates offline invoices with the real customer ID before invoice sync.
+ */
+export const syncOfflineCustomers = async () => {
+	if (isOffline()) return
+
+	const pendingCustomers = await getOfflineCustomers()
+	if (!pendingCustomers.length) return
+
+	log.info(`Starting sync of ${pendingCustomers.length} offline customer(s)`)
+
+	for (const customer of pendingCustomers) {
+		try {
+			const doc = { ...customer.data, doctype: "Customer" }
+			// Remove offline-only fields before sending to server
+			delete doc.offline_id
+			delete doc.name
+
+			const response = await call("frappe.client.insert", { doc })
+			if (response && response.name) {
+				const serverName = response.name
+
+				// Update any offline invoices that reference this temp customer name
+				await db.invoice_queue
+					.filter(inv => inv.data.customer === customer.data.name)
+					.modify(inv => {
+						inv.data.customer = serverName
+						if (inv.data.customer_name === customer.data.customer_name) {
+							inv.data.customer_name = response.customer_name || serverName
+						}
+					})
+
+				// Mark customer as synced
+				await db.customer_queue.update(customer.id, {
+					synced: true,
+					server_customer: serverName,
+				})
+
+				// Update local customer cache
+				const oldCustomer = await db.customers.where("name").equals(customer.data.name).first()
+				if (oldCustomer) {
+					await db.customers.where("name").equals(customer.data.name).delete()
+					await db.customers.put({
+						...oldCustomer,
+						name: serverName,
+						offline_id: undefined,
+					})
+				}
+
+				log.success(`Offline customer synced: ${customer.data.customer_name} -> ${serverName}`)
+			}
+		} catch (error) {
+			log.error("Failed to sync offline customer", { id: customer.id, error })
+			const newRetryCount = (customer.retry_count || 0) + 1
+			await db.customer_queue.update(customer.id, { retry_count: newRetryCount })
+		}
+	}
+}
+
+// ============================================================================
 // OFFLINE INVOICE QUEUE OPERATIONS
 // ============================================================================
 
@@ -358,6 +477,9 @@ export const syncOfflineInvoices = async () => {
 	}
 
 	return await syncMutex.withLock(async () => {
+		// Sync offline customers FIRST so invoices have valid customer references
+		await syncOfflineCustomers()
+
 		const pendingInvoices = await getOfflineInvoices()
 
 		if (!pendingInvoices.length) {
