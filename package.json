@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "cd POS && yarn install",
     "dev": "cd POS && yarn dev",
-    "build": "cd POS && yarn build"
+    "build": "cd POS && yarn build",
+    "production": "cd POS && yarn build"
   },
   "keywords": [],
   "author": "",
