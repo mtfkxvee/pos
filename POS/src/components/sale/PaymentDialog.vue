@@ -885,7 +885,7 @@
 							:disabled="!canComplete || isSubmitting"
 							:class="[
 								'flex-1 inline-flex items-center justify-center gap-2 transition-colors focus:outline-none',
-								dynamicButtonHeight, 'text-sm font-semibold px-5 rounded-lg',
+								'py-2 text-sm font-semibold px-4 rounded-lg',
 								!canComplete || isSubmitting
 									? 'bg-blue-300 text-white cursor-not-allowed'
 									: 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-400'
@@ -900,6 +900,32 @@
 							</svg>
 							<span>{{ isSubmitting ? __('Processing...') : paymentButtonText }}</span>
 						</button>
+					</div>
+
+					<!-- Remarks Toggle + Field -->
+					<div class="mt-1.5">
+						<button
+							@click="showRemarks = !showRemarks"
+							:class="[
+								'w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors border',
+								showRemarks || remarks
+									? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+									: 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+							]"
+						>
+							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+							</svg>
+							<span>{{ remarks ? __('Remarks ✓') : __('Add Remarks') }}</span>
+						</button>
+						<div v-if="showRemarks" class="mt-1.5">
+							<textarea
+								v-model="remarks"
+								:placeholder="__('Enter invoice remarks...')"
+								class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none"
+								rows="2"
+							></textarea>
+						</div>
 					</div>
 				</div>
 				<!-- End Right Column -->
@@ -1050,6 +1076,10 @@ const redeemedLoyaltyAmount = computed(() => {
 const deliveryDate = ref("")
 const today = new Date().toISOString().split("T")[0]
 const isSalesOrder = computed(() => props.targetDoctype === "Sales Order")
+
+// Remarks state
+const remarks = ref("")
+const showRemarks = ref(false)
 
 // Column refs for height matching
 const rightColumnRef = ref(null)
@@ -1787,6 +1817,9 @@ watch(show, (newVal) => {
 		
 		// Set default delivery date to today for Sales Orders
 		deliveryDate.value = isSalesOrder.value ? today : ""
+		// Reset remarks
+		remarks.value = ""
+		showRemarks.value = false
 
 		// Debug logging
 		log.debug("[PaymentDialog] Dialog opened with props:", {
@@ -1835,14 +1868,25 @@ watch(show, (isOpen) => {
 			// Skip if typing in input
 			const tag = e.target?.tagName?.toLowerCase()
 			if (tag === "input" || tag === "textarea") return
+
+			const key = e.key
+
+			// Delete = clear all payments (always available)
+			if (key === "Delete") {
+				e.preventDefault()
+				clearAll()
+				return
+			}
+
+			// Quick amount shortcuts only when a method is selected and remaining > 0
 			if (!lastSelectedMethod.value || remainingAmount.value <= 0) return
 
-			const key = e.key.toLowerCase()
 			let amountIndex = -1
+			const lk = key.toLowerCase()
 
-			if (key === "i") amountIndex = 0 // exact amount
-			else if (key === "o") amountIndex = 1 // round 1
-			else if (key === "p") amountIndex = 2 // round 2
+			if (lk === "i") amountIndex = 0 // exact amount
+			else if (lk === "o") amountIndex = 1 // round 1
+			else if (lk === "p") amountIndex = 2 // round 2
 
 			if (amountIndex >= 0 && quickAmounts.value[amountIndex] !== undefined) {
 				e.preventDefault()
@@ -2129,6 +2173,8 @@ function completePayment() {
 		loyalty_program: isPointsRedemptionActive.value && loyaltyPointInfo.value ? loyaltyPointInfo.value.loyalty_program : null,
 		loyalty_redemption_account: isPointsRedemptionActive.value ? settingsStore.loyaltyRedemptionAccount : null,
 		loyalty_redemption_cost_center: isPointsRedemptionActive.value ? settingsStore.loyaltyRedemptionCostCenter : null,
+		// Remarks
+		remarks: remarks.value || null,
 	}
 
 	log.debug("[PaymentDialog] Emitting payment-completed:", paymentData)

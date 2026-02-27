@@ -28,6 +28,7 @@ export function useInvoice() {
 	const posOpeningShift = ref(null) // POS Opening Shift name
 	const additionalDiscount = ref(0)
 	const couponCode = ref(null)
+	const remarks = ref("") // Invoice remarks
 	const taxRules = ref([]) // Tax rules from POS Profile
 	const taxInclusive = ref(false) // Tax inclusive setting from POS Settings
 
@@ -843,6 +844,7 @@ export function useInvoice() {
 					is_pos: 1,
 					update_stock: 1, // Critical: Ensures stock is updated
 					...loyaltyData,
+					remarks: remarks.value || undefined,
 				}
 
 				if (targetDoctype === "Sales Order" && deliveryDate) {
@@ -1102,6 +1104,7 @@ export function useInvoice() {
 		posOpeningShift,
 		additionalDiscount,
 		couponCode,
+		remarks,
 		taxRules,
 		taxInclusive,
 		isSubmitting,

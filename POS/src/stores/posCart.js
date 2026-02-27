@@ -91,6 +91,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		payments,
 		salesTeam,
 		additionalDiscount,
+		remarks,
 		taxInclusive,
 		isSubmitting,
 		addItem: addItemToInvoice,
@@ -236,6 +237,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		appliedCoupon.value = null
 		currentDraftId.value = null
 		targetDoctype.value = "Sales Invoice"
+		remarks.value = ""
 
 		// Reset offer processing state
 		suppressOfferReapply.value = false
@@ -1758,6 +1760,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Loyalty feature
 		loyaltyData,
 		setLoyaltyData,
+
+		// Remarks
+		remarks,
 
 		// Utilities
 		cancelPendingOfferProcessing: () => {

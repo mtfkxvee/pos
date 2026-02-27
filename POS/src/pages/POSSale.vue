@@ -1989,6 +1989,11 @@ async function handlePaymentCompleted(paymentData) {
 			loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 		});
 
+		// Store remarks for invoice
+		if (paymentData.remarks) {
+			cartStore.remarks = paymentData.remarks;
+		}
+
 		// Delete draft if it exists (since we're submitting/saving invoice)
 		const draftIdToDelete = cartStore.currentDraftId;
 
@@ -2015,6 +2020,7 @@ async function handlePaymentCompleted(paymentData) {
 				loyalty_program: paymentData.loyalty_program || null,
 				loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
 				loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
+				remarks: paymentData.remarks || null,
 			};
 
 			await offlineStore.saveInvoiceOffline(invoiceData);
