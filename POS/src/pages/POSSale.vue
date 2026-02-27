@@ -163,6 +163,10 @@
 						</svg>
 						<span>{{ __("Close Shift") }}</span>
 					</button>
+					<!-- Version -->
+					<div class="px-4 py-2 text-center border-t border-gray-100">
+						<span class="text-[10px] text-gray-400 font-mono">NURSA POS v{{ appVersion }}</span>
+					</div>
 				</template>
 			</POSHeader>
 
@@ -1077,6 +1081,9 @@ const { showSuccess, showError, showWarning } = useToast();
 // Initialize logger
 const log = logger.create("POSSale");
 
+// App version
+const appVersion = "1.0.11";
+
 // User data composable
 const { userName, userImage } = useUserData();
 
@@ -1093,6 +1100,10 @@ const logoutAfterClose = ref(false);
 const editCustomer = ref(null); // Customer being edited (null for create mode)
 const showClearCacheDialog = ref(false);
 const clearCacheOverlayRef = ref(null);
+
+// Invoice detail dialog state
+const showInvoiceDetail = ref(false);
+const selectedInvoiceForView = ref(null);
 
 // Debounce timer for offer reapplication
 const offerReapplyTimer = ref(null);
