@@ -2018,12 +2018,21 @@ async function handlePaymentCompleted(paymentData) {
 			};
 
 			await offlineStore.saveInvoiceOffline(invoiceData);
-			uiStore.showSuccess(
-				`OFFLINE-${Date.now()}`,
-				cartStore.grandTotal,
-				paymentData.paid_amount
-			);
 			uiStore.showPaymentDialog = false;
+
+			// Build print data BEFORE clearing cart (cart data will be gone after clear)
+			const offlineName = `OFFLINE-${Date.now()}`;
+			const offlinePrintData = {
+				...invoiceData,
+				name: offlineName,
+				company: shiftStore.company || invoiceData.company || "POS",
+				customer_name: cartStore.customerName || invoiceData.customer,
+				posting_date: new Date().toISOString().split("T")[0],
+				paid_amount: paymentData.paid_amount || 0,
+				change_amount: paymentData.change_amount || 0,
+				outstanding_amount: paymentData.outstanding_amount || 0,
+			};
+
 			cartStore.clearCart();
 			// Reset cart hash after successful payment
 			previousCartHash = "";
@@ -2033,25 +2042,23 @@ async function handlePaymentCompleted(paymentData) {
 				draftsStore.deleteDraft(draftIdToDelete);
 			}
 
-			showSuccess(__("Invoice saved offline. Will sync when online"));
-
-			// Print offline receipt if auto-print is enabled
+			// Auto-print: print directly, show toast only (no success dialog)
+			// No auto-print: show success dialog (has its own Print button)
 			if (shiftStore.autoPrintEnabled) {
 				try {
-					const offlinePrintData = {
-						...invoiceData,
-						name: `OFFLINE-${Date.now()}`,
-						company: shiftStore.company || invoiceData.company || "POS",
-						customer_name: cartStore.customerName || invoiceData.customer,
-						posting_date: new Date().toISOString().split("T")[0],
-						paid_amount: paymentData.paid_amount || 0,
-						change_amount: paymentData.change_amount || 0,
-						outstanding_amount: paymentData.outstanding_amount || 0,
-					};
 					printInvoiceCustom(offlinePrintData);
+					showSuccess(__("Invoice saved offline and sent to printer"));
 				} catch (printError) {
 					log.warn("Offline print failed:", printError);
+					showWarning(__("Invoice saved offline but print failed"));
 				}
+			} else {
+				uiStore.showSuccess(
+					offlineName,
+					invoiceData.grand_total,
+					paymentData.paid_amount
+				);
+				showSuccess(__("Invoice saved offline. Will sync when online"));
 			}
 		} else {
 			// Get item codes from cart before clearing
