@@ -2209,20 +2209,41 @@ async function handleOptionSelected(option) {
 			}
 		} else if (option.type === "uom") {
 			const qty = option.quantity || cartStore.pendingItemQty;
-			const itemDetails = await cartStore.getItemDetailsResource.submit({
-				item_code: cartStore.pendingItem.item_code,
-				pos_profile: cartStore.posProfile,
-				customer: cartStore.customer?.name || cartStore.customer,
-				qty: qty,
-				uom: option.uom,
-			});
+			let rate = cartStore.pendingItem.rate || 0;
+			let price_list_rate = cartStore.pendingItem.price_list_rate || 0;
+
+			if (offlineStore.isOffline) {
+				// Use cached UOM prices when offline
+				if (cartStore.pendingItem.uom_prices && option.uom in cartStore.pendingItem.uom_prices) {
+					rate = cartStore.pendingItem.uom_prices[option.uom];
+					price_list_rate = rate;
+				} else if (cartStore.pendingItem.stock_uom && cartStore.pendingItem.uom_prices && cartStore.pendingItem.stock_uom in cartStore.pendingItem.uom_prices) {
+					const basePrice = cartStore.pendingItem.uom_prices[cartStore.pendingItem.stock_uom];
+					rate = basePrice * option.conversion_factor;
+					price_list_rate = rate;
+				} else {
+					rate = (cartStore.pendingItem.rate || 0) * option.conversion_factor;
+					price_list_rate = (cartStore.pendingItem.price_list_rate || 0) * option.conversion_factor;
+				}
+			} else {
+				// Make API call when online
+				const itemDetails = await cartStore.getItemDetailsResource.submit({
+					item_code: cartStore.pendingItem.item_code,
+					pos_profile: cartStore.posProfile,
+					customer: cartStore.customer?.name || cartStore.customer,
+					qty: qty,
+					uom: option.uom,
+				});
+				rate = itemDetails.price_list_rate || itemDetails.rate;
+				price_list_rate = itemDetails.price_list_rate;
+			}
 
 			const itemToAdd = {
 				...cartStore.pendingItem,
 				uom: option.uom,
 				conversion_factor: option.conversion_factor,
-				rate: itemDetails.price_list_rate || itemDetails.rate,
-				price_list_rate: itemDetails.price_list_rate,
+				rate: rate,
+				price_list_rate: price_list_rate,
 			};
 
 			if (itemToAdd.has_batch_no || itemToAdd.has_serial_no) {

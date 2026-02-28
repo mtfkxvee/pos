@@ -10,6 +10,10 @@ def get_sw():
     if os.path.exists(sw_path):
         with open(sw_path, 'r') as f:
             content = f.read()
+
+        # Fix relative imports in sw.js because it is served from /api/method/
+        content = content.replace('importScripts("workbox-', 'importScripts("/assets/pos_next/pos/workbox-')
+        content = content.replace("importScripts('workbox-", "importScripts('/assets/pos_next/pos/workbox-")
             
         custom_fallback = """
 // Custom Navigate Fallback added via Frappe API
