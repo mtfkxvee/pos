@@ -1,5 +1,6 @@
 import frappe
 import os
+import re
 from werkzeug.wrappers import Response
 
 @frappe.whitelist(allow_guest=True)
@@ -10,6 +11,16 @@ def get_sw():
     if os.path.exists(sw_path):
         with open(sw_path, 'r') as f:
             content = f.read()
+
+        # The service worker is served from /api/method/... to inject custom
+        # headers, but workbox chunks are generated beside sw.js in
+        # /assets/pos_next/pos. Rewrite relative importScripts paths so they do
+        # not resolve to /api/method/* (which breaks SW installation).
+        content = re.sub(
+            r"importScripts\((['\"])(?!https?://|/)([^'\"]+)\1\)",
+            r"importScripts(\1/assets/pos_next/pos/\2\1)",
+            content,
+        )
             
         custom_fallback = """
 // Custom Navigate Fallback added via Frappe API
