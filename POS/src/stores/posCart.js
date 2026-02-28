@@ -344,7 +344,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			selling_price_list: currentProfile?.selling_price_list,
 			currency: currentProfile?.currency,
 			discount_amount: additionalDiscount.value || 0,
-			coupon_code: appliedCoupon.value?.name || "",
+			coupon_code: (appliedCoupon.value && !appliedCoupon.value.is_manual && appliedCoupon.value.code !== 'MANUAL' && appliedCoupon.value.code !== 'COMPLIMENT')
+				? (appliedCoupon.value.code || appliedCoupon.value.name)
+				: "",
 			items: rawItems.map((item) => ({
 				item_code: item.item_code,
 				item_name: item.item_name,

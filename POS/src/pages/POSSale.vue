@@ -2026,7 +2026,9 @@ async function handlePaymentCompleted(paymentData) {
 				total_discount: cartStore.totalDiscount,
 				discount_amount: cartStore.additionalDiscount || 0,
 				apply_discount_on: "Grand Total", // Tell ERPNext to apply this to grand total
-				coupon_code: cartStore.appliedCoupon ? (cartStore.appliedCoupon.name || cartStore.appliedCoupon) : undefined,
+				coupon_code: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
+					? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name) 
+					: undefined,
 				write_off_amount: paymentData.write_off_amount || 0,
 				redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
 				loyalty_points: paymentData.loyalty_points || 0,
