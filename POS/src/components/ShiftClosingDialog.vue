@@ -246,12 +246,11 @@
                     <div class="w-40 md:w-48">
                       <Input
                         :id="`payment-${idx}`"
-                        :modelValue="payment.closing_amount"
+                        :modelValue="payment._formatted_closing_amount"
                         @update:modelValue="(value) => updateClosingAmount(payment, value)"
-                        type="number"
-                        step="10"
-                        min="0"
-                        placeholder="0.00"
+                        type="text"
+                        inputmode="numeric"
+                        placeholder="0"
                         :disabled="submitResource.loading"
                         :aria-label="__('Enter actual amount for {0}', [payment.mode_of_payment])"
                         class="text-base md:text-lg text-center font-semibold"
@@ -334,12 +333,11 @@
                         {{ __('Actual Amount *') }}
                       </label>
                       <Input
-                        :modelValue="payment.closing_amount"
+                        :modelValue="payment._formatted_closing_amount"
                         @update:modelValue="(value) => updateClosingAmount(payment, value)"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
+                        type="text"
+                        inputmode="numeric"
+                        placeholder="0"
                         :disabled="showSuccessReport || submitResource.loading"
                         :aria-label="`Enter actual amount for ${payment.mode_of_payment}`"
                         class="text-base md:text-lg"
@@ -602,14 +600,15 @@ async function loadClosingData() {
 
 		// Make payment_reconciliation reactive
 		if (data.payment_reconciliation) {
-			data.payment_reconciliation = data.payment_reconciliation.map((payment) =>
-				reactive({
+			data.payment_reconciliation = data.payment_reconciliation.map((payment) => {
+				const initialClosing = payment.closing_amount ?? payment.expected_amount ?? 0;
+				return reactive({
 					...payment,
-					closing_amount:
-						payment.closing_amount ?? payment.expected_amount ?? 0,
+					closing_amount: initialClosing,
+					_formatted_closing_amount: formatRupiahInput(initialClosing),
 					difference: 0,
-				}),
-			)
+				})
+			})
 
 			// Calculate initial differences
 			data.payment_reconciliation.forEach((payment) => {
@@ -635,9 +634,24 @@ function calculateDifference(payment) {
 	payment.difference = closing - expected
 }
 
+function formatRupiahInput(value) {
+	if (value === null || value === undefined) return '';
+	let valStr = String(value).replace(/[^0-9]/g, '');
+	if (!valStr) return '';
+	return valStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function parseRupiahInput(value) {
+	if (!value) return 0;
+	let valStr = String(value).replace(/[^0-9]/g, '');
+	return parseInt(valStr, 10) || 0;
+}
+
 // New function to handle closing amount updates with proper reactivity
 function updateClosingAmount(payment, value) {
-	payment.closing_amount = value
+	const parsed = parseRupiahInput(value)
+	payment.closing_amount = parsed
+	payment._formatted_closing_amount = formatRupiahInput(parsed) || ''
 	calculateDifference(payment)
 }
 
