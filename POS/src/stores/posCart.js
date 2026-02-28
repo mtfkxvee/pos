@@ -1288,6 +1288,27 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * @param {number} qty - Quantity for pricing
 	 */
 	async function applyUomChange(cartItem, newUom, qty) {
+		const uomData = cartItem.item_uoms?.find((u) => u.uom === newUom)
+
+		if (offlineState.isOffline) {
+			cartItem.uom = newUom
+			cartItem.conversion_factor = uomData?.conversion_factor || 1
+
+			// Try to get price from pre-cached uom_prices
+			if (cartItem.uom_prices && newUom in cartItem.uom_prices) {
+				cartItem.rate = cartItem.uom_prices[newUom]
+				cartItem.price_list_rate = cartItem.uom_prices[newUom]
+			} else if (cartItem.stock_uom && cartItem.uom_prices && cartItem.stock_uom in cartItem.uom_prices) {
+				// Fallback to calculate from stock UOM price * conversion factor
+				const basePrice = cartItem.uom_prices[cartItem.stock_uom]
+				cartItem.rate = basePrice * cartItem.conversion_factor
+				cartItem.price_list_rate = cartItem.rate
+			}
+
+			// In offline mode, we cannot reliably evaluate pricing rules dynamically (handled during sync)
+			return
+		}
+
 		const itemDetails = await getItemDetailsResource.submit({
 			item_code: cartItem.item_code,
 			pos_profile: posProfile.value,
@@ -1295,8 +1316,6 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			qty,
 			uom: newUom,
 		})
-
-		const uomData = cartItem.item_uoms?.find((u) => u.uom === newUom)
 
 		cartItem.uom = newUom
 		cartItem.conversion_factor = uomData?.conversion_factor || itemDetails.conversion_factor || 1
