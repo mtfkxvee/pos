@@ -638,7 +638,7 @@ function formatRupiahInput(value) {
 	if (value === null || value === undefined) return '';
 	let valStr = String(value).replace(/[^0-9]/g, '');
 	if (!valStr) return '';
-	return valStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+	return 'Rp. ' + valStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
 function parseRupiahInput(value) {
