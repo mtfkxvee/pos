@@ -541,7 +541,13 @@ const open = computed({
 })
 
 const { getClosingShiftData, submitClosingShift } = useShift()
-const { formatCurrency, formatQuantity, formatDateTime, formatTime } = useFormatters()
+const { formatQuantity, formatDateTime, formatTime } = useFormatters()
+
+function formatCurrency(amount) {
+	if (amount === null || amount === undefined) return 'Rp. 0';
+	const num = Number.parseFloat(amount) || 0;
+	return 'Rp. ' + num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
 const posSettingsStore = usePOSSettingsStore()
 const { hideExpectedAmount } = storeToRefs(posSettingsStore)
 
