@@ -663,7 +663,7 @@ def update_invoice(data):
 
 
 @frappe.whitelist()
-def get_draft_invoices(pos_profile):
+def get_pos_draft_invoices(pos_profile):
     """Fetch Draft Sales Invoices for a specific POS Profile including items."""
     invoices = frappe.get_all(
         "Sales Invoice",

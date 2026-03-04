@@ -193,7 +193,7 @@ const showClearAllDialog = ref(false)
 const draftToDelete = ref(null)
 
 const draftsResource = createResource({
-	url: "pos_next.api.invoices.get_draft_invoices",
+	url: "pos_next.api.invoices.get_pos_draft_invoices",
 	auto: false,
 })
 
