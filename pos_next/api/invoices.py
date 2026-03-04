@@ -662,6 +662,28 @@ def update_invoice(data):
         raise
 
 
+@frappe.whitelist()
+def get_draft_invoices(pos_profile):
+    """Fetch Draft Sales Invoices for a specific POS Profile including items."""
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={"docstatus": 0, "is_pos": 1, "pos_profile": pos_profile},
+        fields=["name", "customer", "customer_name", "grand_total", "creation"]
+    )
+    
+    for inv in invoices:
+        items = frappe.get_all(
+            "Sales Invoice Item",
+            filters={"parent": inv.name},
+            fields=["item_code", "item_name", "qty", "rate", "amount"]
+        )
+        inv.items = items
+        inv.draft_id = inv.name
+        inv.created_at = inv.creation
+        
+    return invoices
+
+
 PENDING_TIMEOUT_MINUTES = 5  # Pending records older than this are considered stale
 
 

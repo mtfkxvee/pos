@@ -122,6 +122,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const selectionMode = ref("uom") // 'uom' or 'variant'
 	const suppressOfferReapply = ref(false)
 	const currentDraftId = ref(null)
+	const currentDraftIsServer = ref(false)
 	const targetDoctype = ref("Sales Invoice")
 
 	// Offer processing state management
@@ -1731,6 +1732,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		selectionMode,
 		suppressOfferReapply,
 		currentDraftId,
+		currentDraftIsServer,
 		offerProcessingState, // Offer processing state for UI feedback
 
 		// Computed
@@ -1766,6 +1768,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		applyOffersResource,
 		buildOfferEvaluationPayload,
 		formatItemsForSubmission,
+		updateInvoiceResource,
 
 		// Sales Order feature
 		targetDoctype,

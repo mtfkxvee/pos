@@ -168,11 +168,13 @@ import { clearAllDrafts, deleteDraft, getAllDrafts } from "@/utils/draftManager"
 import { printInvoiceCustom } from "@/utils/printInvoice"
 import { useToast } from "@/composables/useToast"
 import { usePOSShiftStore } from "@/stores/posShift"
-import { Button, Dialog } from "frappe-ui"
+import { usePOSSyncStore } from "@/stores/posSync"
+import { Button, Dialog, createResource } from "frappe-ui"
 import { onMounted, ref, watch } from "vue"
 
 const { showSuccess, showError } = useToast()
 const shiftStore = usePOSShiftStore()
+const offlineStore = usePOSSyncStore()
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -189,6 +191,16 @@ const drafts = ref([])
 const showDeleteDialog = ref(false)
 const showClearAllDialog = ref(false)
 const draftToDelete = ref(null)
+
+const draftsResource = createResource({
+	url: "pos_next.api.invoices.get_draft_invoices",
+	auto: false,
+})
+
+const deleteResource = createResource({
+	url: "frappe.client.delete",
+	auto: false,
+})
 
 watch(
 	() => props.modelValue,
@@ -210,7 +222,23 @@ onMounted(() => {
 
 async function loadDrafts() {
 	try {
-		drafts.value = await getAllDrafts()
+		let localDrafts = await getAllDrafts()
+		localDrafts = localDrafts.map(d => ({ ...d, is_local: true }))
+
+		let serverDrafts = []
+		if (!offlineStore.isOffline) {
+			const res = await draftsResource.submit({
+				pos_profile: shiftStore.profileName
+			})
+			if (res) {
+				serverDrafts = res.map(d => ({ ...d, is_server: true }))
+			}
+		}
+
+		// Combine and sort by date descending
+		drafts.value = [...serverDrafts, ...localDrafts].sort((a, b) => {
+			return new Date(b.created_at) - new Date(a.created_at)
+		})
 	} catch (error) {
 		console.error("Error loading drafts:", error)
 		showError(__("Failed to load draft invoices"))
@@ -237,14 +265,22 @@ function handlePrintDraft(draft) {
 	}
 }
 
-function handleDeleteDraft(draftId) {
-	draftToDelete.value = draftId
+function handleDeleteDraft(draft) {
+	draftToDelete.value = draft
 	showDeleteDialog.value = true
 }
 
 async function confirmDeleteDraft() {
 	try {
-		await deleteDraft(draftToDelete.value)
+		if (draftToDelete.value.is_server && !offlineStore.isOffline) {
+			await deleteResource.submit({
+				doctype: "Sales Invoice",
+				name: draftToDelete.value.draft_id
+			})
+		} else {
+			await deleteDraft(draftToDelete.value.draft_id)
+		}
+		
 		await loadDrafts()
 		showDeleteDialog.value = false
 		draftToDelete.value = null

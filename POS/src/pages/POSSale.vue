@@ -2061,7 +2061,14 @@ async function handlePaymentCompleted(paymentData) {
 
 			// Delete draft after successful save
 			if (draftIdToDelete) {
-				draftsStore.deleteDraft(draftIdToDelete);
+				if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
+					frappeRequest({
+						url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
+						method: 'DELETE'
+					}).catch(e => log.warn("Failed to delete server draft after checkout", e));
+				} else {
+					draftsStore.deleteDraft(draftIdToDelete);
+				}
 			}
 
 			// Auto-print: print directly, show toast only (no success dialog)
@@ -2100,7 +2107,14 @@ async function handlePaymentCompleted(paymentData) {
 
 				// Delete draft after successful submission
 				if (draftIdToDelete) {
-					draftsStore.deleteDraft(draftIdToDelete);
+					if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
+						frappeRequest({
+							url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
+							method: 'DELETE'
+						}).catch(e => log.warn("Failed to delete server draft after checkout", e));
+					} else {
+						draftsStore.deleteDraft(draftIdToDelete);
+					}
 				}
 
 				// Refresh stock - Direct API (50-200ms), no Socket.IO lag!
@@ -2292,30 +2306,50 @@ function logoutWithCloseShift() {
 }
 
 async function handleSaveDraft() {
-	const savedDraft = await draftsStore.saveDraftInvoice(
-		cartStore.invoiceItems,
-		cartStore.customer,
-		cartStore.posProfile,
-		cartStore.appliedOffers,
-		cartStore.currentDraftId,
-		{
-			additionalDiscount: cartStore.additionalDiscount,
-			appliedCoupon: cartStore.appliedCoupon,
-			loyaltyData: cartStore.loyaltyData
-		}
-	);
-	if (savedDraft) {
-		cartStore.clearCart();
-		// Reset cart hash when cart is saved as draft and cleared
-		previousCartHash = "";
+	if (cartStore.invoiceItems.length === 0) {
+		showWarning(__("Cannot save an empty cart as draft"));
+		return;
 	}
-}
 
-async function handleLoadDraft(draft) {
 	try {
-		// If current cart has items, save it as draft before loading new one
-		if (!cartStore.isEmpty) {
-			const saved = await draftsStore.saveDraftInvoice(
+		if (!offlineStore.isOffline) {
+			const invoiceData = {
+				doctype: cartStore.targetDoctype || "Sales Invoice",
+				pos_profile: cartStore.posProfile,
+				posa_pos_opening_shift: shiftStore.posOpeningShift, // Required to link to current shift
+				customer: cartStore.customer?.name || cartStore.customer,
+				items: cartStore.formatItemsForSubmission(toRaw(cartStore.invoiceItems)),
+				discount_amount: cartStore.additionalDiscount || 0,
+				coupon_code: cartStore.appliedCoupon?.code || cartStore.appliedCoupon?.name || undefined,
+				is_pos: 1,
+				docstatus: 0, // Save as Draft
+				update_stock: 0, // Do NOT update stock for draft!
+				remarks: "Draft - POS Hold Transaction",
+				...cartStore.loyaltyData,
+			};
+
+			const draftInvoice = await cartStore.updateInvoiceResource.submit({
+				data: invoiceData,
+			});
+
+			if (draftInvoice && (draftInvoice.name || draftInvoice.data?.name)) {
+				const invoiceName = draftInvoice.name || draftInvoice.data?.name;
+				
+				// Optional: Delete local draft if we were continuing from one
+				if (cartStore.currentDraftId) {
+					draftsStore.deleteDraft(cartStore.currentDraftId);
+				}
+				
+				showSuccess(__("Invoice {0} saved as draft successfully", [invoiceName]));
+				cartStore.clearCart();
+				previousCartHash = "";
+			} else {
+				throw new Error("Failed to create draft invoice - no invoice name returned");
+			}
+
+		} else {
+			// Fallback to local IndexedDB Draft store when offline
+			const savedDraft = await draftsStore.saveDraftInvoice(
 				cartStore.invoiceItems,
 				cartStore.customer,
 				cartStore.posProfile,
@@ -2327,6 +2361,78 @@ async function handleLoadDraft(draft) {
 					loyaltyData: cartStore.loyaltyData
 				}
 			);
+			
+			if (savedDraft) {
+				cartStore.clearCart();
+				previousCartHash = "";
+			}
+		}
+	} catch (error) {
+		log.error("Error saving draft:", error);
+		showError(__("Failed to save draft invoice online."));
+	}
+}
+
+async function handleLoadDraft(draft) {
+	try {
+		// If current cart has items, save it as draft before loading new one
+		if (!cartStore.isEmpty) {
+			let saved = false;
+			if (!offlineStore.isOffline) {
+				try {
+					const invoiceData = {
+						doctype: cartStore.targetDoctype || "Sales Invoice",
+						pos_profile: cartStore.posProfile,
+						posa_pos_opening_shift: shiftStore.posOpeningShift,
+						customer: cartStore.customer?.name || cartStore.customer,
+						items: cartStore.formatItemsForSubmission(toRaw(cartStore.invoiceItems)),
+						discount_amount: cartStore.additionalDiscount || 0,
+						coupon_code: cartStore.appliedCoupon?.code || cartStore.appliedCoupon?.name || undefined,
+						is_pos: 1,
+						docstatus: 0,
+						update_stock: 0,
+						remarks: "Draft - POS Hold Transaction",
+						...cartStore.loyaltyData,
+					};
+
+					const draftInvoice = await cartStore.updateInvoiceResource.submit({
+						data: invoiceData,
+					});
+
+					if (draftInvoice && (draftInvoice.name || draftInvoice.data?.name)) {
+						if (cartStore.currentDraftId) {
+							if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
+								await frappeRequest({
+									url: `/api/resource/Sales Invoice/${cartStore.currentDraftId}`,
+									method: 'DELETE'
+								}).catch(e => log.warn("Failed to delete replacing server draft", e));
+							} else {
+								draftsStore.deleteDraft(cartStore.currentDraftId);
+							}
+						}
+						saved = true;
+					}
+				} catch (err) {
+					log.error("Failed to auto-save online draft", err);
+				}
+			}
+
+			// Fallback to offline store if online failed or offline
+			if (!saved) {
+				const localSaved = await draftsStore.saveDraftInvoice(
+					cartStore.invoiceItems,
+					cartStore.customer,
+					cartStore.posProfile,
+					cartStore.appliedOffers,
+					cartStore.currentDraftId,
+					{
+						additionalDiscount: cartStore.additionalDiscount,
+						appliedCoupon: cartStore.appliedCoupon,
+						loyaltyData: cartStore.loyaltyData
+					}
+				);
+				saved = !!localSaved;
+			}
 
 			if (!saved) {
 				showError(
@@ -2339,10 +2445,17 @@ async function handleLoadDraft(draft) {
 			// No need to clear here as we're about to overwrite cart contents
 		}
 
-		const draftData = await draftsStore.loadDraft(draft);
+		// When loading an online draft, we just use its items. The items structure is slightly different (Sales Invoice Item).
+		// But let's assume `draftData.items` maps correctly, or if we need a custom mapper we can add it.
+		// For now we'll just map `item_name` to `qty` etc.
+		const draftData = draft.is_server 
+			? { items: draft.items, customer: draft.customer, additionalDiscount: draft.discount_amount } 
+			: await draftsStore.loadDraft(draft);
+
 		cartStore.invoiceItems = draftData.items;
 		cartStore.setCustomer(draftData.customer);
 		cartStore.currentDraftId = draft.draft_id; // Set current draft ID
+		cartStore.currentDraftIsServer = draft.is_server || false;
 		
 		// Restore additional state
 		cartStore.additionalDiscount = draftData.additionalDiscount || 0;
