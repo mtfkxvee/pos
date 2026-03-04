@@ -1,5 +1,6 @@
 import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
+import { formatCurrency } from "@/utils/currency"
 
 const log = logger.create('PrintInvoice')
 
@@ -461,10 +462,6 @@ export function printInvoiceCustom(invoiceData) {
 			printWindow.print()
 		}, 250)
 	}
-}
-
-function formatCurrency(amount) {
-	return Number.parseFloat(amount || 0).toFixed(2)
 }
 
 /**
