@@ -169,10 +169,10 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<!-- INFO -->
 			<p style="font-size: 8.5px; line-height: 1.7;">
 				<b>No &nbsp;:</b> ${invoiceData.name}<br>
-				<b>Kasir:</b> ${invoiceData.owner || "User"}<br>
-				${invoiceData.customer_name ? `<b>Plg &nbsp;:</b> ${invoiceData.customer_name}<br>` : ""}
+				<b>Kasir:</b> ${invoiceData.owner || "Administrator"}<br>
+				<b>Plg &nbsp;:</b> ${invoiceData.customer_name || invoiceData.customer || "Guest"}<br>
 				<b>Tgl &nbsp;:</b> ${new Date(invoiceData.posting_date || Date.now()).toLocaleDateString()}<br>
-				<b>Jam &nbsp;:</b> ${new Date(invoiceData.posting_date || Date.now()).toLocaleTimeString()}<br>
+				<b>Jam &nbsp;:</b> ${invoiceData.posting_time || new Date(invoiceData.posting_date || Date.now()).toLocaleTimeString()}<br>
 			</p>
 
 			<hr>
@@ -291,10 +291,6 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 
 			<!-- TERMS & FOOTER -->
 			<p class="text-center" style="font-size:9px; margin-top:5px;">${__("Thank you, please visit again.")}</p>
-			
-			<div class="text-center" style="font-size:8px; margin-top:5px; color:#666;">
-				Powered by BrainWise
-			</div>
 
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
 				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
