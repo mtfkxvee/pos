@@ -86,6 +86,22 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	const widthCSS = is58mm ? "57mm" : "80mm"
 	const windowWidth = is58mm ? "220" : "350"
 
+	// Determine Date and Time intelligently (Extract from OFFLINE ID if present)
+	let docDateStr = new Date(invoiceData.posting_date || Date.now()).toLocaleDateString()
+	let docTimeStr = invoiceData.posting_time || new Date().toLocaleTimeString()
+
+	if (invoiceData.name && invoiceData.name.startsWith("OFFLINE-")) {
+		const parts = invoiceData.name.split("-")
+		if (parts.length > 1) {
+			const timestamp = parseInt(parts[1], 10)
+			if (!isNaN(timestamp)) {
+				const dateObj = new Date(timestamp)
+				docDateStr = dateObj.toLocaleDateString()
+				docTimeStr = dateObj.toLocaleTimeString()
+			}
+		}
+	}
+
 	// Open print window with receipt size dimensions
 	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
 
@@ -162,8 +178,8 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 		<body class="print-format">
 			<!-- HEADER -->
 			<p class="text-center" style="margin-bottom: 6px;">
-				<b style="font-size: 13px;">${invoiceData.company || "NURSA POS"}</b><br>
-				<span style="font-size: 9px; letter-spacing: 1px;">${__("TAX INVOICE")}</span>
+				<b style="font-size: 13px;">X-SHA</b><br>
+				<span style="font-size: 9px; letter-spacing: 1px;">INVOICE</span>
 			</p>
 
 			<!-- INFO -->
@@ -171,8 +187,8 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 				<b>No &nbsp;:</b> ${invoiceData.name}<br>
 				<b>Kasir:</b> ${invoiceData.owner || "Administrator"}<br>
 				<b>Plg &nbsp;:</b> ${invoiceData.customer_name || invoiceData.customer || "Guest"}<br>
-				<b>Tgl &nbsp;:</b> ${new Date(invoiceData.posting_date || Date.now()).toLocaleDateString()}<br>
-				<b>Jam &nbsp;:</b> ${invoiceData.posting_time || new Date(invoiceData.posting_date || Date.now()).toLocaleTimeString()}<br>
+				<b>Tgl &nbsp;:</b> ${docDateStr}<br>
+				<b>Jam &nbsp;:</b> ${docTimeStr}<br>
 			</p>
 
 			<hr>
