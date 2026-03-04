@@ -650,6 +650,11 @@ def update_invoice(data):
                 # Store coupon code on invoice for tracking
                 invoice_doc.coupon_code = coupon_code
 
+        # ERPNext might overwrite remarks for Returns during validation. Reinforce it.
+        frontend_remarks = data.get("remarks")
+        if frontend_remarks:
+            invoice_doc.remarks = frontend_remarks
+
         # Save as draft
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
@@ -1128,6 +1133,11 @@ def submit_invoice(invoice=None, data=None):
         # Validate stock availability only if negative stock is not allowed
         if not pos_settings_allow_negative:
             _validate_stock_on_invoice(invoice_doc)
+
+        # ERPNext might overwrite remarks for Returns during validation. Reinforce it.
+        frontend_remarks = invoice.get("remarks") or data.get("remarks")
+        if frontend_remarks:
+            invoice_doc.remarks = frontend_remarks
 
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
