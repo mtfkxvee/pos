@@ -96,355 +96,204 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<meta charset="UTF-8">
 			<title>${__('Invoice - {0}', [invoiceData.name])}</title>
 			<style>
-				* {
-					margin: 0;
-					padding: 0;
-					box-sizing: border-box;
+				@page {
+					size: ${widthCSS} auto;
+					margin: 0mm;
 				}
-
-				body {
-					font-family: 'Courier New', monospace;
-					padding: 10px;
+				.print-format table, .print-format tr,
+				.print-format td, .print-format div, .print-format p {
+					line-height: 1.4;
+					vertical-align: middle;
+				}
+				body, .print-format {
+					font-family: 'DejaVu Sans', 'Arial', sans-serif;
 					width: ${widthCSS};
-					margin: 0;
 					max-width: ${widthCSS};
-					font-weight: bold;
+					margin: 0 auto;
+					padding: 5px 9px;
+					font-size: 9px;
+					box-sizing: border-box;
 					color: black;
 				}
-
-				.receipt {
+				.text-center { text-align: center; }
+				.text-right { text-align: right; }
+				p { margin: 0 0 4px 0; }
+				hr {
+					border: none;
+					border-top: 1px dashed #333;
+					margin: 6px 0;
+				}
+				table {
 					width: 100%;
-				}
-
-				.header {
-					text-align: center;
-					margin-bottom: 20px;
-					border-bottom: 2px dashed #000;
-					padding-bottom: 10px;
-				}
-
-				.company-name {
-					font-size: 18px;
-					font-weight: bold;
-					margin-bottom: 5px;
-				}
-
-				.invoice-info {
-					margin-bottom: 15px;
-					font-size: 12px;
-				}
-
-				.invoice-info div {
-					display: flex;
-					justify-content: space-between;
-					margin-bottom: 3px;
-				}
-
-				.partial-status {
-					color: #000;
-					font-weight: bold;
-					margin-bottom: 5px;
-				}
-
-				.items-table {
-					width: 100%;
-					margin-bottom: 15px;
-					border-top: 1px dashed #000;
-					border-bottom: 1px dashed #000;
-					padding: 10px 0;
-				}
-
-				.item-row {
-					margin-bottom: 10px;
-					font-size: 12px;
-				}
-
-				.item-name {
-					font-weight: bold;
-					margin-bottom: 3px;
-				}
-
-				.item-details {
-					display: flex;
-					justify-content: space-between;
-					font-size: 11px;
-					color: #000;
-				}
-
-				.item-discount {
-					display: flex;
-					justify-content: space-between;
-					font-size: 10px;
-					color: #000;
-					margin-top: 2px;
-				}
-
-				.item-serials {
+					border-collapse: collapse;
 					font-size: 9px;
-					color: #000;
-					margin-top: 3px;
-					padding: 3px 5px;
-					background-color: #fff;
-					border: 1px dashed #000;
-					border-radius: 2px;
 				}
-
-				.item-serials-label {
+				table.table-condensed td,
+				table.table-condensed th {
+					padding: 2px 1px;
+					vertical-align: top;
+				}
+				table.table-condensed thead th {
+					border-bottom: 1px solid #333;
 					font-weight: bold;
-					margin-bottom: 2px;
+					font-size: 8.5px;
 				}
-
-				.item-serials-list {
-					word-break: break-all;
+				table.table-condensed tbody tr:not(:last-child) td {
+					border-bottom: 1px dotted #ccc;
 				}
-
-				.totals {
-					margin-top: 15px;
-					border-top: 1px dashed #000;
-					padding-top: 10px;
+				table.no-border td {
+					border: none !important;
 				}
-
-				.total-row {
-					display: flex;
-					justify-content: space-between;
-					margin-bottom: 5px;
-					font-size: 12px;
-				}
-
-				.grand-total {
-					font-size: 16px;
+				.grand-total-row td {
+					font-size: 11px;
 					font-weight: bold;
 					border-top: 2px solid #000;
-					padding-top: 10px;
-					margin-top: 10px;
+					padding-top: 4px;
 				}
-
-				.payments {
-					margin-top: 15px;
-					border-top: 1px dashed #000;
-					padding-top: 10px;
-				}
-
-				.payment-row {
-					display: flex;
-					justify-content: space-between;
-					margin-bottom: 3px;
-					font-size: 11px;
-				}
-
-				.total-paid {
-					font-weight: bold;
-					border-top: 1px solid #000;
-					padding-top: 5px;
-					margin-top: 5px;
-				}
-
-				.outstanding-row {
-					display: flex;
-					justify-content: space-between;
-					font-size: 13px;
-					font-weight: bold;
-					color: #000;
-					background-color: #fff;
-					border: 1px solid #000;
-					padding: 8px;
-					margin-top: 8px;
-					border-radius: 4px;
-				}
-
-				.footer {
-					text-align: center;
-					margin-top: 20px;
-					padding-top: 10px;
-					border-top: 2px dashed #000;
-					font-size: 11px;
-				}
-
+				.paid-row td { font-weight: bold; }
+				.change-row td { font-weight: bold; color: #28a745; }
+				
 				@media print {
-					@page {
-						size: 80mm auto;
-						margin: 0;
-					}
-
-					body {
-						width: 80mm;
-						padding: 5mm;
-						margin: 0;
-					}
-
-					.no-print {
-						display: none;
-					}
+					body, .print-format { padding: 2mm 3mm; }
+					.no-print { display: none; }
 				}
 			</style>
 		</head>
-		<body>
-			<div class="receipt">
-				<!-- Header -->
-				<div class="header">
-					<div class="company-name">${invoiceData.company || "NURSA POS"}</div>
-					<div style="font-size: 12px;">${__('TAX INVOICE')}</div>
-				</div>
+		<body class="print-format">
+			<!-- HEADER -->
+			<p class="text-center" style="margin-bottom: 6px;">
+				<b style="font-size: 13px;">${invoiceData.company || "NURSA POS"}</b><br>
+				<span style="font-size: 9px; letter-spacing: 1px;">${__("TAX INVOICE")}</span>
+			</p>
 
-				<!-- Invoice Info -->
-				<div class="invoice-info">
-					<div>
-						<span>${__('Invoice #:')}</span>
-						<span><strong>${invoiceData.name}</strong></span>
-					</div>
-					<div>
-						<span>${__('Date:')}</span>
-						<span>${new Date(invoiceData.posting_date || Date.now()).toLocaleString()}</span>
-					</div>
-					${invoiceData.customer_name
-			? `
-					<div>
-						<span>${__('Customer:')}</span>
-						<span>${invoiceData.customer_name}</span>
-					</div>
-					`
-			: ""
-		}
-					${(invoiceData.status === "Partly Paid" || (invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0 && invoiceData.outstanding_amount < invoiceData.grand_total))
-			? `
-					<div class="partial-status">
-						<span>${__('Status:')}</span>
-						<span>${__('PARTIAL PAYMENT')}</span>
-					</div>
-					`
-			: ""
-		}
-				</div>
+			<!-- INFO -->
+			<p style="font-size: 8.5px; line-height: 1.7;">
+				<b>No &nbsp;:</b> ${invoiceData.name}<br>
+				<b>Kasir:</b> ${invoiceData.owner || "User"}<br>
+				${invoiceData.customer_name ? `<b>Plg &nbsp;:</b> ${invoiceData.customer_name}<br>` : ""}
+				<b>Tgl &nbsp;:</b> ${new Date(invoiceData.posting_date || Date.now()).toLocaleDateString()}<br>
+				<b>Jam &nbsp;:</b> ${new Date(invoiceData.posting_date || Date.now()).toLocaleTimeString()}<br>
+			</p>
 
-				<!-- Items -->
-				<div class="items-table">
-					${invoiceData.items
-			.map((item) => {
-				// Determine if item has promotional pricing
-				const hasItemDiscount =
-					(item.discount_percentage &&
-						Number.parseFloat(item.discount_percentage) > 0) ||
-					(item.discount_amount &&
-						Number.parseFloat(item.discount_amount) > 0)
-				const isFree = item.is_free_item
-				const qty = item.quantity || item.qty
+			<hr>
 
-				// Display original list price for transparency
-				const displayRate = item.price_list_rate || item.rate
-				// Calculate subtotal before any price reductions
-				const subtotal = qty * displayRate
+			<!-- ITEMS TABLE -->
+			<table class="table table-condensed">
+				<thead>
+					<tr>
+						<th width="48%">${__("Item")}</th>
+						<th width="20%" class="text-right">${__("Qty")}</th>
+						<th width="32%" class="text-right">${__("Amount")}</th>
+					</tr>
+				</thead>
+				<tbody>
+					${invoiceData.items.map((item) => {
+		const qty = item.quantity || item.qty;
+		const displayRate = item.price_list_rate || item.rate;
+		const subtotal = qty * displayRate;
+		const isFree = item.is_free_item;
 
-				return `
-						<div class="item-row">
-							<div class="item-name">
-								${item.item_name || item.item_code} ${isFree ? __('(FREE)') : ""}
-							</div>
-							<div class="item-details">
-								<span>${qty} × ${formatCurrency(displayRate, "IDR", "id-ID")}</span>
-								<span><strong>${formatCurrency(subtotal, "IDR", "id-ID")}</strong></span>
-							</div>
-							${hasItemDiscount
-						? `
-							<div class="item-discount">
-								<span>Discount ${item.discount_percentage ? `(${Number(item.discount_percentage).toFixed(2)}%)` : ""}</span>
-								<span>-${formatCurrency(item.discount_amount || 0, "IDR", "id-ID")}</span>
-							</div>
-							`
-						: ""
-					}
-							${item.serial_no
-						? `
-							<div class="item-serials">
-								<div class="item-serials-label">${__('Serial No:')}</div>
-								<div class="item-serials-list">${item.serial_no.replace(/\n/g, ', ')}</div>
-							</div>
-							`
-						: ""
-					}
-						</div>
-						`
-			})
-			.join("")}
-				</div>
+		return `
+						<tr>
+							<td>
+								${item.item_code} ${isFree ? __('(FREE)') : ""}
+								${item.item_name && item.item_name !== item.item_code ? `<br><span style="font-size:8px; color:#555;">${item.item_name}</span>` : ""}
+								${item.serial_no ? `<br><span style="font-size:7.5px;"><b>S/N:</b> ${item.serial_no.replace(/\n/g, ", ")}</span>` : ""}
+							</td>
+							<td class="text-right">
+								${qty}<br>
+								<span style="font-size:8px; color:#555;">@${formatCurrency(displayRate, "IDR", "id-ID")}</span>
+							</td>
+							<td class="text-right">${formatCurrency(subtotal, "IDR", "id-ID")}</td>
+						</tr>
+						`;
+	}).join("")}
+				</tbody>
+			</table>
 
-				<!-- Totals -->
-				<div class="totals">
-					${invoiceData.total_taxes_and_charges &&
-			invoiceData.total_taxes_and_charges > 0
-			? `
-					<div class="total-row">
-						<span>${__('Subtotal:')}</span>
-						<span>${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0), "IDR", "id-ID")}</span>
-					</div>
-					<div class="total-row">
-						<span>${__('Tax:')}</span>
-						<span>${formatCurrency(invoiceData.total_taxes_and_charges, "IDR", "id-ID")}</span>
-					</div>
-					`
-			: ""
-		}
-					${invoiceData.discount_amount
-			? `
-					<div class="total-row" style="color: #28a745;">
-						<span>Additional Discount${invoiceData.additional_discount_percentage ? ` (${Number(invoiceData.additional_discount_percentage).toFixed(1)}%)` : ""}:</span>
-						<span>-${formatCurrency(Math.abs(invoiceData.discount_amount), "IDR", "id-ID")}</span>
-					</div>
-					`
-			: ""
-		}
-					<div class="total-row grand-total">
-						<span>${__('TOTAL:')}</span>
-						<span>${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</span>
-					</div>
-				</div>
+			<hr>
 
-				<!-- Payments -->
-				${invoiceData.payments && invoiceData.payments.length > 0
-			? `
-				<div class="payments">
-					<div style="font-weight: bold; margin-bottom: 5px; font-size: 12px;">Payments:</div>
-					${invoiceData.payments
-				.map(
-					(payment) => `
-						<div class="payment-row">
-							<span>${payment.mode_of_payment}:</span>
-							<span>${formatCurrency(payment.amount, "IDR", "id-ID")}</span>
-						</div>
-					`,
-				)
-				.join("")}
-					<div class="payment-row total-paid">
-						<span>${__('Total Paid:')}</span>
-						<span>${formatCurrency(invoiceData.paid_amount || 0, "IDR", "id-ID")}</span>
-					</div>
-					${invoiceData.change_amount && invoiceData.change_amount > 0
-				? `
-					<div class="payment-row" style="font-weight: bold; margin-top: 5px;">
-						<span>${__('Change:')}</span>
-						<span>${formatCurrency(invoiceData.change_amount, "IDR", "id-ID")}</span>
-					</div>
-					`
-				: ""
-			}
-					${invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
-				? `
-					<div class="outstanding-row">
-						<span>${__('BALANCE DUE:')}</span>
-						<span>${formatCurrency(invoiceData.outstanding_amount, "IDR", "id-ID")}</span>
-					</div>
-					`
-				: ""
-			}
-				</div>
-				`
-			: ""
-		}
+			<!-- TOTALS TABLE -->
+			<table class="table table-condensed no-border">
+				<tbody>
+					<!-- Subtotal / Total -->
+					<tr>
+						${(invoiceData.total_taxes_and_charges && invoiceData.total_taxes_and_charges > 0) ? `
+						<td class="text-right" style="width:62%;">${__("Total Excl. Tax")}</td>
+						<td class="text-right">${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0), "IDR", "id-ID")}</td>
+						` : `
+						<td class="text-right" style="width:62%;">${__("Subtotal")}</td>
+						<td class="text-right">${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</td>
+						`}
+					</tr>
 
-				<!-- Footer -->
-				<div class="footer">
-					<div style="margin-bottom: 5px;">${__('Thank you for your business!')}</div>
-					<div style="font-size: 10px;">Powered by <a href="https://nexus.brainwise.me" target="_blank" style="color: #3b82f6; text-decoration: none; font-weight: 600;">BrainWise</a></div>
-				</div>
+					<!-- Taxes -->
+					${(invoiceData.taxes || []).map(row => `
+					<tr>
+						<td class="text-right" style="width:62%; color:#555; font-size:8.5px;">
+							${row.description.includes("%") ? row.description : `${row.description}@${row.rate}%`}
+						</td>
+						<td class="text-right" style="color:#555; font-size:8.5px;">${formatCurrency(row.tax_amount, "IDR", "id-ID")}</td>
+					</tr>
+					`).join("")}
+
+					<!-- Discount -->
+					${invoiceData.discount_amount ? `
+					<tr>
+						<td class="text-right" style="width:62%; color:#28a745;">${__("Discount")} ${invoiceData.additional_discount_percentage ? `(${Number(invoiceData.additional_discount_percentage).toFixed(1)}%)` : ""}</td>
+						<td class="text-right" style="color:#28a745;">-${formatCurrency(Math.abs(invoiceData.discount_amount), "IDR", "id-ID")}</td>
+					</tr>
+					` : ""}
+
+					<!-- Grand Total -->
+					<tr class="grand-total-row">
+						<td class="text-right" style="width:62%;"><b>${__("Grand Total")}</b></td>
+						<td class="text-right"><b>${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</b></td>
+					</tr>
+
+					<!-- Payment Methods -->
+					${(invoiceData.payments || []).map(row => `
+					<tr>
+						<td class="text-right" style="width:62%; font-size:8.5px;">${row.mode_of_payment}:</td>
+						<td class="text-right" style="font-size:8.5px;">${formatCurrency(row.amount, "IDR", "id-ID")}</td>
+					</tr>
+					`).join("")}
+
+					<!-- Paid Amount -->
+					<tr class="paid-row" style="border-top:1px solid #ccc;">
+						<td class="text-right" style="width:62%; padding-top:4px;"><b>${__("Paid Amount")}</b></td>
+						<td class="text-right" style="padding-top:4px;"><b>${formatCurrency(invoiceData.paid_amount || 0, "IDR", "id-ID")}</b></td>
+					</tr>
+
+					<!-- Change Amount -->
+					${(invoiceData.change_amount && invoiceData.change_amount > 0) ? `
+					<tr class="change-row">
+						<td class="text-right" style="width:62%;"><b>${__("Change Amount")}</b></td>
+						<td class="text-right"><b>${formatCurrency(invoiceData.change_amount, "IDR", "id-ID")}</b></td>
+					</tr>
+					` : ""}
+
+					<!-- Outstanding -->
+					${(invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0) ? `
+					<tr>
+						<td class="text-right" style="width:62%; color:#dc3545; font-weight:bold; background:#fff3cd; padding:3px 4px;">
+							${__("Balance Due")}
+						</td>
+						<td class="text-right" style="color:#dc3545; font-weight:bold; background:#fff3cd; padding:3px 4px;">
+							${formatCurrency(invoiceData.outstanding_amount, "IDR", "id-ID")}
+						</td>
+					</tr>
+					` : ""}
+				</tbody>
+			</table>
+
+			<hr>
+
+			<!-- TERMS & FOOTER -->
+			<p class="text-center" style="font-size:9px; margin-top:5px;">${__("Thank you, please visit again.")}</p>
+			
+			<div class="text-center" style="font-size:8px; margin-top:5px; color:#666;">
+				Powered by BrainWise
 			</div>
 
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
