@@ -1034,7 +1034,7 @@ import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sy
 import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
 import { Button, Dialog, createResource } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, toRaw } from "vue";
 import { useToast } from "@/composables/useToast";
 
 import { useCustomerSearchStore } from "@/stores/customerSearch";
