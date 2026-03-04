@@ -2357,7 +2357,9 @@ async function handleSaveDraft() {
 					log.warn("Failed to create draft invoice - no invoice name returned, falling back");
 				}
 			} catch (err) {
-				log.error("Error creating draft online, falling back to local:", err);
+				const serverError = err.messages ? err.messages.join(", ") : err.message || err;
+				log.error("Error creating draft online, falling back to local. Server details:", serverError);
+				showError(__("Server Rejected Draft: {0}", [serverError]));
 			}
 		} 
 
