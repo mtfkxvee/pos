@@ -221,28 +221,32 @@ onMounted(() => {
 })
 
 async function loadDrafts() {
+	let localDrafts = [];
 	try {
-		let localDrafts = await getAllDrafts()
+		localDrafts = await getAllDrafts()
 		localDrafts = localDrafts.map(d => ({ ...d, is_local: true }))
+	} catch (e) {
+		console.warn("Failed to load local drafts", e)
+	}
 
-		let serverDrafts = []
-		if (!offlineStore.isOffline) {
+	let serverDrafts = []
+	if (!offlineStore.isOffline) {
+		try {
 			const res = await draftsResource.submit({
 				pos_profile: shiftStore.profileName
 			})
 			if (res) {
 				serverDrafts = res.map(d => ({ ...d, is_server: true }))
 			}
+		} catch (error) {
+			console.warn("Error loading server drafts:", error)
 		}
-
-		// Combine and sort by date descending
-		drafts.value = [...serverDrafts, ...localDrafts].sort((a, b) => {
-			return new Date(b.created_at) - new Date(a.created_at)
-		})
-	} catch (error) {
-		console.error("Error loading drafts:", error)
-		showError(__("Failed to load draft invoices"))
 	}
+
+	// Combine and sort by date descending
+	drafts.value = [...serverDrafts, ...localDrafts].sort((a, b) => {
+		return new Date(b.created_at) - new Date(a.created_at)
+	})
 }
 
 function handlePrintDraft(draft) {

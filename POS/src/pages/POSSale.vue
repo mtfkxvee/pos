@@ -2312,43 +2312,57 @@ async function handleSaveDraft() {
 	}
 
 	try {
+		let saved = false;
 		if (!offlineStore.isOffline) {
-			const invoiceData = {
-				doctype: cartStore.targetDoctype || "Sales Invoice",
-				pos_profile: cartStore.posProfile,
-				posa_pos_opening_shift: shiftStore.posOpeningShift, // Required to link to current shift
-				customer: cartStore.customer?.name || cartStore.customer,
-				items: cartStore.formatItemsForSubmission(toRaw(cartStore.invoiceItems)),
-				discount_amount: cartStore.additionalDiscount || 0,
-				coupon_code: cartStore.appliedCoupon?.code || cartStore.appliedCoupon?.name || undefined,
-				is_pos: 1,
-				docstatus: 0, // Save as Draft
-				update_stock: 0, // Do NOT update stock for draft!
-				remarks: "Draft - POS Hold Transaction",
-				...cartStore.loyaltyData,
-			};
+			try {
+				const invoiceData = {
+					doctype: cartStore.targetDoctype || "Sales Invoice",
+					pos_profile: cartStore.posProfile,
+					posa_pos_opening_shift: shiftStore.posOpeningShift, // Required to link to current shift
+					customer: cartStore.customer?.name || cartStore.customer,
+					items: cartStore.formatItemsForSubmission(toRaw(cartStore.invoiceItems)),
+					discount_amount: cartStore.additionalDiscount || 0,
+					coupon_code: cartStore.appliedCoupon?.code || cartStore.appliedCoupon?.name || undefined,
+					is_pos: 1,
+					docstatus: 0, // Save as Draft
+					update_stock: 0, // Do NOT update stock for draft!
+					remarks: "Draft - POS Hold Transaction",
+					...cartStore.loyaltyData,
+				};
 
-			const draftInvoice = await cartStore.updateInvoiceResource.submit({
-				data: invoiceData,
-			});
+				const draftInvoice = await cartStore.updateInvoiceResource.submit({
+					data: invoiceData,
+				});
 
-			if (draftInvoice && (draftInvoice.name || draftInvoice.data?.name)) {
-				const invoiceName = draftInvoice.name || draftInvoice.data?.name;
-				
-				// Optional: Delete local draft if we were continuing from one
-				if (cartStore.currentDraftId) {
-					draftsStore.deleteDraft(cartStore.currentDraftId);
+				if (draftInvoice && (draftInvoice.name || draftInvoice.data?.name)) {
+					const invoiceName = draftInvoice.name || draftInvoice.data?.name;
+					
+					// Optional: Delete local draft if we were continuing from one
+					if (cartStore.currentDraftId) {
+						if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
+							await frappeRequest({
+								url: `/api/resource/Sales Invoice/${cartStore.currentDraftId}`,
+								method: 'DELETE'
+							}).catch(e => log.warn("Failed to delete replacing server draft", e));
+						} else {
+							draftsStore.deleteDraft(cartStore.currentDraftId);
+						}
+					}
+					
+					showSuccess(__("Invoice {0} saved as draft successfully", [invoiceName]));
+					cartStore.clearCart();
+					previousCartHash = "";
+					saved = true;
+				} else {
+					log.warn("Failed to create draft invoice - no invoice name returned, falling back");
 				}
-				
-				showSuccess(__("Invoice {0} saved as draft successfully", [invoiceName]));
-				cartStore.clearCart();
-				previousCartHash = "";
-			} else {
-				throw new Error("Failed to create draft invoice - no invoice name returned");
+			} catch (err) {
+				log.error("Error creating draft online, falling back to local:", err);
 			}
+		} 
 
-		} else {
-			// Fallback to local IndexedDB Draft store when offline
+		if (!saved) {
+			// Fallback to local IndexedDB Draft store when offline or when online fails
 			const savedDraft = await draftsStore.saveDraftInvoice(
 				cartStore.invoiceItems,
 				cartStore.customer,
@@ -2363,13 +2377,14 @@ async function handleSaveDraft() {
 			);
 			
 			if (savedDraft) {
+				showSuccess(__("Invoice saved as draft locally"));
 				cartStore.clearCart();
 				previousCartHash = "";
 			}
 		}
 	} catch (error) {
 		log.error("Error saving draft:", error);
-		showError(__("Failed to save draft invoice online."));
+		showError(__("Failed to save draft invoice."));
 	}
 }
 
