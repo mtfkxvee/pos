@@ -48,7 +48,7 @@
 									</svg>
 								</button>
 								<button
-									@click.stop="handleDeleteDraft(draft.draft_id)"
+									@click.stop="handleDeleteDraft(draft)"
 									class="text-gray-400 hover:text-red-600 transition-colors p-1"
 									:title="__('Delete draft')"
 								>
@@ -194,6 +194,11 @@ const draftToDelete = ref(null)
 
 const draftsResource = createResource({
 	url: "pos_next.api.invoices.get_pos_draft_invoices",
+	makeParams() {
+		return {
+			pos_profile: shiftStore.profileName
+		}
+	},
 	auto: false,
 })
 
@@ -232,9 +237,7 @@ async function loadDrafts() {
 	let serverDrafts = []
 	if (!offlineStore.isOffline) {
 		try {
-			const res = await draftsResource.submit({
-				pos_profile: shiftStore.profileName
-			})
+			const res = await draftsResource.fetch()
 			if (res) {
 				serverDrafts = res.map(d => ({ ...d, is_server: true }))
 			}
