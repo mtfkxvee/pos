@@ -53,7 +53,7 @@ export async function printInvoice(
 	} catch (error) {
 		log.error("Error printing with Frappe print format:", error)
 		// Fallback to custom print format
-		return printInvoiceCustom(invoiceData)
+		return printInvoiceCustom(invoiceData, format)
 	}
 }
 
@@ -77,11 +77,17 @@ export async function printInvoice(
  * @param {string} invoiceData.company - Company name
  * @param {Array} invoiceData.items - Invoice line items
  * @param {Array} invoiceData.payments - Payment records
+ * @param {Array} invoiceData.payments - Payment records
  * @param {number} invoiceData.grand_total - Invoice total amount
+ * @param {string} printFormat - The requested print format (e.g., "58 PRINTER" or "80 PRINTER")
  */
-export function printInvoiceCustom(invoiceData) {
-	// Open print window with receipt size dimensions (80mm ≈ 302px at 96 DPI)
-	const printWindow = window.open("", "_blank", "width=350,height=600")
+export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
+	const is58mm = printFormat && printFormat.includes("58")
+	const widthCSS = is58mm ? "57mm" : "80mm"
+	const windowWidth = is58mm ? "220" : "350"
+
+	// Open print window with receipt size dimensions
+	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
 
 	const printContent = `
 		<!DOCTYPE html>
@@ -99,9 +105,9 @@ export function printInvoiceCustom(invoiceData) {
 				body {
 					font-family: 'Courier New', monospace;
 					padding: 10px;
-					width: 80mm;
+					width: ${widthCSS};
 					margin: 0;
-					max-width: 80mm;
+					max-width: ${widthCSS};
 					font-weight: bold;
 					color: black;
 				}
@@ -334,14 +340,14 @@ export function printInvoiceCustom(invoiceData) {
 								${item.item_name || item.item_code} ${isFree ? __('(FREE)') : ""}
 							</div>
 							<div class="item-details">
-								<span>${qty} × ${formatCurrency(displayRate)}</span>
-								<span><strong>${formatCurrency(subtotal)}</strong></span>
+								<span>${qty} × ${formatCurrency(displayRate, "IDR", "id-ID")}</span>
+								<span><strong>${formatCurrency(subtotal, "IDR", "id-ID")}</strong></span>
 							</div>
 							${hasItemDiscount
 						? `
 							<div class="item-discount">
 								<span>Discount ${item.discount_percentage ? `(${Number(item.discount_percentage).toFixed(2)}%)` : ""}</span>
-								<span>-${formatCurrency(item.discount_amount || 0)}</span>
+								<span>-${formatCurrency(item.discount_amount || 0, "IDR", "id-ID")}</span>
 							</div>
 							`
 						: ""
@@ -368,11 +374,11 @@ export function printInvoiceCustom(invoiceData) {
 			? `
 					<div class="total-row">
 						<span>${__('Subtotal:')}</span>
-						<span>${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0))}</span>
+						<span>${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0), "IDR", "id-ID")}</span>
 					</div>
 					<div class="total-row">
 						<span>${__('Tax:')}</span>
-						<span>${formatCurrency(invoiceData.total_taxes_and_charges)}</span>
+						<span>${formatCurrency(invoiceData.total_taxes_and_charges, "IDR", "id-ID")}</span>
 					</div>
 					`
 			: ""
@@ -381,14 +387,14 @@ export function printInvoiceCustom(invoiceData) {
 			? `
 					<div class="total-row" style="color: #28a745;">
 						<span>Additional Discount${invoiceData.additional_discount_percentage ? ` (${Number(invoiceData.additional_discount_percentage).toFixed(1)}%)` : ""}:</span>
-						<span>-${formatCurrency(Math.abs(invoiceData.discount_amount))}</span>
+						<span>-${formatCurrency(Math.abs(invoiceData.discount_amount), "IDR", "id-ID")}</span>
 					</div>
 					`
 			: ""
 		}
 					<div class="total-row grand-total">
 						<span>${__('TOTAL:')}</span>
-						<span>${formatCurrency(invoiceData.grand_total)}</span>
+						<span>${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</span>
 					</div>
 				</div>
 
@@ -402,20 +408,20 @@ export function printInvoiceCustom(invoiceData) {
 					(payment) => `
 						<div class="payment-row">
 							<span>${payment.mode_of_payment}:</span>
-							<span>${formatCurrency(payment.amount)}</span>
+							<span>${formatCurrency(payment.amount, "IDR", "id-ID")}</span>
 						</div>
 					`,
 				)
 				.join("")}
 					<div class="payment-row total-paid">
 						<span>${__('Total Paid:')}</span>
-						<span>${formatCurrency(invoiceData.paid_amount || 0)}</span>
+						<span>${formatCurrency(invoiceData.paid_amount || 0, "IDR", "id-ID")}</span>
 					</div>
 					${invoiceData.change_amount && invoiceData.change_amount > 0
 				? `
 					<div class="payment-row" style="font-weight: bold; margin-top: 5px;">
 						<span>${__('Change:')}</span>
-						<span>${formatCurrency(invoiceData.change_amount)}</span>
+						<span>${formatCurrency(invoiceData.change_amount, "IDR", "id-ID")}</span>
 					</div>
 					`
 				: ""
@@ -424,7 +430,7 @@ export function printInvoiceCustom(invoiceData) {
 				? `
 					<div class="outstanding-row">
 						<span>${__('BALANCE DUE:')}</span>
-						<span>${formatCurrency(invoiceData.outstanding_amount)}</span>
+						<span>${formatCurrency(invoiceData.outstanding_amount, "IDR", "id-ID")}</span>
 					</div>
 					`
 				: ""
