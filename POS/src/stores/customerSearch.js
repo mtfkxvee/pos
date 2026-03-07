@@ -366,7 +366,6 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 					"loyalty_program",
 					"customer_group",
 					"primary_address",
-					"custom_tanggal_lahir",
 				],
 				limit_page_length: limit,
 				order_by: "creation desc",

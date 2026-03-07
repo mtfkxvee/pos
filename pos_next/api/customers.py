@@ -38,7 +38,7 @@ def get_customers(search_term="", pos_profile=None, limit=20, fields=None):
                 frappe.logger().debug(f"Filtering by customer_group: {profile_doc.customer_group}")
 
         # Determine fields to fetch
-        fetch_fields = ["name", "customer_name", "mobile_no", "email_id", "loyalty_program", "customer_group", "primary_address", "custom_tanggal_lahir", "custom_kode_pelanggan"]
+        fetch_fields = ["name", "customer_name", "mobile_no", "email_id", "loyalty_program", "customer_group", "primary_address", "custom_kode_pelanggan"]
         if fields:
             import json
             if isinstance(fields, str):
