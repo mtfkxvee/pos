@@ -734,7 +734,7 @@
 
 							<!-- Complete Payment Button -->
 							<button
-								v-if="(remainingAmount === 0 || (applyWriteOff && canWriteOff)) && totalPaid > 0"
+								v-if="(remainingAmount === 0 || (applyWriteOff && canWriteOff)) && (totalPaid > 0 || grandTotal <= 0)"
 								@click="completePayment"
 								:disabled="isSubmitting || !canComplete"
 								:class="[
@@ -1130,7 +1130,7 @@ function handleNumpadEnter(value) {
 		numpadAddPayment()
 	} else if (
 		remainingAmount.value === 0 &&
-		totalPaid.value > 0 &&
+		(totalPaid.value > 0 || roundCurrency(props.grandTotal) <= 0) &&
 		canComplete.value
 	) {
 		// If fully paid and can complete, trigger complete payment
@@ -1721,6 +1721,11 @@ const canComplete = computed(() => {
 	// Check exact amount validation
 	if (!isExactAmountValid.value) {
 		return false
+	}
+
+	// If grand total is 0 (fully covered by loyalty points or discount), allow completing
+	if (roundCurrency(props.grandTotal) <= 0) {
+		return true
 	}
 
 	// If partial payment is allowed, can complete with any amount > 0
