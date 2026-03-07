@@ -24,13 +24,13 @@ import { roundCurrency } from "@/utils/currency"
  */
 function getRoundingTiers(amount) {
 	if (amount <= 0) return [1000, 5000]
-	if (amount < 10000) return [1000, 5000]          // < 10k: round 1k, 5k
-	if (amount < 50000) return [5000, 10000]          // < 50k: round 5k, 10k
-	if (amount < 100000) return [5000, 50000]         // < 100k: round 5k, 50k
-	if (amount < 500000) return [10000, 50000]        // < 500k: round 10k, 50k
-	if (amount < 1000000) return [50000, 100000]      // < 1M: round 50k, 100k
-	if (amount < 5000000) return [100000, 500000]     // < 5M: round 100k, 500k
-	return [500000, 1000000]                           // >= 5M: round 500k, 1M
+	if (amount < 10000) return [1000, 5000] // < 10k: round 1k, 5k
+	if (amount < 50000) return [5000, 10000] // < 50k: round 5k, 10k
+	if (amount < 100000) return [5000, 50000] // < 100k: round 5k, 50k
+	if (amount < 500000) return [10000, 50000] // < 500k: round 10k, 50k
+	if (amount < 1000000) return [50000, 100000] // < 1M: round 50k, 100k
+	if (amount < 5000000) return [100000, 500000] // < 5M: round 100k, 500k
+	return [500000, 1000000] // >= 5M: round 500k, 1M
 }
 
 /**

@@ -196,7 +196,7 @@ const draftsResource = createResource({
 	url: "pos_next.api.invoices.get_pos_draft_invoices",
 	makeParams() {
 		return {
-			pos_profile: shiftStore.profileName
+			pos_profile: shiftStore.profileName,
 		}
 	},
 	auto: false,
@@ -226,10 +226,10 @@ onMounted(() => {
 })
 
 async function loadDrafts() {
-	let localDrafts = [];
+	let localDrafts = []
 	try {
 		localDrafts = await getAllDrafts()
-		localDrafts = localDrafts.map(d => ({ ...d, is_local: true }))
+		localDrafts = localDrafts.map((d) => ({ ...d, is_local: true }))
 	} catch (e) {
 		console.warn("Failed to load local drafts", e)
 	}
@@ -239,7 +239,7 @@ async function loadDrafts() {
 		try {
 			const res = await draftsResource.fetch()
 			if (res) {
-				serverDrafts = res.map(d => ({ ...d, is_server: true }))
+				serverDrafts = res.map((d) => ({ ...d, is_server: true }))
 			}
 		} catch (error) {
 			console.warn("Error loading server drafts:", error)
@@ -282,12 +282,12 @@ async function confirmDeleteDraft() {
 		if (draftToDelete.value.is_server && !offlineStore.isOffline) {
 			await deleteResource.submit({
 				doctype: "Sales Invoice",
-				name: draftToDelete.value.draft_id
+				name: draftToDelete.value.draft_id,
 			})
 		} else {
 			await deleteDraft(draftToDelete.value.draft_id)
 		}
-		
+
 		await loadDrafts()
 		showDeleteDialog.value = false
 		draftToDelete.value = null

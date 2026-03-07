@@ -2,7 +2,7 @@ import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 
-const log = logger.create('PrintInvoice')
+const log = logger.create("PrintInvoice")
 
 /**
  * Print invoice using Frappe's print format system
@@ -87,13 +87,15 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	const windowWidth = is58mm ? "220" : "350"
 
 	// Determine Date and Time intelligently (Extract from OFFLINE ID if present)
-	let docDateStr = new Date(invoiceData.posting_date || Date.now()).toLocaleDateString()
+	let docDateStr = new Date(
+		invoiceData.posting_date || Date.now(),
+	).toLocaleDateString()
 	let docTimeStr = invoiceData.posting_time || new Date().toLocaleTimeString()
 
 	if (invoiceData.name && invoiceData.name.startsWith("OFFLINE-")) {
 		const parts = invoiceData.name.split("-")
 		if (parts.length > 1) {
-			const timestamp = parseInt(parts[1], 10)
+			const timestamp = Number.parseInt(parts[1], 10)
 			if (!isNaN(timestamp)) {
 				const dateObj = new Date(timestamp)
 				docDateStr = dateObj.toLocaleDateString()
@@ -103,14 +105,18 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	}
 
 	// Open print window with receipt size dimensions
-	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
+	const printWindow = window.open(
+		"",
+		"_blank",
+		`width=${windowWidth},height=600`,
+	)
 
 	const printContent = `
 		<!DOCTYPE html>
 		<html>
 		<head>
 			<meta charset="UTF-8">
-			<title>${__('Invoice - {0}', [invoiceData.name])}</title>
+			<title>${__("Invoice - {0}", [invoiceData.name])}</title>
 			<style>
 				@page {
 					size: ${widthCSS} auto;
@@ -203,16 +209,17 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 					</tr>
 				</thead>
 				<tbody>
-					${invoiceData.items.map((item) => {
-		const qty = item.quantity || item.qty;
-		const displayRate = item.price_list_rate || item.rate;
-		const subtotal = qty * displayRate;
-		const isFree = item.is_free_item;
+					${invoiceData.items
+						.map((item) => {
+							const qty = item.quantity || item.qty
+							const displayRate = item.price_list_rate || item.rate
+							const subtotal = qty * displayRate
+							const isFree = item.is_free_item
 
-		return `
+							return `
 						<tr>
 							<td>
-								${item.item_code} ${isFree ? __('(FREE)') : ""}
+								${item.item_code} ${isFree ? __("(FREE)") : ""}
 								${item.item_name && item.item_name !== item.item_code ? `<br><span style="font-size:8px; color:#555;">${item.item_name}</span>` : ""}
 								${item.serial_no ? `<br><span style="font-size:7.5px;"><b>S/N:</b> ${item.serial_no.replace(/\n/g, ", ")}</span>` : ""}
 							</td>
@@ -222,8 +229,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 							</td>
 							<td class="text-right">${formatCurrency(subtotal, "IDR", "id-ID")}</td>
 						</tr>
-						`;
-	}).join("")}
+						`
+						})
+						.join("")}
 				</tbody>
 			</table>
 
@@ -234,32 +242,45 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 				<tbody>
 					<!-- Subtotal / Total -->
 					<tr>
-						${(invoiceData.total_taxes_and_charges && invoiceData.total_taxes_and_charges > 0) ? `
+						${
+							invoiceData.total_taxes_and_charges &&
+							invoiceData.total_taxes_and_charges > 0
+								? `
 						<td class="text-right" style="width:62%;">${__("Total Excl. Tax")}</td>
 						<td class="text-right">${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0), "IDR", "id-ID")}</td>
-						` : `
+						`
+								: `
 						<td class="text-right" style="width:62%;">${__("Subtotal")}</td>
 						<td class="text-right">${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</td>
-						`}
+						`
+						}
 					</tr>
 
 					<!-- Taxes -->
-					${(invoiceData.taxes || []).map(row => `
+					${(invoiceData.taxes || [])
+						.map(
+							(row) => `
 					<tr>
 						<td class="text-right" style="width:62%; color:#555; font-size:8.5px;">
 							${row.description.includes("%") ? row.description : `${row.description}@${row.rate}%`}
 						</td>
 						<td class="text-right" style="color:#555; font-size:8.5px;">${formatCurrency(row.tax_amount, "IDR", "id-ID")}</td>
 					</tr>
-					`).join("")}
+					`,
+						)
+						.join("")}
 
 					<!-- Discount -->
-					${invoiceData.discount_amount ? `
+					${
+						invoiceData.discount_amount
+							? `
 					<tr>
 						<td class="text-right" style="width:62%; color:#28a745;">${__("Discount")} ${invoiceData.additional_discount_percentage ? `(${Number(invoiceData.additional_discount_percentage).toFixed(1)}%)` : ""}</td>
 						<td class="text-right" style="color:#28a745;">-${formatCurrency(Math.abs(invoiceData.discount_amount), "IDR", "id-ID")}</td>
 					</tr>
-					` : ""}
+					`
+							: ""
+					}
 
 					<!-- Grand Total -->
 					<tr class="grand-total-row">
@@ -268,12 +289,16 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 					</tr>
 
 					<!-- Payment Methods -->
-					${(invoiceData.payments || []).map(row => `
+					${(invoiceData.payments || [])
+						.map(
+							(row) => `
 					<tr>
 						<td class="text-right" style="width:62%; font-size:8.5px;">${row.mode_of_payment}:</td>
 						<td class="text-right" style="font-size:8.5px;">${formatCurrency(row.amount, "IDR", "id-ID")}</td>
 					</tr>
-					`).join("")}
+					`,
+						)
+						.join("")}
 
 					<!-- Paid Amount -->
 					<tr class="paid-row" style="border-top:1px solid #ccc;">
@@ -282,15 +307,21 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 					</tr>
 
 					<!-- Change Amount -->
-					${(invoiceData.change_amount && invoiceData.change_amount > 0) ? `
+					${
+						invoiceData.change_amount && invoiceData.change_amount > 0
+							? `
 					<tr class="change-row">
 						<td class="text-right" style="width:62%;"><b>${__("Change Amount")}</b></td>
 						<td class="text-right"><b>${formatCurrency(invoiceData.change_amount, "IDR", "id-ID")}</b></td>
 					</tr>
-					` : ""}
+					`
+							: ""
+					}
 
 					<!-- Outstanding -->
-					${(invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0) ? `
+					${
+						invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
+							? `
 					<tr>
 						<td class="text-right" style="width:62%; color:#dc3545; font-weight:bold; background:#fff3cd; padding:3px 4px;">
 							${__("Balance Due")}
@@ -299,7 +330,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 							${formatCurrency(invoiceData.outstanding_amount, "IDR", "id-ID")}
 						</td>
 					</tr>
-					` : ""}
+					`
+							: ""
+					}
 				</tbody>
 			</table>
 
@@ -310,10 +343,10 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
 				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
-					${__('Print Receipt')}
+					${__("Print Receipt")}
 				</button>
 				<button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
-					${__('Close')}
+					${__("Close")}
 				</button>
 			</div>
 		</body>
@@ -386,20 +419,31 @@ export function printShiftClosing(closingData) {
 	// Open print window with receipt size dimensions (80mm ≈ 302px at 96 DPI)
 	const printWindow = window.open("", "_blank", "width=350,height=600")
 
-	const salesTotal = closingData.sales_total ?? closingData.grand_total ?? 0;
-	const taxesTotal = closingData.taxes ? closingData.taxes.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0) : 0;
-	const paymentReconciliation = closingData.payment_reconciliation || [];
+	const salesTotal = closingData.sales_total ?? closingData.grand_total ?? 0
+	const taxesTotal = closingData.taxes
+		? closingData.taxes.reduce(
+				(acc, t) => acc + (Number.parseFloat(t.amount) || 0),
+				0,
+			)
+		: 0
+	const paymentReconciliation = closingData.payment_reconciliation || []
 
-	const totalExpected = paymentReconciliation.reduce((acc, p) => acc + (parseFloat(p.expected_amount) || 0), 0);
-	const totalActual = paymentReconciliation.reduce((acc, p) => acc + (parseFloat(p.closing_amount) || 0), 0);
-	const totalDifference = totalActual - totalExpected;
+	const totalExpected = paymentReconciliation.reduce(
+		(acc, p) => acc + (Number.parseFloat(p.expected_amount) || 0),
+		0,
+	)
+	const totalActual = paymentReconciliation.reduce(
+		(acc, p) => acc + (Number.parseFloat(p.closing_amount) || 0),
+		0,
+	)
+	const totalDifference = totalActual - totalExpected
 
 	const printContent = `
 		<!DOCTYPE html>
 		<html>
 		<head>
 			<meta charset="UTF-8">
-			<title>${__('Shift Report - {0}', [closingData.pos_profile])}</title>
+			<title>${__("Shift Report - {0}", [closingData.pos_profile])}</title>
 			<style>
 				* {
 					margin: 0;
@@ -486,49 +530,51 @@ export function printShiftClosing(closingData) {
 		</head>
 		<body>
             <div class="header">
-                <div class="title">${__('SHIFT CLOSING REPORT')}</div>
+                <div class="title">${__("SHIFT CLOSING REPORT")}</div>
                 <div class="title">${closingData.pos_profile}</div>
                 <div class="subtitle">${new Date().toLocaleString()}</div>
             </div>
 
             <div class="section">
                 <div class="row">
-                    <span>${__('Start:')}</span>
+                    <span>${__("Start:")}</span>
                     <span>${new Date(closingData.period_start_date).toLocaleString()}</span>
                 </div>
                 <div class="row">
-                    <span>${__('End:')}</span>
+                    <span>${__("End:")}</span>
                     <span>${new Date().toLocaleString()}</span>
                 </div>
                   <div class="row">
-                    <span>${__('User:')}</span>
-                    <span>${closingData.owner || 'User'}</span>
+                    <span>${__("User:")}</span>
+                    <span>${closingData.owner || "User"}</span>
                 </div>
             </div>
 
             <div class="section">
-                <div class="section-title">${__('SALES SUMMARY')}</div>
+                <div class="section-title">${__("SALES SUMMARY")}</div>
                 <div class="row">
-                    <span>${__('Gross Sales:')}</span>
+                    <span>${__("Gross Sales:")}</span>
                     <span>${formatCurrency(salesTotal)}</span>
                 </div>
                 <div class="row">
-                    <span>${__('Returns:')}</span>
+                    <span>${__("Returns:")}</span>
                     <span>${formatCurrency(closingData.returns_total)}</span>
                 </div>
                 <div class="row">
-                    <span>${__('Tax Collected:')}</span>
+                    <span>${__("Tax Collected:")}</span>
                     <span>${formatCurrency(taxesTotal)}</span>
                 </div>
                 <div class="row bold" style="margin-top: 5px; border-top: 1px solid #000; padding-top: 2px;">
-                    <span>${__('NET SALES:')}</span>
+                    <span>${__("NET SALES:")}</span>
                     <span>${formatCurrency(closingData.grand_total)}</span>
                 </div>
             </div>
 
              <div class="section">
-                <div class="section-title">${__('PAYMENTS')}</div>
-                ${paymentReconciliation.map(p => `
+                <div class="section-title">${__("PAYMENTS")}</div>
+                ${paymentReconciliation
+									.map(
+										(p) => `
                     <div style="margin-bottom: 5px;">
                         <div class="row bold">
                             <span>${p.mode_of_payment}</span>
@@ -547,39 +593,41 @@ export function printShiftClosing(closingData) {
                         </div>
                          <div class="row">
                             <span>Diff:</span>
-                            <span>${formatCurrency(parseFloat(p.closing_amount || 0) - parseFloat(p.expected_amount || 0))}</span>
+                            <span>${formatCurrency(Number.parseFloat(p.closing_amount || 0) - Number.parseFloat(p.expected_amount || 0))}</span>
                         </div>
                     </div>
-                `).join('')}
+                `,
+									)
+									.join("")}
             </div>
 
              <div class="section">
                  <div class="row bold">
-                    <span>${__('TOTAL EXPECTED:')}</span>
+                    <span>${__("TOTAL EXPECTED:")}</span>
                     <span>${formatCurrency(totalExpected)}</span>
                 </div>
                 <div class="row bold">
-                    <span>${__('TOTAL ACTUAL:')}</span>
+                    <span>${__("TOTAL ACTUAL:")}</span>
                     <span>${formatCurrency(totalActual)}</span>
                 </div>
                  <div class="row bold">
-                    <span>${__('VARIANCE:')}</span>
+                    <span>${__("VARIANCE:")}</span>
                     <span>${formatCurrency(totalDifference)}</span>
                 </div>
             </div>
 
             <div class="footer">
-                ${__('Printed on')} ${new Date().toLocaleString()}
+                ${__("Printed on")} ${new Date().toLocaleString()}
                 <br>
                 Powered by BrainWise
             </div>
 
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
 				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
-					${__('Print Report')}
+					${__("Print Report")}
 				</button>
 				<button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
-					${__('Close')}
+					${__("Close")}
 				</button>
 			</div>
 		</body>

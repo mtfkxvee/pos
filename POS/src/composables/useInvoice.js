@@ -473,7 +473,11 @@ export function useInvoice() {
 
 		// Store coupon code for tracking, but not for manual discounts/compliments
 		// Manual discounts should NOT be sent as coupon codes to prevent validation errors
-		if (discount.is_manual || discount.code === 'MANUAL' || discount.code === 'COMPLIMENT') {
+		if (
+			discount.is_manual ||
+			discount.code === "MANUAL" ||
+			discount.code === "COMPLIMENT"
+		) {
 			couponCode.value = null
 		} else {
 			couponCode.value = discount.code || discount.name

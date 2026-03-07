@@ -75,17 +75,17 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const enableLoyaltyProgram = computed(() =>
 		Boolean(settings.value.enable_loyalty_program),
 	)
-	const defaultLoyaltyProgram = computed(() =>
-		settings.value.default_loyalty_program || "",
+	const defaultLoyaltyProgram = computed(
+		() => settings.value.default_loyalty_program || "",
 	)
 	const redeemLoyaltyPoints = computed(() =>
 		Boolean(settings.value.redeem_loyalty_points),
 	)
-	const loyaltyRedemptionAccount = computed(() =>
-		settings.value.loyalty_redemption_account || "",
+	const loyaltyRedemptionAccount = computed(
+		() => settings.value.loyalty_redemption_account || "",
 	)
-	const loyaltyRedemptionCostCenter = computed(() =>
-		settings.value.loyalty_redemption_cost_center || "",
+	const loyaltyRedemptionCostCenter = computed(
+		() => settings.value.loyalty_redemption_cost_center || "",
 	)
 
 	// Computed - General Settings
@@ -214,17 +214,17 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 
 	// Computed - Sales Persons
-	const enableSalesPersons = computed(() =>
-		settings.value.enable_sales_persons !== "Disabled"
+	const enableSalesPersons = computed(
+		() => settings.value.enable_sales_persons !== "Disabled",
 	)
-	const salesPersonsMode = computed(() =>
-		settings.value.enable_sales_persons || "Disabled"
+	const salesPersonsMode = computed(
+		() => settings.value.enable_sales_persons || "Disabled",
 	)
-	const isSingleSalesPerson = computed(() =>
-		settings.value.enable_sales_persons === "Single"
+	const isSingleSalesPerson = computed(
+		() => settings.value.enable_sales_persons === "Single",
 	)
-	const isMultipleSalesPersons = computed(() =>
-		settings.value.enable_sales_persons === "Multiple"
+	const isMultipleSalesPersons = computed(
+		() => settings.value.enable_sales_persons === "Multiple",
 	)
 
 	// Resource

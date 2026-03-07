@@ -1,7 +1,11 @@
 import { call } from "@/utils/apiWrapper"
 import { isOffline } from "@/utils/offline"
 import { offlineWorker } from "@/utils/offline/workerClient"
-import { cacheItems, getCachedVariants, updateItemBatchSerialData } from "@/utils/offline/items"
+import {
+	cacheItems,
+	getCachedVariants,
+	updateItemBatchSerialData,
+} from "@/utils/offline/items"
 import { performanceConfig } from "@/utils/performanceConfig"
 import { logger } from "@/utils/logger"
 import { createResource } from "frappe-ui"
@@ -11,7 +15,7 @@ import { useStockStore } from "./stock"
 import { usePOSShiftStore } from "./posShift"
 import { useRealtimePosProfile } from "@/composables/useRealtimePosProfile"
 
-const log = logger.create('ItemSearch')
+const log = logger.create("ItemSearch")
 
 /**
  * Fetch and cache variants for all template items
@@ -23,7 +27,7 @@ async function cacheVariantsForTemplates(items, posProfile) {
 	if (!items || items.length === 0 || !posProfile) return
 
 	// Find template items (items with has_variants = 1)
-	const templateItems = items.filter(item => item.has_variants)
+	const templateItems = items.filter((item) => item.has_variants)
 
 	if (templateItems.length === 0) {
 		log.debug("No template items found - skipping variant caching")
@@ -48,12 +52,17 @@ async function cacheVariantsForTemplates(items, posProfile) {
 				const variants = response?.message || response || []
 
 				if (variants.length > 0) {
-					log.debug(`Fetched ${variants.length} variants for ${template.item_code}`)
+					log.debug(
+						`Fetched ${variants.length} variants for ${template.item_code}`,
+					)
 					return variants
 				}
 				return []
 			} catch (error) {
-				log.warn(`Failed to fetch variants for ${template.item_code}:`, error.message)
+				log.warn(
+					`Failed to fetch variants for ${template.item_code}:`,
+					error.message,
+				)
 				return []
 			}
 		})
@@ -86,7 +95,7 @@ async function cacheBatchSerialForItems(items, warehouse) {
 
 	// Find items with batch or serial tracking
 	const batchSerialItems = items.filter(
-		item => item.has_batch_no || item.has_serial_no
+		(item) => item.has_batch_no || item.has_serial_no,
 	)
 
 	if (batchSerialItems.length === 0) {
@@ -98,25 +107,33 @@ async function cacheBatchSerialForItems(items, warehouse) {
 
 	// Fetch in batches to avoid too large requests
 	const BATCH_SIZE = 20
-	const itemCodes = batchSerialItems.map(item => item.item_code)
+	const itemCodes = batchSerialItems.map((item) => item.item_code)
 
 	for (let i = 0; i < itemCodes.length; i += BATCH_SIZE) {
 		const batchCodes = itemCodes.slice(i, i + BATCH_SIZE)
 
 		try {
-			const response = await call("pos_next.api.items.get_batch_serial_data_for_items", {
-				item_codes: JSON.stringify(batchCodes),
-				warehouse: warehouse,
-			})
+			const response = await call(
+				"pos_next.api.items.get_batch_serial_data_for_items",
+				{
+					item_codes: JSON.stringify(batchCodes),
+					warehouse: warehouse,
+				},
+			)
 
 			const data = response?.message || response || {}
 
 			if (Object.keys(data).length > 0) {
 				await updateItemBatchSerialData(data)
-				log.debug(`Cached batch/serial data for ${Object.keys(data).length} items`)
+				log.debug(
+					`Cached batch/serial data for ${Object.keys(data).length} items`,
+				)
 			}
 		} catch (error) {
-			log.warn(`Failed to fetch batch/serial data for batch ${i}:`, error.message)
+			log.warn(
+				`Failed to fetch batch/serial data for batch ${i}:`,
+				error.message,
+			)
 		}
 	}
 
@@ -148,7 +165,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 	// Sorting state - for user-triggered sorting filters
 	const sortBy = ref(null) // Options: 'name', 'quantity', 'item_group', null (no sorting)
-	const sortOrder = ref('asc') // Options: 'asc', 'desc'
+	const sortOrder = ref("asc") // Options: 'asc', 'desc'
 
 	// Lazy loading state - dynamically adjusted based on device performance
 	const currentOffset = ref(0)
@@ -192,13 +209,13 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 * @returns {Object} Delta with added and removed groups
 	 */
 	function calculateItemGroupDelta(oldGroups, newGroups) {
-		const oldSet = new Set(oldGroups.map(g => g.item_group))
-		const newSet = new Set(newGroups.map(g => g.item_group))
+		const oldSet = new Set(oldGroups.map((g) => g.item_group))
+		const newSet = new Set(newGroups.map((g) => g.item_group))
 
 		return {
-			added: [...newSet].filter(g => !oldSet.has(g)),
-			removed: [...oldSet].filter(g => !newSet.has(g)),
-			unchanged: [...newSet].filter(g => oldSet.has(g))
+			added: [...newSet].filter((g) => !oldSet.has(g)),
+			removed: [...oldSet].filter((g) => !newSet.has(g)),
+			unchanged: [...newSet].filter((g) => oldSet.has(g)),
 		}
 	}
 
@@ -218,14 +235,14 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 			log.success(`Removed ${removed} items from ${groups.length} group(s)`, {
 				groups: groups.slice(0, 5), // Log first 5 to avoid spam
-				totalGroups: groups.length
+				totalGroups: groups.length,
 			})
 
 			return removed
 		} catch (error) {
 			log.error("Failed to remove items from groups", {
 				groups,
-				error: error.message
+				error: error.message,
 			})
 			throw error
 		}
@@ -245,14 +262,16 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 		try {
 			// Convert group names to group objects format
-			const groupObjects = groups.map(g => ({ item_group: g }))
+			const groupObjects = groups.map((g) => ({ item_group: g }))
 
 			// Reuse the standard fetch function
 			const items = await fetchItemsFromGroups(profile, groupObjects)
 
 			if (items.length > 0) {
 				await offlineWorker.cacheItems(items)
-				log.success(`Cached ${items.length} items from ${groups.length} group(s)`)
+				log.success(
+					`Cached ${items.length} items from ${groups.length} group(s)`,
+				)
 				return items.length
 			}
 
@@ -273,20 +292,23 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		if (updateData.pos_profile !== profile) {
 			log.debug("Ignoring update for different profile", {
 				received: updateData.pos_profile,
-				current: profile
+				current: profile,
 			})
 			return
 		}
 
-		log.info(`POS Profile ${profile} updated remotely - applying smart cache update`, {
-			changeType: updateData.change_type,
-			timestamp: updateData.timestamp
-		})
+		log.info(
+			`POS Profile ${profile} updated remotely - applying smart cache update`,
+			{
+				changeType: updateData.change_type,
+				timestamp: updateData.timestamp,
+			},
+		)
 
 		// Calculate delta
 		const delta = calculateItemGroupDelta(
 			profileItemGroups.value || [],
-			updateData.item_groups || []
+			updateData.item_groups || [],
 		)
 
 		// Update the reference immediately
@@ -303,7 +325,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		log.info("Item group delta calculated", {
 			added: delta.added.length,
 			removed: delta.removed.length,
-			unchanged: delta.unchanged.length
+			unchanged: delta.unchanged.length,
 		})
 
 		// Attempt smart cache update
@@ -326,13 +348,12 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				removed: removedCount,
 				cached: cachedCount,
 				addedGroups: delta.added.length,
-				removedGroups: delta.removed.length
+				removedGroups: delta.removed.length,
 			})
-
 		} catch (error) {
 			log.error("Smart cache update failed - attempting recovery", {
 				error: error.message,
-				stack: error.stack
+				stack: error.stack,
 			})
 
 			// Recovery Strategy: Full cache rebuild
@@ -355,18 +376,17 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			// Reload from server (force server fetch since cache was cleared)
 			await loadAllItems(profile, true)
 			log.success("Full cache recovery completed")
-
 		} catch (recoveryError) {
 			log.error("Recovery failed - manual intervention required", {
 				error: recoveryError.message,
-				stack: recoveryError.stack
+				stack: recoveryError.stack,
 			})
 
 			// Last resort: Show user a message
 			// TODO: Integrate with notification system
 			console.error(
 				"Failed to update item cache. Please refresh the page manually.",
-				recoveryError
+				recoveryError,
 			)
 		}
 	}
@@ -381,7 +401,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		},
 		auto: false,
 		onSuccess(data) {
-			itemGroups.value = (data?.message || data || [])
+			itemGroups.value = data?.message || data || []
 		},
 		onError(error) {
 			log.error("Error fetching item groups", error)
@@ -398,7 +418,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	function clearBaseCache() {
 		baseResultCache.clear()
 		filteredItemsCache.clear() // Also clear filtered items cache
-		lastFilterKey = ''
+		lastFilterKey = ""
 	}
 
 	function removeRegisteredItems(registrySet) {
@@ -482,7 +502,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 * - 20x faster for repeated filter selections
 	 */
 	const filteredItemsCache = new Map()
-	let lastFilterKey = ''
+	let lastFilterKey = ""
 
 	/**
 	 * Filtered items with live stock injection - Optimized with intelligent caching
@@ -519,7 +539,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 * Get all groups to filter by, including child groups for parent item groups.
 	 */
 	const getGroupsToFilter = (groupName) => {
-		const groupInfo = itemGroups.value?.find(g => g.item_group === groupName)
+		const groupInfo = itemGroups.value?.find((g) => g.item_group === groupName)
 		if (groupInfo?.child_groups?.length) {
 			return new Set([groupName, ...groupInfo.child_groups])
 		}
@@ -537,7 +557,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		// Step 2: Create cache key based on current filter state
 		// Key format: "itemGroup_version_searchTerm"
 		// This ensures cache invalidates when data or filters change
-		const filterKey = `${selectedItemGroup.value || 'all'}_${allItemsVersion.value}_${searchTerm.value || ''}`
+		const filterKey = `${selectedItemGroup.value || "all"}_${allItemsVersion.value}_${searchTerm.value || ""}`
 
 		// Step 3: Check cache for filtered results
 		let list
@@ -558,18 +578,23 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				// User selected a specific item group tab
 				// Items are ALREADY server-filtered, but verify for safety
 				const groupsToFilter = getGroupsToFilter(selectedItemGroup.value)
-				list = sourceItems.filter(i => groupsToFilter.has(i.item_group))
-			} else if (profileItemGroups.value && profileItemGroups.value.length > 0) {
+				list = sourceItems.filter((i) => groupsToFilter.has(i.item_group))
+			} else if (
+				profileItemGroups.value &&
+				profileItemGroups.value.length > 0
+			) {
 				// "All Items" tab - items fetched without group filter
 				// Still filter by allowed groups as sanity check
-				const allowedGroups = new Set(profileItemGroups.value.map(g => g.item_group))
+				const allowedGroups = new Set(
+					profileItemGroups.value.map((g) => g.item_group),
+				)
 				// Also include child groups in allowed set
-				itemGroups.value.forEach(g => {
+				itemGroups.value.forEach((g) => {
 					if (g.child_groups) {
-						g.child_groups.forEach(child => allowedGroups.add(child))
+						g.child_groups.forEach((child) => allowedGroups.add(child))
 					}
 				})
-				list = sourceItems.filter(i => allowedGroups.has(i.item_group))
+				list = sourceItems.filter((i) => allowedGroups.has(i.item_group))
 			} else {
 				// No filters - show all items as-is
 				list = sourceItems
@@ -588,7 +613,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 		// Step 4: Inject live stock quantities (optimized)
 		// Use a simple map operation - O(n) complexity
-		const itemsWithStock = list.map(item => {
+		const itemsWithStock = list.map((item) => {
 			// Get display stock (includes reservations from cart)
 			const displayStock = stockStore.getDisplayStock(item.item_code)
 			// Get original server stock (without reservations)
@@ -599,7 +624,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				...item,
 				actual_qty: displayStock,
 				stock_qty: displayStock,
-				original_stock: originalStock
+				original_stock: originalStock,
 			}
 		})
 
@@ -610,34 +635,34 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				let compareResult = 0
 
 				switch (sortBy.value) {
-					case 'name':
+					case "name":
 						// Sort by item_name alphabetically
-						const nameA = (a.item_name || '').toLowerCase()
-						const nameB = (b.item_name || '').toLowerCase()
+						const nameA = (a.item_name || "").toLowerCase()
+						const nameB = (b.item_name || "").toLowerCase()
 						compareResult = nameA.localeCompare(nameB)
 						break
 
-					case 'quantity':
+					case "quantity":
 						// Sort by stock quantity
 						compareResult = (a.actual_qty ?? 0) - (b.actual_qty ?? 0)
 						break
 
-					case 'item_group':
+					case "item_group":
 						// Sort by item_group alphabetically
-						const groupA = (a.item_group || '').toLowerCase()
-						const groupB = (b.item_group || '').toLowerCase()
+						const groupA = (a.item_group || "").toLowerCase()
+						const groupB = (b.item_group || "").toLowerCase()
 						compareResult = groupA.localeCompare(groupB)
 						break
 
-					case 'price':
+					case "price":
 						// Sort by price_list_rate (standard selling rate)
 						compareResult = (a.price_list_rate ?? 0) - (b.price_list_rate ?? 0)
 						break
 
-					case 'item_code':
+					case "item_code":
 						// Sort by item_code alphabetically
-						const codeA = (a.item_code || '').toLowerCase()
-						const codeB = (b.item_code || '').toLowerCase()
+						const codeA = (a.item_code || "").toLowerCase()
+						const codeB = (b.item_code || "").toLowerCase()
 						compareResult = codeA.localeCompare(codeB)
 						break
 
@@ -647,7 +672,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				}
 
 				// Apply sort order (asc or desc)
-				return sortOrder.value === 'desc' ? -compareResult : compareResult
+				return sortOrder.value === "desc" ? -compareResult : compareResult
 			})
 		}
 
@@ -752,8 +777,10 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			log.info("Loading items with filter strategy", {
 				profile,
 				filterCount: itemGroupFilters.length,
-				filters: hasFilters ? itemGroupFilters.map(g => g.item_group).slice(0, 3) : [],
-				forceServerFetch
+				filters: hasFilters
+					? itemGroupFilters.map((g) => g.item_group).slice(0, 3)
+					: [],
+				forceServerFetch,
 			})
 
 			// ====================================================================
@@ -766,27 +793,38 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 			const cacheStatsPromise = Promise.race([
 				offlineWorker.getCacheStats(),
-				new Promise((_, reject) => setTimeout(() => reject(new Error('Cache stats timeout')), 3000))
-			]).catch(statsError => {
-				log.warn("Cache stats unavailable, proceeding with defaults:", statsError.message)
+				new Promise((_, reject) =>
+					setTimeout(() => reject(new Error("Cache stats timeout")), 3000),
+				),
+			]).catch((statsError) => {
+				log.warn(
+					"Cache stats unavailable, proceeding with defaults:",
+					statsError.message,
+				)
 				return { items: 0, cacheReady: false, lastSync: null }
 			})
 
 			// Start item count fetch early (only used in Strategy C, but cheap to fire now)
 			// Skip when offline — count can't be fetched without network
-			const countPromise = !offline ? call("pos_next.api.items.get_items_count", {
-				pos_profile: profile,
-			}).then(r => r?.message ?? r ?? 0).catch(countErr => {
-				log.warn("Could not fetch item count:", countErr.message)
-				return 0
-			}) : Promise.resolve(0)
+			const countPromise = !offline
+				? call("pos_next.api.items.get_items_count", {
+						pos_profile: profile,
+					})
+						.then((r) => r?.message ?? r ?? 0)
+						.catch((countErr) => {
+							log.warn("Could not fetch item count:", countErr.message)
+							return 0
+						})
+				: Promise.resolve(0)
 
 			const stats = await cacheStatsPromise
 			// Preserve totalServerItems from previous sync (getCacheStats doesn't include it)
 			const prevTotalServerItems = cacheStats.value?.totalServerItems
 			cacheStats.value = {
 				...stats,
-				...(prevTotalServerItems ? { totalServerItems: prevTotalServerItems } : {}),
+				...(prevTotalServerItems
+					? { totalServerItems: prevTotalServerItems }
+					: {}),
 			}
 			cacheReady.value = stats.cacheReady
 
@@ -799,7 +837,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			// - stats.cacheReady = false: Cache not available, need server data
 			// - Otherwise: Use cache (already have fresh data this session)
 
-			const shouldFetchFromServer = forceServerFetch || !serverDataFresh.value || !stats.cacheReady
+			const shouldFetchFromServer =
+				forceServerFetch || !serverDataFresh.value || !stats.cacheReady
 
 			// ====================================================================
 			// STRATEGY A: OFFLINE MODE - Cache Only
@@ -821,14 +860,19 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 							totalItemsLoaded.value = cached.length
 							currentOffset.value = cached.length
 							// Use server count if available (excludes variants), fallback to IndexedDB count
-							totalServerItems.value = cacheStats.value?.totalServerItems || stats.items
+							totalServerItems.value =
+								cacheStats.value?.totalServerItems || stats.items
 							hasMore.value = cached.length >= limit
-							log.success(`Loaded ${cached.length} items from cache (offline, total: ${stats.items})`)
+							log.success(
+								`Loaded ${cached.length} items from cache (offline, total: ${stats.items})`,
+							)
 
 							// Eager variant verification: Check if template items have cached variants
-							const templateItems = cached.filter(item => item.has_variants)
+							const templateItems = cached.filter((item) => item.has_variants)
 							if (templateItems.length > 0) {
-								log.info(`Verifying variants for ${templateItems.length} template items`)
+								log.info(
+									`Verifying variants for ${templateItems.length} template items`,
+								)
 								const missingVariants = []
 
 								for (const template of templateItems) {
@@ -836,14 +880,21 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 									if (!variants || variants.length === 0) {
 										missingVariants.push(template.item_code)
 									} else {
-										log.debug(`Template ${template.item_code} has ${variants.length} cached variants`)
+										log.debug(
+											`Template ${template.item_code} has ${variants.length} cached variants`,
+										)
 									}
 								}
 
 								if (missingVariants.length > 0) {
-									log.warn(`${missingVariants.length} template items missing variants in offline cache:`, missingVariants)
+									log.warn(
+										`${missingVariants.length} template items missing variants in offline cache:`,
+										missingVariants,
+									)
 								} else {
-									log.success(`All ${templateItems.length} template items have variants cached`)
+									log.success(
+										`All ${templateItems.length} template items have variants cached`,
+									)
 								}
 							}
 						} else {
@@ -869,7 +920,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			// This prevents redundant server fetches on page refreshes/navigations
 			// Condition: serverDataFresh=true AND cache is ready
 			if (!shouldFetchFromServer && stats.cacheReady && stats.items > 0) {
-				log.info("Using cached items (already fetched from server this session)")
+				log.info(
+					"Using cached items (already fetched from server this session)",
+				)
 				try {
 					// Load first page from cache for display
 					const limit = itemsPerPage.value
@@ -880,10 +933,13 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 						totalItemsLoaded.value = cached.length
 						currentOffset.value = cached.length
 						// Use server count if available (excludes variants), fallback to IndexedDB count
-						totalServerItems.value = cacheStats.value?.totalServerItems || stats.items
+						totalServerItems.value =
+							cacheStats.value?.totalServerItems || stats.items
 						hasMore.value = cached.length >= limit
 						loading.value = false
-						log.success(`Loaded ${cached.length} items from cache (total: ${stats.items})`)
+						log.success(
+							`Loaded ${cached.length} items from cache (total: ${stats.items})`,
+						)
 						return // Exit early - cache hit, no server fetch needed
 					}
 				} catch (cacheError) {
@@ -915,7 +971,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 			// Determine initial load size based on catalog size
 			const SMALL_CATALOG_THRESHOLD = 1000
-			const isSmallCatalog = totalItemCount > 0 && totalItemCount <= SMALL_CATALOG_THRESHOLD
+			const isSmallCatalog =
+				totalItemCount > 0 && totalItemCount <= SMALL_CATALOG_THRESHOLD
 			const INITIAL_LIMIT = isSmallCatalog ? totalItemCount : itemsPerPage.value
 
 			// ----------------------------------------------------------------
@@ -924,10 +981,16 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			// Load ONLY first batch from first group. Other groups load on-demand
 			// when user clicks the tab. This prevents loading 65K items at once.
 			if (hasFilters && selectedItemGroup.value) {
-				log.debug(`Fetching first ${INITIAL_LIMIT} items (${isSmallCatalog ? 'small catalog — loading all' : 'large catalog mode'})`)
+				log.debug(
+					`Fetching first ${INITIAL_LIMIT} items (${isSmallCatalog ? "small catalog — loading all" : "large catalog mode"})`,
+				)
 
 				// Load items from first group only - other groups load on tab click
-				const fetchedItems = await fetchItemsFromGroups(profile, itemGroupFilters, INITIAL_LIMIT)
+				const fetchedItems = await fetchItemsFromGroups(
+					profile,
+					itemGroupFilters,
+					INITIAL_LIMIT,
+				)
 
 				replaceAllItems(fetchedItems)
 				totalItemsLoaded.value = fetchedItems.length
@@ -938,22 +1001,29 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 				if (fetchedItems.length > 0) {
 					// Cache this batch for offline access (non-blocking)
-					offlineWorker.cacheItems(fetchedItems).catch(err => {
+					offlineWorker.cacheItems(fetchedItems).catch((err) => {
 						log.warn("Background item caching failed:", err.message)
 					})
 					cacheReady.value = true
 					serverDataFresh.value = true
 
-					log.success(`Loaded ${fetchedItems.length} items (server-side filtering)`)
+					log.success(
+						`Loaded ${fetchedItems.length} items (server-side filtering)`,
+					)
 
 					// Background caching - limit to prevent overloading IndexedDB
-					cacheVariantsForTemplates(fetchedItems.slice(0, 50), profile).catch(err => {
-						log.warn("Background variant caching failed:", err.message)
-					})
+					cacheVariantsForTemplates(fetchedItems.slice(0, 50), profile).catch(
+						(err) => {
+							log.warn("Background variant caching failed:", err.message)
+						},
+					)
 
 					// Cache batch/serial data for offline use
 					if (shiftStore.profileWarehouse) {
-						cacheBatchSerialForItems(fetchedItems, shiftStore.profileWarehouse).catch(err => {
+						cacheBatchSerialForItems(
+							fetchedItems,
+							shiftStore.profileWarehouse,
+						).catch((err) => {
 							log.warn("Background batch/serial caching failed:", err.message)
 						})
 					}
@@ -964,18 +1034,22 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 						startBackgroundCacheSync(profile, itemGroupFilters)
 					}
 				} else {
-					log.info('No items found for the selected filter groups')
+					log.info("No items found for the selected filter groups")
 				}
 
-			// ----------------------------------------------------------------
-			// UNFILTERED LOADING PATH: Lazy load with infinite scroll
-			// ----------------------------------------------------------------
-			// When no filters (default "All Items" view), load first batch only
-			// and enable infinite scroll for progressive loading. Suitable for
-			// large catalogs (1000+ items) to minimize initial load time.
+				// ----------------------------------------------------------------
+				// UNFILTERED LOADING PATH: Lazy load with infinite scroll
+				// ----------------------------------------------------------------
+				// When no filters (default "All Items" view), load first batch only
+				// and enable infinite scroll for progressive loading. Suitable for
+				// large catalogs (1000+ items) to minimize initial load time.
 			} else {
-				const unfilteredLimit = isSmallCatalog ? totalItemCount : itemsPerPage.value
-				log.debug(`Fetching ${unfilteredLimit} items (no filters, ${isSmallCatalog ? 'small catalog' : 'paginated'})`)
+				const unfilteredLimit = isSmallCatalog
+					? totalItemCount
+					: itemsPerPage.value
+				log.debug(
+					`Fetching ${unfilteredLimit} items (no filters, ${isSmallCatalog ? "small catalog" : "paginated"})`,
+				)
 
 				// Fetch first batch for fast initial render
 				const response = await call("pos_next.api.items.get_items", {
@@ -997,7 +1071,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					hasMore.value = totalItemCount > unfilteredLimit
 
 					// Cache this batch (non-blocking — background sync fills the rest)
-					offlineWorker.cacheItems(list).catch(err => {
+					offlineWorker.cacheItems(list).catch((err) => {
 						log.warn("Background item caching failed:", err.message)
 					})
 
@@ -1008,15 +1082,17 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 					// Cache variants for template items (for offline use)
 					// Run in background to not block UI
-					cacheVariantsForTemplates(list, profile).catch(err => {
+					cacheVariantsForTemplates(list, profile).catch((err) => {
 						log.warn("Background variant caching failed:", err.message)
 					})
 
 					// Cache batch/serial data for offline use
 					if (shiftStore.profileWarehouse) {
-						cacheBatchSerialForItems(list, shiftStore.profileWarehouse).catch(err => {
-							log.warn("Background batch/serial caching failed:", err.message)
-						})
+						cacheBatchSerialForItems(list, shiftStore.profileWarehouse).catch(
+							(err) => {
+								log.warn("Background batch/serial caching failed:", err.message)
+							},
+						)
 					}
 				}
 
@@ -1031,7 +1107,10 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 			// Fallback to cache
 			try {
-				const cached = await offlineWorker.searchCachedItems("", itemsPerPage.value)
+				const cached = await offlineWorker.searchCachedItems(
+					"",
+					itemsPerPage.value,
+				)
 				replaceAllItems(cached || [])
 				totalItemsLoaded.value = cached?.length || 0
 				currentOffset.value = cached?.length || 0
@@ -1063,7 +1142,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		// For large catalogs: Load items from first/selected group only
 		// Other groups load on-demand when user clicks the tab
 		const firstGroup = itemGroups[0]?.item_group
-		log.debug(`Fetching first ${effectiveLimit} items from group: ${firstGroup}`)
+		log.debug(
+			`Fetching first ${effectiveLimit} items from group: ${firstGroup}`,
+		)
 
 		try {
 			const response = await call("pos_next.api.items.get_items", {
@@ -1086,18 +1167,25 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 * Fetch items for a specific item group (on-demand when user clicks tab)
 	 * Optimized for large catalogs - server-side filtering
 	 */
-	async function fetchItemsForGroup(profile, itemGroup, start = 0, limit = null) {
+	async function fetchItemsForGroup(
+		profile,
+		itemGroup,
+		start = 0,
+		limit = null,
+	) {
 		if (!itemGroup) return []
 
 		const effectiveLimit = limit || itemsPerPage.value
 
 		// Get expanded groups (parent + children) for filtering
-		const groupInfo = itemGroups.value?.find(g => g.item_group === itemGroup)
+		const groupInfo = itemGroups.value?.find((g) => g.item_group === itemGroup)
 		const groupsToFetch = groupInfo?.child_groups?.length
 			? [itemGroup, ...groupInfo.child_groups]
 			: [itemGroup]
 
-		log.debug(`Fetching items for group: ${itemGroup} (includes ${groupsToFetch.length} groups)`)
+		log.debug(
+			`Fetching items for group: ${itemGroup} (includes ${groupsToFetch.length} groups)`,
+		)
 
 		try {
 			// Use bulk endpoint for multiple groups, or single endpoint for one
@@ -1151,8 +1239,14 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				try {
 					// Use group-aware cache query when a specific group is selected
 					if (selectedItemGroup.value) {
-						const groupsToFilter = Array.from(getGroupsToFilter(selectedItemGroup.value))
-						items = await offlineWorker.searchCachedItemsByGroup(groupsToFilter, pageSize, start)
+						const groupsToFilter = Array.from(
+							getGroupsToFilter(selectedItemGroup.value),
+						)
+						items = await offlineWorker.searchCachedItemsByGroup(
+							groupsToFilter,
+							pageSize,
+							start,
+						)
 					} else {
 						items = await offlineWorker.searchCachedItems("", pageSize, start)
 					}
@@ -1164,7 +1258,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					replaceAllItems(items)
 					currentOffset.value = start + items.length
 					totalItemsLoaded.value = items.length
-					log.debug(`Fetched page ${page} from cache: ${items.length} items (offset ${start})`)
+					log.debug(
+						`Fetched page ${page} from cache: ${items.length} items (offset ${start})`,
+					)
 					return
 				}
 				// Cache returned empty — if offline, nothing more we can do
@@ -1200,7 +1296,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				// Cache for offline
 				await offlineWorker.cacheItems(items)
 
-				log.debug(`Fetched page ${page}: ${items.length} items (offset ${start})`)
+				log.debug(
+					`Fetched page ${page}: ${items.length} items (offset ${start})`,
+				)
 			}
 		} catch (error) {
 			log.error(`Error fetching page ${page}`, error)
@@ -1208,8 +1306,14 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			try {
 				let cached = []
 				if (selectedItemGroup.value) {
-					const groupsToFilter = Array.from(getGroupsToFilter(selectedItemGroup.value))
-					cached = await offlineWorker.searchCachedItemsByGroup(groupsToFilter, pageSize, start)
+					const groupsToFilter = Array.from(
+						getGroupsToFilter(selectedItemGroup.value),
+					)
+					cached = await offlineWorker.searchCachedItemsByGroup(
+						groupsToFilter,
+						pageSize,
+						start,
+					)
 				} else {
 					cached = await offlineWorker.searchCachedItems("", pageSize, start)
 				}
@@ -1217,7 +1321,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					replaceAllItems(cached)
 					currentOffset.value = start + cached.length
 					totalItemsLoaded.value = cached.length
-					log.info(`Fetched page ${page} from cache (fallback): ${cached.length} items`)
+					log.info(
+						`Fetched page ${page} from cache (fallback): ${cached.length} items`,
+					)
 				}
 			} catch (cacheErr) {
 				log.error(`Cache fallback also failed for page ${page}`, cacheErr)
@@ -1296,7 +1402,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				// Cache new batch for offline support
 				await offlineWorker.cacheItems(list)
 
-				log.debug(`Loaded ${list.length} more items, total: ${totalItemsLoaded.value}`)
+				log.debug(
+					`Loaded ${list.length} more items, total: ${totalItemsLoaded.value}`,
+				)
 			} else {
 				// Empty response - no more items to load
 				hasMore.value = false
@@ -1323,18 +1431,26 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 * @param {string} profile - POS Profile name
 	 * @param {Array} filterGroups - Item group filters from POS Profile (optional)
 	 */
-	async function startBackgroundCacheSync(profile, filterGroups = [], initialOffset = 0) {
+	async function startBackgroundCacheSync(
+		profile,
+		filterGroups = [],
+		initialOffset = 0,
+	) {
 		// Cancel any previous sync and start fresh
 		syncGeneration++
 		const myGeneration = syncGeneration
 
 		if (cacheSyncing.value) {
-			log.info(`Cancelling previous sync, starting new sync (gen=${myGeneration})`)
+			log.info(
+				`Cancelling previous sync, starting new sync (gen=${myGeneration})`,
+			)
 		}
 
 		const hasFilters = filterGroups.length > 0
 
-		log.info(`Starting background sync gen=${myGeneration} ${hasFilters ? `for ${filterGroups.length} groups` : '(all items)'}`)
+		log.info(
+			`Starting background sync gen=${myGeneration} ${hasFilters ? `for ${filterGroups.length} groups` : "(all items)"}`,
+		)
 		cacheSyncing.value = true
 
 		// Use larger batch size for faster sync (500 items per batch)
@@ -1356,13 +1472,19 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 		// Get all groups to sync — deduplicated (parent groups may share children)
 		const groupsToSync = hasFilters
-			? [...new Set(filterGroups.flatMap(g => {
-				const groupInfo = itemGroups.value?.find(ig => ig.item_group === g.item_group)
-				if (groupInfo?.child_groups?.length) {
-					return [g.item_group, ...groupInfo.child_groups]
-				}
-				return [g.item_group]
-			}))]
+			? [
+					...new Set(
+						filterGroups.flatMap((g) => {
+							const groupInfo = itemGroups.value?.find(
+								(ig) => ig.item_group === g.item_group,
+							)
+							if (groupInfo?.child_groups?.length) {
+								return [g.item_group, ...groupInfo.child_groups]
+							}
+							return [g.item_group]
+						}),
+					),
+				]
 			: []
 
 		// Fetch total item count for progress percentage (Phase 7)
@@ -1411,7 +1533,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 							// Move to next group
 							groupIndex++
 							groupOffset = 0
-							log.debug(`Completed group ${currentGroup} (${groupIndex}/${groupsToSync.length})`)
+							log.debug(
+								`Completed group ${currentGroup} (${groupIndex}/${groupsToSync.length})`,
+							)
 						} else {
 							groupOffset += list.length
 						}
@@ -1461,45 +1585,60 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 						// Update stats EVERY batch for smooth progress indicator
 						// Include initialOffset to account for items already loaded before sync
 						const totalCached = initialOffset + uniqueItemsSeen.size
-						const syncProgress = totalServerItems > 0
-							? Math.round((totalCached / totalServerItems) * 100)
-							: null
+						const syncProgress =
+							totalServerItems > 0
+								? Math.round((totalCached / totalServerItems) * 100)
+								: null
 						cacheStats.value = {
 							...cacheStats.value,
 							items: totalCached,
 							totalServerItems,
 							syncProgress,
-							lastSync: new Date().toISOString()
+							lastSync: new Date().toISOString(),
 						}
 						cacheReady.value = true
 
 						// Log progress every 10 batches (5000 items)
 						if (batchCount % 10 === 0) {
-							const progressStr = syncProgress != null ? ` (${syncProgress}%)` : ''
-							log.info(`Sync progress: ${totalCached} items cached${progressStr} (${batchCount} batches)`)
+							const progressStr =
+								syncProgress != null ? ` (${syncProgress}%)` : ""
+							log.info(
+								`Sync progress: ${totalCached} items cached${progressStr} (${batchCount} batches)`,
+							)
 						}
 
 						// Note: Variants are included in the sync via include_variants=1,
 						// so no need for separate cacheVariantsForTemplates call here
 
 						// Small delay to not overwhelm server/browser
-						await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS))
+						await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS))
 					}
 				} catch (error) {
 					consecutiveErrors++
 					if (consecutiveErrors >= MAX_SYNC_RETRIES) {
-						log.error(`Sync failed after ${MAX_SYNC_RETRIES} consecutive errors, stopping`, error.message)
+						log.error(
+							`Sync failed after ${MAX_SYNC_RETRIES} consecutive errors, stopping`,
+							error.message,
+						)
 						break
 					}
-					const backoffMs = Math.min(2000 * Math.pow(2, consecutiveErrors - 1), 30000)
-					log.warn(`Sync batch error (${consecutiveErrors}/${MAX_SYNC_RETRIES}), retrying in ${backoffMs}ms...`, error.message)
-					await new Promise(resolve => setTimeout(resolve, backoffMs))
+					const backoffMs = Math.min(
+						2000 * Math.pow(2, consecutiveErrors - 1),
+						30000,
+					)
+					log.warn(
+						`Sync batch error (${consecutiveErrors}/${MAX_SYNC_RETRIES}), retrying in ${backoffMs}ms...`,
+						error.message,
+					)
+					await new Promise((resolve) => setTimeout(resolve, backoffMs))
 				}
 			}
 
 			// Only finalize if this sync generation is still active
 			if (myGeneration !== syncGeneration) {
-				log.info(`Sync gen=${myGeneration} cancelled (current gen=${syncGeneration})`)
+				log.info(
+					`Sync gen=${myGeneration} cancelled (current gen=${syncGeneration})`,
+				)
 				return
 			}
 
@@ -1509,22 +1648,35 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			cacheStats.value = {
 				...finalStats,
 				totalServerItems,
-				syncProgress: totalServerItems > 0 ? Math.round((finalCached / totalServerItems) * 100) : null,
+				syncProgress:
+					totalServerItems > 0
+						? Math.round((finalCached / totalServerItems) * 100)
+						: null,
 			}
 			cacheReady.value = true
 			cacheSyncing.value = false
-			log.success(`Background sync COMPLETE - ${finalCached} items cached in ${batchCount} batches`)
+			log.success(
+				`Background sync COMPLETE - ${finalCached} items cached in ${batchCount} batches`,
+			)
 
 			// Cache batch/serial data after items are synced (in background)
 			if (shiftStore.profileWarehouse && finalCached > 0) {
 				log.info("Starting batch/serial data sync...")
 				// This runs in background, don't await
-				offlineWorker.searchCachedItems("", 10000).then(async (items) => {
-					const batchSerialItems = items.filter(i => i.has_batch_no || i.has_serial_no)
-					if (batchSerialItems.length > 0) {
-						await cacheBatchSerialForItems(batchSerialItems, shiftStore.profileWarehouse)
-					}
-				}).catch(err => log.warn("Batch/serial sync failed:", err.message))
+				offlineWorker
+					.searchCachedItems("", 10000)
+					.then(async (items) => {
+						const batchSerialItems = items.filter(
+							(i) => i.has_batch_no || i.has_serial_no,
+						)
+						if (batchSerialItems.length > 0) {
+							await cacheBatchSerialForItems(
+								batchSerialItems,
+								shiftStore.profileWarehouse,
+							)
+						}
+					})
+					.catch((err) => log.warn("Batch/serial sync failed:", err.message))
 			}
 		}
 
@@ -1568,7 +1720,10 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					// 3. Then search server for fresh results in background
 
 					log.debug(`Searching cache for: "${term}"`)
-					const cached = await offlineWorker.searchCachedItems(term, searchLimit)
+					const cached = await offlineWorker.searchCachedItems(
+						term,
+						searchLimit,
+					)
 
 					if (cached && cached.length > 0) {
 						// Show cached results immediately (instant!)
@@ -1614,7 +1769,10 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					// If we haven't shown cache results yet, try cache as fallback
 					if (!searchResults.value || searchResults.value.length === 0) {
 						try {
-							const cached = await offlineWorker.searchCachedItems(term, searchLimit)
+							const cached = await offlineWorker.searchCachedItems(
+								term,
+								searchLimit,
+							)
 							setSearchResults(cached || [])
 							resolve(cached || [])
 							log.info(`Fallback: found ${cached?.length || 0} items in cache`)
@@ -1705,7 +1863,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 * @param {string} field - Field to sort by: 'name', 'quantity', 'item_group', 'price', 'item_code'
 	 * @param {string} order - Sort order: 'asc' or 'desc' (default: 'asc')
 	 */
-	function setSortFilter(field, order = 'asc') {
+	function setSortFilter(field, order = "asc") {
 		sortBy.value = field
 		sortOrder.value = order
 
@@ -1720,12 +1878,12 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	 */
 	function clearSortFilter() {
 		sortBy.value = null
-		sortOrder.value = 'asc'
+		sortOrder.value = "asc"
 
 		// Clear filtered items cache to force re-computation
 		clearBaseCache()
 
-		log.debug('Sort filter cleared')
+		log.debug("Sort filter cleared")
 	}
 
 	function cleanup() {
@@ -1768,7 +1926,11 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 							// Get expanded groups (parent + children)
 							const groupsToFilter = Array.from(getGroupsToFilter(group))
 							const [cached, count] = await Promise.all([
-								offlineWorker.searchCachedItemsByGroup(groupsToFilter, pageSize, 0),
+								offlineWorker.searchCachedItemsByGroup(
+									groupsToFilter,
+									pageSize,
+									0,
+								),
 								offlineWorker.countCachedItemsByGroup(groupsToFilter),
 							])
 							items = cached || []
@@ -1780,7 +1942,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 								offlineWorker.getCacheStats(),
 							])
 							items = cached || []
-							totalCount = stats?.totalServerItems || stats?.items || items.length
+							totalCount =
+								stats?.totalServerItems || stats?.items || items.length
 						}
 
 						if (items.length > 0) {
@@ -1789,13 +1952,20 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 							currentOffset.value = items.length
 							totalServerItems.value = totalCount
 							hasMore.value = items.length >= pageSize
-							log.info(`Loaded ${items.length} cached items for group: ${group || 'All Items'} (offline, total: ${totalCount})`)
+							log.info(
+								`Loaded ${items.length} cached items for group: ${group || "All Items"} (offline, total: ${totalCount})`,
+							)
 						} else {
 							replaceAllItems([])
-							log.warn(`No cached items for group: ${group || 'All Items'} (offline)`)
+							log.warn(
+								`No cached items for group: ${group || "All Items"} (offline)`,
+							)
 						}
 					} catch (cacheErr) {
-						log.error("Cache load failed for group tab (offline):", cacheErr.message)
+						log.error(
+							"Cache load failed for group tab (offline):",
+							cacheErr.message,
+						)
 						replaceAllItems([])
 					}
 					loading.value = false
@@ -1817,7 +1987,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				const countPromise = call("pos_next.api.items.get_items_count", {
 					pos_profile: posProfile.value,
 					item_group: group || undefined,
-				}).catch(err => {
+				}).catch((err) => {
 					log.warn("Could not fetch item count:", err.message)
 					return 0
 				})
@@ -1842,7 +2012,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 				// Get total count for pagination
 				const countResult = await countPromise
-				totalServerItems.value = countResult?.message ?? countResult ?? items.length
+				totalServerItems.value =
+					countResult?.message ?? countResult ?? items.length
 
 				if (items.length > 0) {
 					replaceAllItems(items)
@@ -1853,20 +2024,29 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					// Server returned 0 but sync is still caching items — try cache fallback
 					try {
 						const groupsToFilter = Array.from(getGroupsToFilter(group))
-						const cached = await offlineWorker.searchCachedItemsByGroup(groupsToFilter, 500, 0)
+						const cached = await offlineWorker.searchCachedItemsByGroup(
+							groupsToFilter,
+							500,
+							0,
+						)
 						if (cached && cached.length > 0) {
 							replaceAllItems(cached)
 							totalItemsLoaded.value = cached.length
 							currentOffset.value = cached.length
 							hasMore.value = false
-							log.info(`Loaded ${cached.length} cached items for group: ${group} (sync in progress)`)
+							log.info(
+								`Loaded ${cached.length} cached items for group: ${group} (sync in progress)`,
+							)
 						}
 					} catch (cacheErr) {
 						log.warn("Cache fallback for group tab failed:", cacheErr.message)
 					}
 				}
 			} catch (error) {
-				log.error(`Failed to load items for group ${group || 'All Items'}`, error)
+				log.error(
+					`Failed to load items for group ${group || "All Items"}`,
+					error,
+				)
 
 				// Network error — try cache as fallback
 				try {
@@ -1876,13 +2056,18 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					if (group) {
 						const groupsToFilter = Array.from(getGroupsToFilter(group))
 						const [cached, count] = await Promise.all([
-							offlineWorker.searchCachedItemsByGroup(groupsToFilter, pageSize, 0),
+							offlineWorker.searchCachedItemsByGroup(
+								groupsToFilter,
+								pageSize,
+								0,
+							),
 							offlineWorker.countCachedItemsByGroup(groupsToFilter),
 						])
 						items = cached || []
 						totalCount = count || items.length
 					} else {
-						items = await offlineWorker.searchCachedItems("", pageSize, 0) || []
+						items =
+							(await offlineWorker.searchCachedItems("", pageSize, 0)) || []
 						totalCount = items.length
 					}
 					if (items.length > 0) {
@@ -1891,10 +2076,15 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 						currentOffset.value = items.length
 						totalServerItems.value = totalCount
 						hasMore.value = items.length >= pageSize
-						log.info(`Loaded ${items.length} cached items for group: ${group || 'All Items'} (network error fallback)`)
+						log.info(
+							`Loaded ${items.length} cached items for group: ${group || "All Items"} (network error fallback)`,
+						)
 					}
 				} catch (cacheErr) {
-					log.warn("Cache fallback after network error failed:", cacheErr.message)
+					log.warn(
+						"Cache fallback after network error failed:",
+						cacheErr.message,
+					)
 				}
 			} finally {
 				loading.value = false
@@ -1943,7 +2133,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		try {
 			// Single API call returns EVERYTHING - no need for separate loadItemGroups()
 			const data = await call("pos_next.api.pos_profile.get_pos_profile_data", {
-				pos_profile: profile
+				pos_profile: profile,
 			})
 
 			// Set profile item groups (raw from child table)
@@ -1955,10 +2145,13 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 			// Cache profile data for offline use (survives component remount)
 			try {
-				sessionStorage.setItem(`pos_profile_data:${profile}`, JSON.stringify({
-					profileItemGroups: profileItemGroups.value,
-					itemGroups: itemGroups.value,
-				}))
+				sessionStorage.setItem(
+					`pos_profile_data:${profile}`,
+					JSON.stringify({
+						profileItemGroups: profileItemGroups.value,
+						itemGroups: itemGroups.value,
+					}),
+				)
 			} catch (e) {
 				// sessionStorage might be full or unavailable
 			}
@@ -1986,7 +2179,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					const parsed = JSON.parse(cached)
 					profileItemGroups.value = parsed.profileItemGroups || []
 					itemGroups.value = parsed.itemGroups || []
-					log.info(`Restored ${itemGroups.value.length} item groups from session cache (offline)`)
+					log.info(
+						`Restored ${itemGroups.value.length} item groups from session cache (offline)`,
+					)
 
 					// Still load items from IndexedDB cache
 					if (autoLoadItems) {
@@ -2067,8 +2262,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		// ========================================================================
 		// STOCK ACTIONS - Delegates to stock store
 		// ========================================================================
-		applyStockUpdates,        // Delegates to stockStore.applyUpdates
-		refreshStockFromServer,   // Delegates to stockStore.refreshFromServer
+		applyStockUpdates, // Delegates to stockStore.applyUpdates
+		refreshStockFromServer, // Delegates to stockStore.refreshFromServer
 
 		// ========================================================================
 		// STOCK STORE ACCESS

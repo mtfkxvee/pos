@@ -73,7 +73,7 @@ function createAsyncQueue() {
 		 */
 		get hasPending() {
 			return pendingTask !== null
-		}
+		},
 	}
 }
 
@@ -128,12 +128,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 	// Offer processing state management
 	const offerProcessingState = ref({
-		isProcessing: false,      // True while any offer operation is running
-		isAutoProcessing: false,  // True during automatic offer processing
-		lastProcessedAt: 0,       // Timestamp of last successful processing
-		lastCartHash: '',         // Hash of cart state when last processed
-		error: null,              // Last error if any
-		retryCount: 0,            // Number of consecutive failures
+		isProcessing: false, // True while any offer operation is running
+		isAutoProcessing: false, // True during automatic offer processing
+		lastProcessedAt: 0, // Timestamp of last successful processing
+		lastCartHash: "", // Hash of cart state when last processed
+		error: null, // Last error if any
+		retryCount: 0, // Number of consecutive failures
 	})
 
 	const loyaltyData = ref({
@@ -152,7 +152,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const offerQueue = createAsyncQueue()
 
 	// Computed for backward compatibility and UI binding
-	const isProcessingOffers = computed(() => offerProcessingState.value.isProcessing)
+	const isProcessingOffers = computed(
+		() => offerProcessingState.value.isProcessing,
+	)
 
 	/**
 	 * Generates a comprehensive hash of the current cart state.
@@ -162,17 +164,22 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		const items = invoiceItems.value
 		const parts = [
 			// Item details: code, quantity, uom, discount
-			items.map(i => `${i.item_code}:${i.quantity}:${i.uom || ''}:${i.discount_percentage || 0}`).join('|'),
+			items
+				.map(
+					(i) =>
+						`${i.item_code}:${i.quantity}:${i.uom || ""}:${i.discount_percentage || 0}`,
+				)
+				.join("|"),
 			// Total item count
 			items.length.toString(),
 			// Subtotal (rounded to avoid floating point issues)
 			Math.round((subtotal.value || 0) * 100).toString(),
 			// Customer
-			customer.value?.name || customer.value || 'none',
+			customer.value?.name || customer.value || "none",
 			// Applied offers count
 			appliedOffers.value.length.toString(),
 		]
-		return parts.join('::')
+		return parts.join("::")
 	}
 
 	// Toast composable
@@ -193,11 +200,21 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Determine if this item should be validated for stock
 		// Include: stock items, bundles, OR items with actual_qty defined (catches misconfigured items)
 		// CRITICAL: If is_stock_item is explicitly false/0, we must skip validation even if actual_qty exists
-		const isNonStockItem = item.is_stock_item === 0 || item.is_stock_item === false
-		const hasActualQty = item.actual_qty !== undefined || item.stock_qty !== undefined
-		const shouldValidateStock = !isNonStockItem && (item.is_stock_item || item.is_bundle || hasActualQty)
+		const isNonStockItem =
+			item.is_stock_item === 0 || item.is_stock_item === false
+		const hasActualQty =
+			item.actual_qty !== undefined || item.stock_qty !== undefined
+		const shouldValidateStock =
+			!isNonStockItem && (item.is_stock_item || item.is_bundle || hasActualQty)
 
-		if (currentProfile && !autoAdd && settingsStore.shouldEnforceStockValidation() && shouldValidateStock && !item.has_serial_no && !item.has_batch_no) {
+		if (
+			currentProfile &&
+			!autoAdd &&
+			settingsStore.shouldEnforceStockValidation() &&
+			shouldValidateStock &&
+			!item.has_serial_no &&
+			!item.has_batch_no
+		) {
 			const warehouse = item.warehouse || currentProfile.warehouse
 			const actualQty =
 				item.actual_qty !== undefined ? item.actual_qty : item.stock_qty || 0
@@ -243,7 +260,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		// Reset offer processing state
 		suppressOfferReapply.value = false
-		offerProcessingState.value.lastCartHash = ''
+		offerProcessingState.value.lastCartHash = ""
 		offerProcessingState.value.error = null
 		offerProcessingState.value.retryCount = 0
 
@@ -273,7 +290,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			loyalty_amount: data.loyalty_amount || 0,
 			loyalty_program: data.loyalty_program || null,
 			loyalty_redemption_account: data.loyalty_redemption_account || null,
-			loyalty_redemption_cost_center: data.loyalty_redemption_cost_center || null,
+			loyalty_redemption_cost_center:
+				data.loyalty_redemption_cost_center || null,
 		}
 	}
 
@@ -287,11 +305,23 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
-		const result = await baseSubmitInvoice(targetDoctype.value, deliveryDate.value, writeOffAmount.value, toRaw(loyaltyData.value))
+		const result = await baseSubmitInvoice(
+			targetDoctype.value,
+			deliveryDate.value,
+			writeOffAmount.value,
+			toRaw(loyaltyData.value),
+		)
 		// Reset write-off and loyalty amount after successful submission
 		if (result) {
 			writeOffAmount.value = 0
-			loyaltyData.value = { redeem_loyalty_points: 0, loyalty_points: 0, loyalty_amount: 0, loyalty_program: null, loyalty_redemption_account: null, loyalty_redemption_cost_center: null }
+			loyaltyData.value = {
+				redeem_loyalty_points: 0,
+				loyalty_points: 0,
+				loyalty_amount: 0,
+				loyalty_program: null,
+				loyalty_redemption_account: null,
+				loyalty_redemption_cost_center: null,
+			}
 		}
 		return result
 	}
@@ -299,8 +329,6 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	async function createSalesOrder() {
 		return await submitInvoice()
 	}
-
-
 
 	function setCustomer(selectedCustomer) {
 		customer.value = selectedCustomer
@@ -322,7 +350,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	function applyDiscountToCart(discount) {
 		applyDiscount(discount)
 		appliedCoupon.value = discount
-		showSuccess(__('{0} applied successfully', [discount.name]))
+		showSuccess(__("{0} applied successfully", [discount.name]))
 	}
 
 	function removeDiscountFromCart() {
@@ -346,9 +374,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			selling_price_list: currentProfile?.selling_price_list,
 			currency: currentProfile?.currency,
 			discount_amount: additionalDiscount.value || 0,
-			coupon_code: (appliedCoupon.value && !appliedCoupon.value.is_manual && appliedCoupon.value.code !== 'MANUAL' && appliedCoupon.value.code !== 'COMPLIMENT')
-				? (appliedCoupon.value.code || appliedCoupon.value.name)
-				: "",
+			coupon_code:
+				appliedCoupon.value &&
+				!appliedCoupon.value.is_manual &&
+				appliedCoupon.value.code !== "MANUAL" &&
+				appliedCoupon.value.code !== "COMPLIMENT"
+					? appliedCoupon.value.code || appliedCoupon.value.name
+					: "",
 			items: rawItems.map((item) => ({
 				item_code: item.item_code,
 				item_name: item.item_name,
@@ -370,7 +402,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	function hasPricingRules(value) {
 		if (!value) return false
 		if (Array.isArray(value)) return value.length > 0
-		return typeof value === 'string' && value.trim().length > 0
+		return typeof value === "string" && value.trim().length > 0
 	}
 
 	/**
@@ -388,7 +420,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			const discountAmt = Number.parseFloat(serverItem.discount_amount) || 0
 
 			// Only update if server applied a pricing rule or discount
-			if (hasPricingRules(serverItem.pricing_rules) || discountPct > 0 || discountAmt > 0) {
+			if (
+				hasPricingRules(serverItem.pricing_rules) ||
+				discountPct > 0 ||
+				discountAmt > 0
+			) {
 				item.discount_percentage = discountPct
 				item.discount_amount = discountAmt
 				item.pricing_rules = serverItem.pricing_rules
@@ -416,7 +452,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 */
 	function processFreeItems(freeItems) {
 		// Reset all free quantities
-		invoiceItems.value.forEach(item => {
+		invoiceItems.value.forEach((item) => {
 			item.free_qty = 0
 		})
 
@@ -432,8 +468,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 			// Find matching cart item by item_code and uom
 			const cartItem = invoiceItems.value.find(
-				item => item.item_code === freeItem.item_code &&
-					(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom)
+				(item) =>
+					item.item_code === freeItem.item_code &&
+					(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom),
 			)
 
 			if (cartItem) {
@@ -460,7 +497,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			freeItems: Array.isArray(payload.free_items) ? payload.free_items : [],
 			// CRITICAL: Only trust explicitly returned rules - NO FALLBACK
 			// If backend doesn't return applied_pricing_rules, NO offers were applied
-			appliedRules: Array.isArray(payload.applied_pricing_rules) ? payload.applied_pricing_rules : []
+			appliedRules: Array.isArray(payload.applied_pricing_rules)
+				? payload.applied_pricing_rules
+				: [],
 		}
 	}
 
@@ -525,8 +564,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				// Check if cancelled during API call
 				if (signal?.aborted) return
 
-				const { items: responseItems, freeItems, appliedRules } =
-					parseOfferResponse(response)
+				const {
+					items: responseItems,
+					freeItems,
+					appliedRules,
+				} = parseOfferResponse(response)
 
 				suppressOfferReapply.value = true
 				applyDiscountsFromServer(responseItems)
@@ -557,7 +599,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 						}
 					}
 
-					showWarning(__("Your cart doesn't meet the requirements for this offer."))
+					showWarning(
+						__("Your cart doesn't meet the requirements for this offer."),
+					)
 					offersDialogRef?.resetApplyingState()
 					result = false
 					return
@@ -590,7 +634,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				// Wait for Vue reactivity to propagate before showing toast
 				await nextTick()
 
-				showSuccess(__('{0} applied successfully', [(offer.title || offer.name)]))
+				showSuccess(__("{0} applied successfully", [offer.title || offer.name]))
 				result = true
 			} catch (error) {
 				if (signal?.aborted) return
@@ -667,8 +711,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 				if (signal?.aborted) return
 
-				const { items: responseItems, freeItems, appliedRules } =
-					parseOfferResponse(response)
+				const {
+					items: responseItems,
+					freeItems,
+					appliedRules,
+				} = parseOfferResponse(response)
 
 				suppressOfferReapply.value = true
 				applyDiscountsFromServer(responseItems)
@@ -747,7 +794,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				if (!eligible) {
 					invalidOffers.push({
 						...appliedOffer,
-						reason
+						reason,
 					})
 				}
 			}
@@ -758,8 +805,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// If any offers are invalid, remove them and reapply remaining
 			if (invalidOffers.length > 0) {
 				const validOfferCodes = appliedOffers.value
-					.filter(o => !invalidOffers.find(inv => inv.code === o.code))
-					.map(o => o.code)
+					.filter((o) => !invalidOffers.find((inv) => inv.code === o.code))
+					.map((o) => o.code)
 
 				if (validOfferCodes.length === 0) {
 					// All offers invalid - clear everything
@@ -767,7 +814,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					processFreeItems([])
 
 					// Reset all item rates to original (remove discounts)
-					invoiceItems.value.forEach(item => {
+					invoiceItems.value.forEach((item) => {
 						if (item.pricing_rules && item.pricing_rules.length > 0) {
 							item.discount_percentage = 0
 							item.discount_amount = 0
@@ -786,16 +833,19 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 					if (signal?.aborted) return false
 
-					const { items: responseItems, freeItems, appliedRules } =
-						parseOfferResponse(response)
+					const {
+						items: responseItems,
+						freeItems,
+						appliedRules,
+					} = parseOfferResponse(response)
 
 					applyDiscountsFromServer(responseItems)
 					processFreeItems(freeItems)
 					filterActiveOffers(appliedRules)
 
 					// Update appliedOffers to only include valid ones
-					appliedOffers.value = appliedOffers.value.filter(entry =>
-						appliedRules.includes(entry.code)
+					appliedOffers.value = appliedOffers.value.filter((entry) =>
+						appliedRules.includes(entry.code),
 					)
 				}
 
@@ -803,8 +853,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				await nextTick()
 
 				// Show warning about removed offers
-				const offerNames = invalidOffers.map(o => o.name).join(', ')
-				showWarning(__('Offer removed: {0}. Cart no longer meets requirements.', [offerNames]))
+				const offerNames = invalidOffers.map((o) => o.name).join(", ")
+				showWarning(
+					__("Offer removed: {0}. Cart no longer meets requirements.", [
+						offerNames,
+					]),
+				)
 				return true
 			}
 			return false
@@ -845,9 +899,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			}
 
 			// Find offers that are not yet applied
-			const appliedOfferCodes = new Set(appliedOffers.value.map(o => o.code))
-			const newOffers = allEligibleOffers.filter(offer =>
-				!appliedOfferCodes.has(offer.name)
+			const appliedOfferCodes = new Set(appliedOffers.value.map((o) => o.code))
+			const newOffers = allEligibleOffers.filter(
+				(offer) => !appliedOfferCodes.has(offer.name),
 			)
 
 			if (newOffers.length === 0) {
@@ -858,8 +912,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			if (signal?.aborted) return
 
 			// Apply all new eligible offers in a single batch
-			const existingCodes = appliedOffers.value.map(entry => entry.code)
-			const newOfferCodes = newOffers.map(offer => offer.name)
+			const existingCodes = appliedOffers.value.map((entry) => entry.code)
+			const newOfferCodes = newOffers.map((offer) => offer.name)
 			const allCodes = [...existingCodes, ...newOfferCodes]
 
 			const invoiceData = buildOfferEvaluationPayload(currentProfile)
@@ -872,8 +926,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Check for cancellation after API call
 			if (signal?.aborted) return
 
-			const { items: responseItems, freeItems, appliedRules } =
-				parseOfferResponse(response)
+			const {
+				items: responseItems,
+				freeItems,
+				appliedRules,
+			} = parseOfferResponse(response)
 
 			applyDiscountsFromServer(responseItems)
 			processFreeItems(freeItems)
@@ -890,7 +947,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					continue
 				}
 
-				const offerRuleCodes = appliedRules.filter(ruleName => ruleName === offerCode)
+				const offerRuleCodes = appliedRules.filter(
+					(ruleName) => ruleName === offerCode,
+				)
 				appliedOffers.value.push({
 					name: offer.title || offer.name,
 					code: offerCode,
@@ -916,9 +975,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Show consolidated toast for all newly applied offers
 			if (newlyAppliedOffers.length > 0) {
 				if (newlyAppliedOffers.length === 1) {
-					showSuccess(__('Offer applied: {0}', [newlyAppliedOffers[0]]))
+					showSuccess(__("Offer applied: {0}", [newlyAppliedOffers[0]]))
 				} else {
-					showSuccess(__('Offers applied: {0}', [newlyAppliedOffers.join(', ')]))
+					showSuccess(
+						__("Offers applied: {0}", [newlyAppliedOffers.join(", ")]),
+					)
 				}
 			}
 		} catch (error) {
@@ -967,8 +1028,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			}
 
 			// Find new offers to apply (both price and product discounts)
-			const appliedOfferCodes = new Set(appliedOffers.value.map(o => o.code))
-			const newOffers = eligibleOffers.filter(offer => !appliedOfferCodes.has(offer.name))
+			const appliedOfferCodes = new Set(appliedOffers.value.map((o) => o.code))
+			const newOffers = eligibleOffers.filter(
+				(offer) => !appliedOfferCodes.has(offer.name),
+			)
 
 			if (newOffers.length === 0) {
 				return
@@ -978,27 +1041,27 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 			for (const offer of newOffers) {
 				// Determine offer type: "Item Price" (discount) or "Give Product" (free item)
-				const isProductDiscount = offer.offer === 'Give Product'
+				const isProductDiscount = offer.offer === "Give Product"
 
 				// Find eligible items based on offer.apply_on
 				let eligibleItems = []
 
-				if (offer.apply_on === 'Item Code') {
+				if (offer.apply_on === "Item Code") {
 					const eligibleCodes = offer.eligible_items || []
-					eligibleItems = invoiceItems.value.filter(item =>
-						eligibleCodes.includes(item.item_code)
+					eligibleItems = invoiceItems.value.filter((item) =>
+						eligibleCodes.includes(item.item_code),
 					)
-				} else if (offer.apply_on === 'Item Group') {
+				} else if (offer.apply_on === "Item Group") {
 					const eligibleGroups = offer.eligible_item_groups || []
-					eligibleItems = invoiceItems.value.filter(item =>
-						eligibleGroups.includes(item.item_group)
+					eligibleItems = invoiceItems.value.filter((item) =>
+						eligibleGroups.includes(item.item_group),
 					)
-				} else if (offer.apply_on === 'Brand') {
+				} else if (offer.apply_on === "Brand") {
 					const eligibleBrands = offer.eligible_brands || []
-					eligibleItems = invoiceItems.value.filter(item =>
-						eligibleBrands.includes(item.brand)
+					eligibleItems = invoiceItems.value.filter((item) =>
+						eligibleBrands.includes(item.brand),
 					)
-				} else if (offer.apply_on === 'Transaction') {
+				} else if (offer.apply_on === "Transaction") {
 					// Transaction-level discount applies to all items
 					eligibleItems = invoiceItems.value
 				}
@@ -1037,7 +1100,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Rebuild cache after bulk changes
 			if (newlyAppliedOffers.length > 0) {
 				rebuildIncrementalCache()
-				showSuccess(__('Offline: {0} applied', [newlyAppliedOffers.join(', ')]))
+				showSuccess(__("Offline: {0} applied", [newlyAppliedOffers.join(", ")]))
 			}
 		} catch (error) {
 			console.error("Error applying offers offline:", error)
@@ -1062,18 +1125,18 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Only apply if no existing pricing rule
 			if (item.pricing_rules && item.pricing_rules.length > 0) continue
 
-			if (discountType === 'Discount Percentage' && discountPercentage > 0) {
+			if (discountType === "Discount Percentage" && discountPercentage > 0) {
 				item.discount_percentage = discountPercentage
 				item.pricing_rules = [offer.name]
 				recalculateItem(item)
 				applied = true
-			} else if (discountType === 'Discount Amount' && discountAmount > 0) {
+			} else if (discountType === "Discount Amount" && discountAmount > 0) {
 				// Apply fixed discount amount
 				item.discount_amount = discountAmount
 				item.pricing_rules = [offer.name]
 				recalculateItem(item)
 				applied = true
-			} else if (discountType === 'Rate' && rate > 0) {
+			} else if (discountType === "Rate" && rate > 0) {
 				// Apply fixed rate (override price)
 				item.rate = rate
 				item.pricing_rules = [offer.name]
@@ -1104,7 +1167,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		const sameItem = offer.same_item === 1
 		const isRecursive = offer.is_recursive === 1
 		const recurseFor = Number.parseFloat(offer.recurse_for) || 0
-		const applyRecursionOver = Number.parseFloat(offer.apply_recursion_over) || 0
+		const applyRecursionOver =
+			Number.parseFloat(offer.apply_recursion_over) || 0
 		const freeItemCode = offer.free_item
 
 		if (freeQty <= 0) return false
@@ -1148,7 +1212,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Free item is a specific different item
 			// Find if the free item is already in the cart
 			const freeItemInCart = invoiceItems.value.find(
-				item => item.item_code === freeItemCode
+				(item) => item.item_code === freeItemCode,
 			)
 
 			if (freeItemInCart) {
@@ -1158,15 +1222,22 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				if (isRecursive && recurseFor > 0) {
 					// Calculate based on total eligible quantity
 					const totalEligibleQty = eligibleItems.reduce(
-						(sum, item) => sum + (item.quantity || 0), 0
+						(sum, item) => sum + (item.quantity || 0),
+						0,
 					)
-					const effectiveQty = Math.max(0, totalEligibleQty - applyRecursionOver)
+					const effectiveQty = Math.max(
+						0,
+						totalEligibleQty - applyRecursionOver,
+					)
 					const multiplier = Math.floor(effectiveQty / recurseFor)
 					freeItemsToGive = multiplier * freeQty
 				}
 
 				// Mark existing cart item as having free quantity
-				if (freeItemsToGive > 0 && (!freeItemInCart.free_qty || freeItemInCart.free_qty === 0)) {
+				if (
+					freeItemsToGive > 0 &&
+					(!freeItemInCart.free_qty || freeItemInCart.free_qty === 0)
+				) {
 					freeItemInCart.free_qty = freeItemsToGive
 					freeItemInCart.pricing_rules = freeItemInCart.pricing_rules || []
 					if (!freeItemInCart.pricing_rules.includes(offer.name)) {
@@ -1188,9 +1259,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	function buildCartSnapshot() {
 		const items = invoiceItems.value
 		const totalQty = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
-		const itemCodes = items.map(item => item.item_code)
-		const itemGroups = items.map(item => item.item_group).filter(Boolean)
-		const brands = items.map(item => item.brand).filter(Boolean)
+		const itemCodes = items.map((item) => item.item_code)
+		const itemGroups = items.map((item) => item.item_group).filter(Boolean)
+		const brands = items.map((item) => item.brand).filter(Boolean)
 
 		// Build quantity maps for accurate offer validation
 		// itemQuantities: { item_code: total_qty } - quantity per item code
@@ -1205,12 +1276,14 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 			// Aggregate by item code
 			if (item.item_code) {
-				itemQuantities[item.item_code] = (itemQuantities[item.item_code] || 0) + qty
+				itemQuantities[item.item_code] =
+					(itemQuantities[item.item_code] || 0) + qty
 			}
 
 			// Aggregate by item group
 			if (item.item_group) {
-				itemGroupQuantities[item.item_group] = (itemGroupQuantities[item.item_group] || 0) + qty
+				itemGroupQuantities[item.item_group] =
+					(itemGroupQuantities[item.item_group] || 0) + qty
 			}
 
 			// Aggregate by brand
@@ -1228,7 +1301,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// New: quantity maps for accurate min_qty/max_qty validation
 			itemQuantities,
 			itemGroupQuantities,
-			brandQuantities
+			brandQuantities,
 		}
 	}
 
@@ -1239,8 +1312,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * @returns {Object|undefined} Cart item or undefined
 	 */
 	function findCartItem(itemCode, uom = null) {
-		return invoiceItems.value.find((item) =>
-			item.item_code === itemCode && (!uom || item.uom === uom)
+		return invoiceItems.value.find(
+			(item) => item.item_code === itemCode && (!uom || item.uom === uom),
 		)
 	}
 
@@ -1252,10 +1325,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * @returns {Object|undefined} Existing item or undefined
 	 */
 	function findItemWithUom(itemCode, targetUom, excludeItem = null) {
-		return invoiceItems.value.find((item) =>
-			item.item_code === itemCode &&
-			item.uom === targetUom &&
-			item !== excludeItem
+		return invoiceItems.value.find(
+			(item) =>
+				item.item_code === itemCode &&
+				item.uom === targetUom &&
+				item !== excludeItem,
 		)
 	}
 
@@ -1302,7 +1376,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			if (cartItem.uom_prices && newUom in cartItem.uom_prices) {
 				cartItem.rate = cartItem.uom_prices[newUom]
 				cartItem.price_list_rate = cartItem.uom_prices[newUom]
-			} else if (cartItem.stock_uom && cartItem.uom_prices && cartItem.stock_uom in cartItem.uom_prices) {
+			} else if (
+				cartItem.stock_uom &&
+				cartItem.uom_prices &&
+				cartItem.stock_uom in cartItem.uom_prices
+			) {
 				// Fallback to calculate from stock UOM price * conversion factor
 				const basePrice = cartItem.uom_prices[cartItem.stock_uom]
 				cartItem.rate = basePrice * cartItem.conversion_factor
@@ -1322,7 +1400,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		})
 
 		cartItem.uom = newUom
-		cartItem.conversion_factor = uomData?.conversion_factor || itemDetails.conversion_factor || 1
+		cartItem.conversion_factor =
+			uomData?.conversion_factor || itemDetails.conversion_factor || 1
 		cartItem.rate = itemDetails.price_list_rate || itemDetails.rate
 		cartItem.price_list_rate = itemDetails.price_list_rate
 	}
@@ -1342,7 +1421,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			const existingItem = findItemWithUom(itemCode, newUom, cartItem)
 			if (existingItem) {
 				const totalQty = mergeItems(cartItem, existingItem, cartItem.quantity)
-				showSuccess(__('Merged into {0} (Total: {1})', [newUom, totalQty]))
+				showSuccess(__("Merged into {0} (Total: {1})", [newUom, totalQty]))
 				return
 			}
 
@@ -1350,7 +1429,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			await applyUomChange(cartItem, newUom, cartItem.quantity)
 			recalculateItem(cartItem)
 			rebuildIncrementalCache()
-			showSuccess(__('Unit changed to {0}', [newUom]))
+			showSuccess(__("Unit changed to {0}", [newUom]))
 		} catch (error) {
 			console.error("Error changing UOM:", error)
 			showError(__("Failed to update UOM. Please try again."))
@@ -1376,13 +1455,19 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				if (existingItem) {
 					const qtyToMerge = updates.quantity ?? cartItem.quantity
 					const totalQty = mergeItems(cartItem, existingItem, qtyToMerge)
-					showSuccess(__('Merged into {0} (Total: {1})', [updates.uom, totalQty]))
+					showSuccess(
+						__("Merged into {0} (Total: {1})", [updates.uom, totalQty]),
+					)
 					return true
 				}
 
 				// Apply UOM change with new rate
 				try {
-					await applyUomChange(cartItem, updates.uom, updates.quantity ?? cartItem.quantity)
+					await applyUomChange(
+						cartItem,
+						updates.uom,
+						updates.quantity ?? cartItem.quantity,
+					)
 				} catch {
 					// Fallback: just change UOM without rate update
 					cartItem.uom = updates.uom
@@ -1391,15 +1476,20 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 			// Apply other updates
 			if (updates.quantity !== undefined) cartItem.quantity = updates.quantity
-			if (updates.warehouse !== undefined) cartItem.warehouse = updates.warehouse
-			if (updates.discount_percentage !== undefined) cartItem.discount_percentage = updates.discount_percentage
-			if (updates.discount_amount !== undefined) cartItem.discount_amount = updates.discount_amount
-			if (updates.price_list_rate !== undefined) cartItem.price_list_rate = updates.price_list_rate
-			if (updates.serial_no !== undefined) cartItem.serial_no = updates.serial_no
+			if (updates.warehouse !== undefined)
+				cartItem.warehouse = updates.warehouse
+			if (updates.discount_percentage !== undefined)
+				cartItem.discount_percentage = updates.discount_percentage
+			if (updates.discount_amount !== undefined)
+				cartItem.discount_amount = updates.discount_amount
+			if (updates.price_list_rate !== undefined)
+				cartItem.price_list_rate = updates.price_list_rate
+			if (updates.serial_no !== undefined)
+				cartItem.serial_no = updates.serial_no
 
 			recalculateItem(cartItem)
 			rebuildIncrementalCache()
-			showSuccess(__('{0} updated', [cartItem.item_name]))
+			showSuccess(__("{0} updated", [cartItem.item_name]))
 			return true
 		} catch (error) {
 			console.error("Error updating item:", error)
@@ -1448,13 +1538,16 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					const qty = item.quantity || 0
 
 					if (item.item_code) {
-						cachedItemQuantities[item.item_code] = (cachedItemQuantities[item.item_code] || 0) + qty
+						cachedItemQuantities[item.item_code] =
+							(cachedItemQuantities[item.item_code] || 0) + qty
 					}
 					if (item.item_group) {
-						cachedItemGroupQuantities[item.item_group] = (cachedItemGroupQuantities[item.item_group] || 0) + qty
+						cachedItemGroupQuantities[item.item_group] =
+							(cachedItemGroupQuantities[item.item_group] || 0) + qty
 					}
 					if (item.brand) {
-						cachedBrandQuantities[item.brand] = (cachedBrandQuantities[item.brand] || 0) + qty
+						cachedBrandQuantities[item.brand] =
+							(cachedBrandQuantities[item.brand] || 0) + qty
 					}
 				}
 
@@ -1487,7 +1580,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * @param {number} generation - Cart generation when this was triggered
 	 * @param {boolean} force - If true, process even if cart hash matches
 	 */
-	async function processOffersInternal(signal = null, generation = 0, force = false) {
+	async function processOffersInternal(
+		signal = null,
+		generation = 0,
+		force = false,
+	) {
 		// CRITICAL: Always reset suppression flag FIRST, before any early returns
 		// This ensures the flag never gets stuck in a true state
 		suppressOfferReapply.value = false
@@ -1524,7 +1621,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Skip if cart hasn't changed since last successful processing (unless forced)
 		// Also force re-processing if offers were just fetched for the first time
 		const justFetched = !wasFetched && offersStore.hasFetched
-		if (!force && !justFetched && currentHash === offerProcessingState.value.lastCartHash) {
+		if (
+			!force &&
+			!justFetched &&
+			currentHash === offerProcessingState.value.lastCartHash
+		) {
 			return
 		}
 
@@ -1617,7 +1718,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		offerQueue.cancel()
 
 		// Clear the hash to force reprocessing
-		offerProcessingState.value.lastCartHash = ''
+		offerProcessingState.value.lastCartHash = ""
 		offerProcessingState.value.error = null
 		offerProcessingState.value.retryCount = 0
 
@@ -1679,9 +1780,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// Watch item count (additions/removals)
 			() => invoiceItems.value.length,
 			// Watch item details (quantity, code, uom changes)
-			() => invoiceItems.value.map(item =>
-				`${item.item_code}:${item.quantity}:${item.uom || ''}:${item.discount_percentage || 0}`
-			).join(','),
+			() =>
+				invoiceItems.value
+					.map(
+						(item) =>
+							`${item.item_code}:${item.quantity}:${item.uom || ""}:${item.discount_percentage || 0}`,
+					)
+					.join(","),
 			// Watch subtotal changes
 			subtotal,
 			// Watch customer changes (some offers are customer-specific)
@@ -1709,7 +1814,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			if (newLen < oldLen) {
 				syncOfferSnapshot()
 			}
-		}
+		},
 	)
 
 	return {

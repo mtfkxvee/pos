@@ -1,4 +1,10 @@
-import { deleteDraft, getDraftsCount, saveDraft, getAllDrafts, updateDraft } from "@/utils/draftManager"
+import {
+	deleteDraft,
+	getDraftsCount,
+	saveDraft,
+	getAllDrafts,
+	updateDraft,
+} from "@/utils/draftManager"
 import { useToast } from "@/composables/useToast"
 import { defineStore } from "pinia"
 import { ref } from "vue"
@@ -35,7 +41,7 @@ export const usePOSDraftsStore = defineStore("posDrafts", () => {
 		posProfile,
 		appliedOffers = [],
 		draftId = null,
-		extraData = {}
+		extraData = {},
 	) {
 		if (invoiceItems.length === 0) {
 			showWarning(__("Cannot save an empty cart as draft"))
@@ -48,7 +54,7 @@ export const usePOSDraftsStore = defineStore("posDrafts", () => {
 				customer: customer,
 				items: invoiceItems,
 				applied_offers: appliedOffers, // Save applied offers
-				...extraData
+				...extraData,
 			}
 
 			let savedDraft
@@ -80,7 +86,7 @@ export const usePOSDraftsStore = defineStore("posDrafts", () => {
 				applied_offers: draft.applied_offers || [], // Restore applied offers
 				additionalDiscount: draft.additionalDiscount || 0,
 				appliedCoupon: draft.appliedCoupon || null,
-				loyaltyData: draft.loyaltyData || {}
+				loyaltyData: draft.loyaltyData || {},
 			}
 		} catch (error) {
 			console.error("Error loading draft:", error)

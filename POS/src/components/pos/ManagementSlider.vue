@@ -88,14 +88,14 @@ import {
 	TagIcon,
 	DocumentTextIcon,
 	Cog6ToothIcon,
-	ArrowPathIcon
+	ArrowPathIcon,
 } from "@heroicons/vue/24/outline"
 
 defineProps({
 	isSyncing: {
 		type: Boolean,
-		default: false
-	}
+		default: false,
+	},
 })
 
 const emit = defineEmits(["menu-clicked", "sync-clicked"])

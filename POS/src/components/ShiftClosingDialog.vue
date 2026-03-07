@@ -544,9 +544,15 @@ const { getClosingShiftData, submitClosingShift } = useShift()
 const { formatQuantity, formatDateTime, formatTime } = useFormatters()
 
 function formatCurrency(amount) {
-	if (amount === null || amount === undefined) return 'Rp. 0';
-	const num = Number.parseFloat(amount) || 0;
-	return 'Rp. ' + num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+	if (amount === null || amount === undefined) return "Rp. 0"
+	const num = Number.parseFloat(amount) || 0
+	return (
+		"Rp. " +
+		num.toLocaleString("id-ID", {
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 0,
+		})
+	)
 }
 const posSettingsStore = usePOSSettingsStore()
 const { hideExpectedAmount } = storeToRefs(posSettingsStore)
@@ -558,7 +564,7 @@ const closingDataResource = getClosingShiftData
 const submitResource = submitClosingShift
 const showInvoiceDetails = ref(false)
 const showSuccessReport = ref(false) // Track if shift is closed and showing report
-const errorMessage = ref('') // User-friendly error message
+const errorMessage = ref("") // User-friendly error message
 const showIdleWarning = ref(false)
 let _idleWarningTimer = null
 
@@ -598,7 +604,7 @@ onBeforeUnmount(() => {
 
 async function loadClosingData() {
 	try {
-		errorMessage.value = '' // Clear any previous errors
+		errorMessage.value = "" // Clear any previous errors
 
 		const data = await closingDataResource.submit({
 			opening_shift: props.openingShift,
@@ -606,15 +612,18 @@ async function loadClosingData() {
 
 		// Make payment_reconciliation reactive
 		if (data.payment_reconciliation) {
-			data.payment_reconciliation = data.payment_reconciliation.map((payment) => {
-				const initialClosing = payment.closing_amount ?? payment.expected_amount ?? 0;
-				return reactive({
-					...payment,
-					closing_amount: initialClosing,
-					_formatted_closing_amount: formatRupiahInput(initialClosing),
-					difference: 0,
-				})
-			})
+			data.payment_reconciliation = data.payment_reconciliation.map(
+				(payment) => {
+					const initialClosing =
+						payment.closing_amount ?? payment.expected_amount ?? 0
+					return reactive({
+						...payment,
+						closing_amount: initialClosing,
+						_formatted_closing_amount: formatRupiahInput(initialClosing),
+						difference: 0,
+					})
+				},
+			)
 
 			// Calculate initial differences
 			data.payment_reconciliation.forEach((payment) => {
@@ -630,7 +639,8 @@ async function loadClosingData() {
 		}
 	} catch (error) {
 		console.error("Error loading closing data:", error)
-		errorMessage.value = 'Unable to load shift data. Please check your connection and try again.'
+		errorMessage.value =
+			"Unable to load shift data. Please check your connection and try again."
 	}
 }
 
@@ -641,23 +651,23 @@ function calculateDifference(payment) {
 }
 
 function formatRupiahInput(value) {
-	if (value === null || value === undefined) return '';
-	let valStr = String(value).replace(/[^0-9]/g, '');
-	if (!valStr) return '';
-	return 'Rp. ' + valStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+	if (value === null || value === undefined) return ""
+	const valStr = String(value).replace(/[^0-9]/g, "")
+	if (!valStr) return ""
+	return "Rp. " + valStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
 }
 
 function parseRupiahInput(value) {
-	if (!value) return 0;
-	let valStr = String(value).replace(/[^0-9]/g, '');
-	return parseInt(valStr, 10) || 0;
+	if (!value) return 0
+	const valStr = String(value).replace(/[^0-9]/g, "")
+	return Number.parseInt(valStr, 10) || 0
 }
 
 // New function to handle closing amount updates with proper reactivity
 function updateClosingAmount(payment, value) {
 	const parsed = parseRupiahInput(value)
 	payment.closing_amount = parsed
-	payment._formatted_closing_amount = formatRupiahInput(parsed) || ''
+	payment._formatted_closing_amount = formatRupiahInput(parsed) || ""
 	calculateDifference(payment)
 }
 
@@ -678,7 +688,7 @@ async function submitClosing() {
 	if (!closingData.value) return
 
 	try {
-		errorMessage.value = '' // Clear any previous errors
+		errorMessage.value = "" // Clear any previous errors
 
 		// Ensure all differences are calculated
 		if (closingData.value.payment_reconciliation) {
@@ -699,7 +709,8 @@ async function submitClosing() {
 		}
 	} catch (error) {
 		console.error("Error submitting closing shift:", error)
-		errorMessage.value = 'Failed to close shift. Please verify all amounts and try again.'
+		errorMessage.value =
+			"Failed to close shift. Please verify all amounts and try again."
 	}
 }
 
@@ -718,26 +729,26 @@ function closeDialog() {
 	closingData.value = null
 	showInvoiceDetails.value = false
 	showSuccessReport.value = false // Reset report view
-	errorMessage.value = '' // Clear error messages
+	errorMessage.value = "" // Clear error messages
 }
 
 // UI State Computed Properties
-const shouldShowSummary = computed(() =>
-	!hideExpectedAmount.value || showSuccessReport.value
+const shouldShowSummary = computed(
+	() => !hideExpectedAmount.value || showSuccessReport.value,
 )
 
-const isInEntryMode = computed(() =>
-	hideExpectedAmount.value && !showSuccessReport.value
+const isInEntryMode = computed(
+	() => hideExpectedAmount.value && !showSuccessReport.value,
 )
 
 const reconciliationMessage = computed(() => {
 	if (isInEntryMode.value) {
-		return 'Enter the actual counted amounts for each payment method'
+		return "Enter the actual counted amounts for each payment method"
 	}
 	if (showSuccessReport.value && hideExpectedAmount.value) {
-		return 'Shift closed successfully - Review the final reconciliation below'
+		return "Shift closed successfully - Review the final reconciliation below"
 	}
-	return 'Count your cash and enter actual amounts below'
+	return "Count your cash and enter actual amounts below"
 })
 
 // Computed properties for real-time recalculation
@@ -757,7 +768,7 @@ const hasReturns = computed(() => {
 const salesInvoiceCount = computed(() => {
 	if (!closingData.value) return 0
 	const transactions = closingData.value.pos_transactions || []
-	return transactions.filter(t => !t.is_return).length
+	return transactions.filter((t) => !t.is_return).length
 })
 
 const totalTax = computed(() => {
@@ -800,7 +811,8 @@ function getSalesForPayment(payment) {
 }
 
 function getShiftDuration() {
-	if (!closingData.value || !closingData.value.period_start_date) return __("N/A")
+	if (!closingData.value || !closingData.value.period_start_date)
+		return __("N/A")
 
 	// Use the same timezone-safe approach as the header timer
 	const { _initialElapsedMs, _receivedAt } = shiftState.value
@@ -812,13 +824,13 @@ function getShiftDuration() {
 	const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
 
 	if (days > 0) {
-		const dayLabel = days === 1 ? __('Day') : __('Days')
-		return __('{0} {1} {2}h {3}m', [days, dayLabel, hours, minutes])
+		const dayLabel = days === 1 ? __("Day") : __("Days")
+		return __("{0} {1} {2}h {3}m", [days, dayLabel, hours, minutes])
 	}
 	if (hours > 0) {
-		return __('{0}h {1}m', [hours, minutes])
+		return __("{0}h {1}m", [hours, minutes])
 	}
-	return __('{0}m', [minutes])
+	return __("{0}m", [minutes])
 }
 
 function getPaymentIcon(method) {

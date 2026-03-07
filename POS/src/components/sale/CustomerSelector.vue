@@ -115,20 +115,20 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { debounce } from 'frappe-ui'
-import { useCustomerSearchStore } from '@/stores/customerSearch'
-import { isOffline as getIsOffline } from '@/utils/offline'
-import CustomerDetailsDialog from './CustomerDetailsDialog.vue'
+import { ref, computed } from "vue"
+import { debounce } from "frappe-ui"
+import { useCustomerSearchStore } from "@/stores/customerSearch"
+import { isOffline as getIsOffline } from "@/utils/offline"
+import CustomerDetailsDialog from "./CustomerDetailsDialog.vue"
 
 const props = defineProps({
 	posProfile: String,
 })
 
-const emit = defineEmits(['customer-selected'])
+const emit = defineEmits(["customer-selected"])
 
 const customerStore = useCustomerSearchStore()
-const searchTerm = ref('')
+const searchTerm = ref("")
 const customers = ref([])
 const loading = ref(false)
 const isOffline = computed(() => getIsOffline())
@@ -149,7 +149,10 @@ const handleSearch = debounce(async (e) => {
 	loading.value = true
 	try {
 		// Use the new online-only search action
-		const results = await customerStore.searchOnlineCustomers(term, props.posProfile)
+		const results = await customerStore.searchOnlineCustomers(
+			term,
+			props.posProfile,
+		)
 		customers.value = results
 	} catch (error) {
 		console.error("Search failed:", error)
@@ -160,7 +163,7 @@ const handleSearch = debounce(async (e) => {
 }, 300)
 
 function clearSearch() {
-	searchTerm.value = ''
+	searchTerm.value = ""
 	customers.value = []
 }
 
@@ -170,7 +173,7 @@ function handleSelect(customer) {
 }
 
 function confirmSelection(customer) {
-	emit('customer-selected', customer)
+	emit("customer-selected", customer)
 	showDetails.value = false
 	// Optional: Clear search after selection? kept for context
 }

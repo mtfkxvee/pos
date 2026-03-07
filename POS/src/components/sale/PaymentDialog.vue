@@ -1262,12 +1262,12 @@ const loyaltyPointsResource = createResource({
 		return {
 			customer: customerName,
 			loyalty_program: loyaltyProgram,
-			silent: true
+			silent: true,
 		}
 	},
 	auto: false,
 	onSuccess(data) {
-		const result = data?.message || data || null;
+		const result = data?.message || data || null
 		log.debug("[PaymentDialog] Loyalty info loaded:", result)
 		loyaltyPointInfo.value = result || { loyalty_points: 0 }
 		loadingLoyalty.value = false
@@ -1276,7 +1276,7 @@ const loyaltyPointsResource = createResource({
 		log.error("[PaymentDialog] Error loading loyalty points:", error)
 		loyaltyPointInfo.value = { loyalty_points: 0 }
 		loadingLoyalty.value = false
-	}
+	},
 })
 
 // Check if a payment method is a cash payment (allows overpayment/change)
@@ -1465,7 +1465,9 @@ async function loadPaymentMethods() {
 					lastSelectedMethod.value = defaultMethod || paymentMethods.value[0]
 				}
 			} else {
-				log.warn("PaymentDialog: Offline cache empty, trying to fetch from server...")
+				log.warn(
+					"PaymentDialog: Offline cache empty, trying to fetch from server...",
+				)
 				await paymentMethodsResource.fetch()
 			}
 		} else {
@@ -1519,12 +1521,18 @@ const calculatedAdditionalDiscount = computed(() => {
 })
 
 const remainingAmount = computed(() => {
-	const remaining = roundCurrency(props.grandTotal) - totalPaid.value - redeemedLoyaltyAmount.value
+	const remaining =
+		roundCurrency(props.grandTotal) -
+		totalPaid.value -
+		redeemedLoyaltyAmount.value
 	return remaining > 0 ? roundCurrency(remaining) : 0
 })
 
 const changeAmount = computed(() => {
-	const change = totalPaid.value + redeemedLoyaltyAmount.value - roundCurrency(props.grandTotal)
+	const change =
+		totalPaid.value +
+		redeemedLoyaltyAmount.value -
+		roundCurrency(props.grandTotal)
 	return change > 0 ? roundCurrency(change) : 0
 })
 
@@ -1786,7 +1794,12 @@ watch(
 // Pre-fetch customer balance when customer changes (before dialog opens)
 // This ensures data is available immediately when dialog opens
 watch(
-	() => [props.customer, props.company, props.allowCreditSale, props.allowCustomerCreditPayment],
+	() => [
+		props.customer,
+		props.company,
+		props.allowCreditSale,
+		props.allowCustomerCreditPayment,
+	],
 	([customer, company, allowCreditSale, allowCustomerCreditPayment]) => {
 		const creditEnabled = allowCreditSale || allowCustomerCreditPayment
 		if (creditEnabled && customer && company) {
@@ -1814,7 +1827,7 @@ watch(show, (newVal) => {
 		// Reset loyalty state
 		isPointsRedemptionActive.value = false
 		pointsToRedeem.value = 0
-		
+
 		// Set default delivery date to today for Sales Orders
 		deliveryDate.value = isSalesOrder.value ? today : ""
 		// Reset remarks
@@ -1835,10 +1848,10 @@ watch(show, (newVal) => {
 		// Fetch loyalty points when dialog opens
 		if (props.customer && props.company) {
 			if (props.isOffline) {
-				log.debug("[PaymentDialog] Using offline cached loyalty points");
+				log.debug("[PaymentDialog] Using offline cached loyalty points")
 				loyaltyPointInfo.value = {
 					loyalty_points: props.customer.loyalty_points || 0,
-					loyalty_program: props.customer.loyalty_program || null
+					loyalty_program: props.customer.loyalty_program || null,
 				}
 			} else {
 				loadingLoyalty.value = true
@@ -1851,7 +1864,6 @@ watch(show, (newVal) => {
 			const defaultMethod = paymentMethods.value.find((m) => m.default)
 			lastSelectedMethod.value = defaultMethod || paymentMethods.value[0]
 		}
-
 	}
 })
 
@@ -1884,8 +1896,10 @@ watch(show, (isOpen) => {
 			let amountIndex = -1
 			const lk = key.toLowerCase()
 
-			if (lk === "i") amountIndex = 0 // exact amount
-			else if (lk === "o") amountIndex = 1 // round 1
+			if (lk === "i")
+				amountIndex = 0 // exact amount
+			else if (lk === "o")
+				amountIndex = 1 // round 1
 			else if (lk === "p") amountIndex = 2 // round 2
 
 			if (amountIndex >= 0 && quickAmounts.value[amountIndex] !== undefined) {
@@ -1915,8 +1929,6 @@ function selectPaymentMethod(method) {
 	lastSelectedMethod.value = method
 	log.debug("[PaymentDialog] Selected payment method:", method.mode_of_payment)
 }
-
-
 
 // Quick add payment (long press action)
 function quickAddPayment(method) {
@@ -2167,12 +2179,22 @@ function completePayment() {
 		write_off_amount: writeOffAmount.value,
 		is_write_off: writeOffAmount.value > 0,
 		// Loyalty Points data
-		redeem_loyalty_points: isPointsRedemptionActive.value && redeemedLoyaltyAmount.value > 0 ? 1 : 0,
+		redeem_loyalty_points:
+			isPointsRedemptionActive.value && redeemedLoyaltyAmount.value > 0 ? 1 : 0,
 		loyalty_points: isPointsRedemptionActive.value ? pointsToRedeem.value : 0,
-		loyalty_amount: isPointsRedemptionActive.value ? redeemedLoyaltyAmount.value : 0,
-		loyalty_program: isPointsRedemptionActive.value && loyaltyPointInfo.value ? loyaltyPointInfo.value.loyalty_program : null,
-		loyalty_redemption_account: isPointsRedemptionActive.value ? settingsStore.loyaltyRedemptionAccount : null,
-		loyalty_redemption_cost_center: isPointsRedemptionActive.value ? settingsStore.loyaltyRedemptionCostCenter : null,
+		loyalty_amount: isPointsRedemptionActive.value
+			? redeemedLoyaltyAmount.value
+			: 0,
+		loyalty_program:
+			isPointsRedemptionActive.value && loyaltyPointInfo.value
+				? loyaltyPointInfo.value.loyalty_program
+				: null,
+		loyalty_redemption_account: isPointsRedemptionActive.value
+			? settingsStore.loyaltyRedemptionAccount
+			: null,
+		loyalty_redemption_cost_center: isPointsRedemptionActive.value
+			? settingsStore.loyaltyRedemptionCostCenter
+			: null,
 		// Remarks
 		remarks: remarks.value || null,
 	}
@@ -2301,6 +2323,6 @@ watch(
 	() => props.additionalDiscount,
 	(newVal) => {
 		localAdditionalDiscount.value = newVal || 0
-	}
+	},
 )
 </script>

@@ -168,7 +168,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (/^\d+$/.test(term)) {
 			recs.push({
 				type: "phone",
-				text: __('Search by phone: {0}', [term]),
+				text: __("Search by phone: {0}", [term]),
 				icon: "📱",
 			})
 		}
@@ -177,7 +177,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (term.includes("@")) {
 			recs.push({
 				type: "email",
-				text: __('Search by email: {0}', [term]),
+				text: __("Search by email: {0}", [term]),
 				icon: "✉️",
 			})
 		}
@@ -189,7 +189,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		if (!exactMatch && filteredCustomers.value.length < 5) {
 			recs.push({
 				type: "create",
-				text: __('Create new customer: {0}', [term]),
+				text: __("Create new customer: {0}", [term]),
 				icon: "➕",
 			})
 		}
@@ -211,10 +211,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		loading.value = true
 		try {
 			// Try to get from worker cache first
-			const cachedCustomers = await offlineWorker.searchCachedCustomers(
-				"",
-				0,
-			)
+			const cachedCustomers = await offlineWorker.searchCachedCustomers("", 0)
 
 			if (cachedCustomers && cachedCustomers.length > 0) {
 				allCustomers.value = cachedCustomers
@@ -337,30 +334,41 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 		}
 	}
 
-
 	async function searchOnlineCustomers(searchTerm, posProfile, limit = 20) {
 		if (isOffline()) {
 			throw new Error("Cannot search online customers in offline mode")
 		}
 
 		try {
-			console.log("Searching online customers with:", { searchTerm, posProfile })
+			console.log("Searching online customers with:", {
+				searchTerm,
+				posProfile,
+			})
 
 			// Fallback to standard Frappe API for robust searching
 			const searchFilters = searchTerm
 				? [
-					["name", "like", "%" + searchTerm + "%"],
-					["customer_name", "like", "%" + searchTerm + "%"],
-					["mobile_no", "like", "%" + searchTerm + "%"],
-					["email_id", "like", "%" + searchTerm + "%"]
-				]
+						["name", "like", "%" + searchTerm + "%"],
+						["customer_name", "like", "%" + searchTerm + "%"],
+						["mobile_no", "like", "%" + searchTerm + "%"],
+						["email_id", "like", "%" + searchTerm + "%"],
+					]
 				: []
 
 			const apiArgs = {
 				doctype: "Customer",
-				fields: ["name", "customer_name", "mobile_no", "email_id", "image", "loyalty_program", "customer_group", "tax_id"],
+				fields: [
+					"name",
+					"customer_name",
+					"mobile_no",
+					"email_id",
+					"image",
+					"loyalty_program",
+					"customer_group",
+					"tax_id",
+				],
 				limit_page_length: limit,
-				order_by: "creation desc"
+				order_by: "creation desc",
 			}
 
 			if (searchTerm) {

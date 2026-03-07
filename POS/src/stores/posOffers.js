@@ -11,9 +11,9 @@ const defaultSnapshot = () => ({
 	itemGroups: [],
 	brands: [],
 	// Quantity maps for accurate min_qty/max_qty validation
-	itemQuantities: {},      // { item_code: qty }
+	itemQuantities: {}, // { item_code: qty }
 	itemGroupQuantities: {}, // { item_group: qty }
-	brandQuantities: {},     // { brand: qty }
+	brandQuantities: {}, // { brand: qty }
 })
 
 function getDiscountSortValue(offer) {
@@ -44,15 +44,19 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 		const brands = Array.isArray(snapshot.brands) ? snapshot.brands : []
 
 		// Quantity maps for accurate offer validation
-		const itemQuantities = snapshot.itemQuantities && typeof snapshot.itemQuantities === 'object'
-			? snapshot.itemQuantities
-			: {}
-		const itemGroupQuantities = snapshot.itemGroupQuantities && typeof snapshot.itemGroupQuantities === 'object'
-			? snapshot.itemGroupQuantities
-			: {}
-		const brandQuantities = snapshot.brandQuantities && typeof snapshot.brandQuantities === 'object'
-			? snapshot.brandQuantities
-			: {}
+		const itemQuantities =
+			snapshot.itemQuantities && typeof snapshot.itemQuantities === "object"
+				? snapshot.itemQuantities
+				: {}
+		const itemGroupQuantities =
+			snapshot.itemGroupQuantities &&
+			typeof snapshot.itemGroupQuantities === "object"
+				? snapshot.itemGroupQuantities
+				: {}
+		const brandQuantities =
+			snapshot.brandQuantities && typeof snapshot.brandQuantities === "object"
+				? snapshot.brandQuantities
+				: {}
 
 		cartSnapshot.value = {
 			subtotal,
@@ -202,7 +206,7 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 		if (offer?.min_qty && eligibleItemQty < offer.min_qty) {
 			return {
 				eligible: false,
-				reason: __('At least {0} eligible items required', [offer.min_qty]),
+				reason: __("At least {0} eligible items required", [offer.min_qty]),
 			}
 		}
 
@@ -210,7 +214,9 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 		if (offer?.max_qty && eligibleItemQty > offer.max_qty) {
 			return {
 				eligible: false,
-				reason: __('Maximum {0} eligible items allowed for this offer', [offer.max_qty]),
+				reason: __("Maximum {0} eligible items allowed for this offer", [
+					offer.max_qty,
+				]),
 			}
 		}
 
@@ -218,7 +224,7 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 		if (offer?.min_amt && subtotal < offer.min_amt) {
 			return {
 				eligible: false,
-				reason: __('Minimum cart value of {0} required', [offer.min_amt]),
+				reason: __("Minimum cart value of {0} required", [offer.min_amt]),
 			}
 		}
 
@@ -226,7 +232,7 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 		if (offer?.max_amt && subtotal > offer.max_amt) {
 			return {
 				eligible: false,
-				reason: __('Maximum cart value exceeded ({0})', [offer.max_amt]),
+				reason: __("Maximum cart value exceeded ({0})", [offer.max_amt]),
 			}
 		}
 

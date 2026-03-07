@@ -137,7 +137,7 @@ import {
 	SignalSlashIcon,
 	CubeIcon,
 	UserGroupIcon,
-	DocumentTextIcon
+	DocumentTextIcon,
 } from "@heroicons/vue/24/outline"
 import StatusBadge from "@/components/common/StatusBadge.vue"
 import { useToast } from "@/composables/useToast"
@@ -148,10 +148,15 @@ const props = defineProps({
 	isSyncing: Boolean,
 	cacheStats: Object,
 	pendingInvoicesCount: Number,
-	posProfile: String
+	posProfile: String,
 })
 
-const emit = defineEmits(["close", "sync-all", "items-synced", "customers-synced"])
+const emit = defineEmits([
+	"close",
+	"sync-all",
+	"items-synced",
+	"customers-synced",
+])
 const { showSuccess, showError } = useToast()
 
 const isSyncingItems = ref(false)
@@ -159,15 +164,15 @@ const isSyncingCustomers = ref(false)
 const isSyncingPending = ref(false)
 
 const getItemSyncStatus = computed(() => {
-	if (isSyncingItems.value) return 'syncing'
-	if (props.cacheStats?.items > 0) return 'synced'
-	return 'pending'
+	if (isSyncingItems.value) return "syncing"
+	if (props.cacheStats?.items > 0) return "synced"
+	return "pending"
 })
 
 const getCustomerSyncStatus = computed(() => {
-	if (isSyncingCustomers.value) return 'syncing'
-	if (props.cacheStats?.customers > 0) return 'synced'
-	return 'pending'
+	if (isSyncingCustomers.value) return "syncing"
+	if (props.cacheStats?.customers > 0) return "synced"
+	return "pending"
 })
 
 function formatNumber(num) {
@@ -175,12 +180,12 @@ function formatNumber(num) {
 }
 
 function formatLastSync(timestamp) {
-	if (!timestamp) return __('Never')
+	if (!timestamp) return __("Never")
 	return new Date(timestamp).toLocaleString()
 }
 
 async function handleSyncAll() {
-	emit('sync-all')
+	emit("sync-all")
 }
 
 async function handleSyncItems() {
@@ -188,10 +193,10 @@ async function handleSyncItems() {
 	try {
 		// Logic to trigger item sync via worker
 		await offlineWorker.cacheItemsFromServer(props.posProfile)
-		showSuccess(__('Items updated successfully'))
-		emit('items-synced')
+		showSuccess(__("Items updated successfully"))
+		emit("items-synced")
 	} catch (e) {
-		showError(__('Failed to update items'))
+		showError(__("Failed to update items"))
 	} finally {
 		isSyncingItems.value = false
 	}
@@ -201,10 +206,10 @@ async function handleSyncCustomers() {
 	isSyncingCustomers.value = true
 	try {
 		await offlineWorker.cacheCustomersFromServer(props.posProfile)
-		showSuccess(__('Customers updated successfully'))
-		emit('customers-synced')
+		showSuccess(__("Customers updated successfully"))
+		emit("customers-synced")
 	} catch (e) {
-		showError(__('Failed to update customers'))
+		showError(__("Failed to update customers"))
 	} finally {
 		isSyncingCustomers.value = false
 	}
@@ -214,9 +219,9 @@ async function handleSyncPending() {
 	isSyncingPending.value = true
 	try {
 		await offlineWorker.syncOfflineInvoices()
-		showSuccess(__('Pending invoices synced'))
+		showSuccess(__("Pending invoices synced"))
 	} catch (e) {
-		showError(__('Failed to sync invoices'))
+		showError(__("Failed to sync invoices"))
 	} finally {
 		isSyncingPending.value = false
 	}

@@ -53,23 +53,27 @@ if ("serviceWorker" in navigator) {
 	window.addEventListener(
 		"load",
 		() => {
-			navigator.serviceWorker.register("/api/method/pos_next.api.pwa.get_sw", { scope: "/" })
+			navigator.serviceWorker
+				.register("/api/method/pos_next.api.pwa.get_sw", { scope: "/" })
 				.then((reg) => {
 					log.info("Service Worker registered successfully", reg)
 					// Auto update logic
-					reg.addEventListener('updatefound', () => {
-						const newWorker = reg.installing;
+					reg.addEventListener("updatefound", () => {
+						const newWorker = reg.installing
 						if (newWorker) {
-							newWorker.addEventListener('statechange', () => {
-								if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+							newWorker.addEventListener("statechange", () => {
+								if (
+									newWorker.state === "installed" &&
+									navigator.serviceWorker.controller
+								) {
 									log.info("New content available, reloading...")
 									// Note: VitePWA autoUpdate will handle the actual skipWaiting automatically
-									// if generateSW autoUpdate is true in vite.config.js, 
+									// if generateSW autoUpdate is true in vite.config.js,
 									// but we can also manually reload if needed.
 								}
-							});
+							})
 						}
-					});
+					})
 				})
 				.catch((err) => {
 					log.error("Service Worker registration error", err)
@@ -171,12 +175,17 @@ async function initializeApp() {
 	const userPromise = (async () => {
 		try {
 			if (!userResource.loading) {
-				userResource.fetch().catch(e => log.debug("User fetch network rejected:", e?.message))
+				userResource
+					.fetch()
+					.catch((e) => log.debug("User fetch network rejected:", e?.message))
 			}
 			await userResource.promise
 			return sessionUser()
 		} catch (error) {
-			log.debug("User fetch failed (offline or logged out), falling back to cookie", error?.message)
+			log.debug(
+				"User fetch failed (offline or logged out), falling back to cookie",
+				error?.message,
+			)
 			return sessionUser()
 		}
 	})()
@@ -203,7 +212,7 @@ async function initializeApp() {
 					log.debug("Bootstrap preload failed (non-critical)", error)
 				}
 			})
-			.catch(() => { })
+			.catch(() => {})
 	}
 
 	// -------------------------------------------------------------------------

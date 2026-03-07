@@ -128,20 +128,25 @@
 					</select>
 				</div>
 
-				<!-- Territory -->
+				<!-- Address -->
 				<div>
 					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-						{{ __("Territory") }}
+						{{ __("Address") }}
 					</label>
-					<select
-						v-model="customerData.territory"
-						class="w-full px-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-					>
-						<option value="">{{ __("Select Territory") }}</option>
-						<option v-for="territory in territories" :key="territory" :value="territory">
-							{{ territory }}
-						</option>
-					</select>
+					<textarea
+						v-model="customerData.address_line1"
+						rows="2"
+						:placeholder="__('Enter complete address')"
+						class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-start"
+					></textarea>
+				</div>
+
+				<!-- Date of Birth -->
+				<div>
+					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
+						{{ __("Date of Birth") }}
+					</label>
+					<Input v-model="customerData.custom_tanggal_lahir" type="date" />
 				</div>
 			</div>
 		</template>
@@ -199,6 +204,7 @@
 import { usePOSPermissions } from "@/composables/usePermissions"
 import { useToast } from "@/composables/useToast"
 import { useCountriesStore } from "@/stores/countries"
+import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { saveOfflineCustomer } from "@/utils/offline"
 import { offlineState } from "@/utils/offline/offlineState"
@@ -226,7 +232,11 @@ const props = defineProps({
 	customer: Object, // Customer object for edit mode
 })
 
-const emit = defineEmits(["update:modelValue", "customer-created", "customer-updated"])
+const emit = defineEmits([
+	"update:modelValue",
+	"customer-created",
+	"customer-updated",
+])
 
 // =============================================================================
 // State
@@ -241,8 +251,12 @@ const countrySearchQuery = ref("")
 const dropdownRef = ref(null)
 const countrySearchRef = ref(null)
 
-const customerGroups = ref(["Commercial", "Individual", "Non Profit", "Government"])
-const territories = ref(["All Territories"])
+const customerGroups = ref([
+	"Commercial",
+	"Individual",
+	"Non Profit",
+	"Government",
+])
 
 const customerData = ref({
 	customer_name: "",
@@ -250,7 +264,8 @@ const customerData = ref({
 	mobile_no: "",
 	email_id: "",
 	customer_group: "Individual",
-	territory: "All Territories",
+	address_line1: "",
+	custom_tanggal_lahir: "",
 })
 
 // =============================================================================
@@ -265,7 +280,9 @@ const show = computed({
 const isEditMode = computed(() => !!props.customer?.name)
 
 const currentCountryCode = computed(() => {
-	const country = countriesStore.countries.find((c) => c.isd === selectedCountryCode.value)
+	const country = countriesStore.countries.find(
+		(c) => c.isd === selectedCountryCode.value,
+	)
 	return country?.code.toLowerCase() || "eg"
 })
 
@@ -274,7 +291,10 @@ const filteredCountries = computed(() => {
 
 	const query = countrySearchQuery.value.toLowerCase()
 	return countriesStore.countries.filter(
-		(c) => c.name.toLowerCase().includes(query) || c.isd.includes(query) || c.code.toLowerCase().includes(query)
+		(c) =>
+			c.name.toLowerCase().includes(query) ||
+			c.isd.includes(query) ||
+			c.code.toLowerCase().includes(query),
 	)
 })
 
@@ -292,7 +312,9 @@ const selectCountry = (country) => {
 }
 
 const updateMobileNumber = () => {
-	customerData.value.mobile_no = phoneNumber.value ? `${selectedCountryCode.value}-${phoneNumber.value}` : ""
+	customerData.value.mobile_no = phoneNumber.value
+		? `${selectedCountryCode.value}-${phoneNumber.value}`
+		: ""
 }
 
 const handleClickOutside = (event) => {
@@ -318,34 +340,67 @@ const setCountryFromName = (countryName) => {
 	}
 }
 
-/** Auto-set territory based on selected country (exact or fuzzy match) */
-const updateTerritoryFromCountry = () => {
-	if (!territories.value.length) return
-
-	const country = countriesStore.countries.find((c) => c.isd === selectedCountryCode.value)
-	if (!country) return
-
-	// Try exact match first
-	if (territories.value.includes(country.name)) {
-		customerData.value.territory = country.name
-		log.info(`Territory set to: ${country.name}`)
-		return
-	}
-
-	// Try fuzzy match
-	const fuzzyMatch = territories.value.find(
-		(t) => t.toLowerCase().includes(country.name.toLowerCase()) || country.name.toLowerCase().includes(t.toLowerCase())
-	)
-
-	if (fuzzyMatch) {
-		customerData.value.territory = fuzzyMatch
-		log.info(`Territory set to fuzzy match: ${fuzzyMatch}`)
-	}
-}
-
 // =============================================================================
 // API Resources
 // =============================================================================
+
+/** Create or update an Address record linked to a Customer */
+const saveAddressForCustomer = async (customerName, addressText) => {
+	if (!addressText) return
+	try {
+		// Check if customer already has an address
+		const existing = await call("frappe.client.get_list", {
+			doctype: "Dynamic Link",
+			filters: { link_doctype: "Customer", link_name: customerName, parenttype: "Address" },
+			fields: ["parent"],
+			limit_page_length: 1,
+		})
+		if (existing?.length) {
+			// Update existing address
+			await call("frappe.client.set_value", {
+				doctype: "Address",
+				name: existing[0].parent,
+				fieldname: { address_line1: addressText },
+			})
+		} else {
+			// Create new address
+			await call("frappe.client.insert", {
+				doc: {
+					doctype: "Address",
+					address_title: customerName,
+					address_type: "Billing",
+					address_line1: addressText,
+					links: [{ link_doctype: "Customer", link_name: customerName }],
+				},
+			})
+		}
+	} catch (err) {
+		log.error("Failed to save address", err)
+	}
+}
+
+/** Fetch the primary address for a customer */
+const fetchCustomerAddress = async (customerName) => {
+	try {
+		const links = await call("frappe.client.get_list", {
+			doctype: "Dynamic Link",
+			filters: { link_doctype: "Customer", link_name: customerName, parenttype: "Address" },
+			fields: ["parent"],
+			limit_page_length: 1,
+		})
+		if (links?.length) {
+			const addr = await call("frappe.client.get_value", {
+				doctype: "Address",
+				filters: { name: links[0].parent },
+				fieldname: ["address_line1"],
+			})
+			return addr?.address_line1 || ""
+		}
+	} catch (err) {
+		log.error("Failed to fetch address", err)
+	}
+	return ""
+}
 
 const createCustomerResource = createResource({
 	url: "frappe.client.insert",
@@ -356,12 +411,14 @@ const createCustomerResource = createResource({
 			custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
 			customer_type: "Individual",
 			customer_group: customerData.value.customer_group || __("Individual"),
-			territory: customerData.value.territory || __("All Territories"),
 			mobile_no: customerData.value.mobile_no || "",
 			email_id: customerData.value.email_id || "",
+			custom_tanggal_lahir: customerData.value.custom_tanggal_lahir || null,
 		},
 	}),
-	onSuccess: (data) => {
+	onSuccess: async (data) => {
+		// Save address as a linked Address record
+		await saveAddressForCustomer(data.name, customerData.value.address_line1)
 		showSuccess(__("Customer {0} created successfully", [data.customer_name]))
 		emit("customer-created", data)
 		show.value = false
@@ -381,12 +438,14 @@ const updateCustomerResource = createResource({
 			customer_name: customerData.value.customer_name,
 			custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
 			customer_group: customerData.value.customer_group || __("Individual"),
-			territory: customerData.value.territory || __("All Territories"),
 			mobile_no: customerData.value.mobile_no || "",
 			email_id: customerData.value.email_id || "",
+			custom_tanggal_lahir: customerData.value.custom_tanggal_lahir || null,
 		},
 	}),
-	onSuccess: (data) => {
+	onSuccess: async (data) => {
+		// Save address as a linked Address record
+		await saveAddressForCustomer(props.customer?.name, customerData.value.address_line1)
 		showSuccess(__("Customer {0} updated successfully", [data.customer_name]))
 		emit("customer-updated", data)
 		show.value = false
@@ -412,8 +471,14 @@ const createListResource = (doctype, onSuccess) =>
 		onError: (err) => log.error(`Error loading ${doctype}`, err),
 	})
 
-const customerGroupsResource = createListResource("Customer Group", (names) => (customerGroups.value = names))
-const territoriesResource = createListResource("Territory", (names) => (territories.value = names))
+const customerGroupsResource = createListResource(
+	"Customer Group",
+	(names) => (customerGroups.value = names),
+)
+const territoriesResource = createListResource(
+	"Territory",
+	(names) => (territories.value = names),
+)
 
 const posProfileResource = createResource({
 	url: "frappe.client.get_value",
@@ -439,7 +504,6 @@ const loadDialogData = async () => {
 	countriesStore.loadCountries()
 
 	// Load form options
-	await territoriesResource.reload()
 	customerGroupsResource.reload()
 	checkPermissions()
 
@@ -480,11 +544,16 @@ const handleCreate = async () => {
 				custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
 				customer_type: "Individual",
 				customer_group: customerData.value.customer_group || __("Individual"),
-				territory: customerData.value.territory || __("All Territories"),
 				mobile_no: customerData.value.mobile_no || "",
 				email_id: customerData.value.email_id || "",
+				address_line1: customerData.value.address_line1 || "",
+				custom_tanggal_lahir: customerData.value.custom_tanggal_lahir || null,
 			})
-			showSuccess(__("Customer {0} saved offline. Will sync when online.", [result.customer_name]))
+			showSuccess(
+				__("Customer {0} saved offline. Will sync when online.", [
+					result.customer_name,
+				]),
+			)
 			emit("customer-created", {
 				name: result.name,
 				customer_name: result.customer_name,
@@ -507,7 +576,8 @@ const resetForm = () => {
 		mobile_no: "",
 		email_id: "",
 		customer_group: "Individual",
-		territory: "All Territories",
+		address_line1: "",
+		custom_tanggal_lahir: "",
 	})
 	selectedCountryCode.value = ""
 	phoneNumber.value = ""
@@ -519,7 +589,7 @@ const resetForm = () => {
 
 watch(
 	() => props.initialName,
-	(name) => name && (customerData.value.customer_name = name)
+	(name) => name && (customerData.value.customer_name = name),
 )
 
 // Pre-fill form when customer prop changes (edit mode)
@@ -528,10 +598,17 @@ watch(
 	(customer) => {
 		if (customer?.name) {
 			customerData.value.customer_name = customer.customer_name || ""
-			customerData.value.custom_kode_pelanggan = customer.custom_kode_pelanggan || ""
+			customerData.value.custom_kode_pelanggan =
+				customer.custom_kode_pelanggan || ""
 			customerData.value.email_id = customer.email_id || ""
-			customerData.value.customer_group = customer.customer_group || "Individual"
-			customerData.value.territory = customer.territory || "All Territories"
+			customerData.value.customer_group =
+				customer.customer_group || "Individual"
+			// Fetch address from Address doctype
+			fetchCustomerAddress(customer.name).then((addr) => {
+				customerData.value.address_line1 = addr
+			})
+			customerData.value.custom_tanggal_lahir =
+				customer.custom_tanggal_lahir || ""
 			// Handle mobile_no with country code
 			if (customer.mobile_no) {
 				customerData.value.mobile_no = customer.mobile_no
@@ -545,7 +622,7 @@ watch(
 			}
 		}
 	},
-	{ immediate: true }
+	{ immediate: true },
 )
 
 watch(
@@ -556,13 +633,8 @@ watch(
 			selectedCountryCode.value = code
 			phoneNumber.value = rest.join("-")
 		}
-	}
+	},
 )
-
-watch(selectedCountryCode, async () => {
-	await nextTick()
-	updateTerritoryFromCountry()
-})
 
 watch(showCountryDropdown, async (isOpen) => {
 	if (isOpen) {
@@ -576,7 +648,7 @@ watch(
 	async (isOpen) => {
 		show.value = isOpen
 		isOpen ? await loadDialogData() : resetForm()
-	}
+	},
 )
 
 watch(show, (val) => emit("update:modelValue", val))

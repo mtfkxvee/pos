@@ -992,8 +992,8 @@
 // Module-scoped init guard — prevents redundant heavy initialization
 // when component remounts due to translationVersion changes.
 // Tracks the profile name so a shift change correctly re-initializes.
-let _initializedProfile = null
-let _posInitPromise = null
+const _initializedProfile = null
+const _posInitPromise = null
 </script>
 
 <script setup>

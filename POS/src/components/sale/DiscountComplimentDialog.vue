@@ -127,48 +127,48 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { Dialog, Button } from 'frappe-ui'
-import { usePOSCartStore } from '@/stores/posCart'
-import { usePOSSettingsStore } from '@/stores/posSettings'
-import { formatCurrency, roundCurrency } from '@/utils/currency'
+import { ref, computed, watch } from "vue"
+import { Dialog, Button } from "frappe-ui"
+import { usePOSCartStore } from "@/stores/posCart"
+import { usePOSSettingsStore } from "@/stores/posSettings"
+import { formatCurrency, roundCurrency } from "@/utils/currency"
 
-const props = defineProps(['modelValue', 'subtotal'])
-const emit = defineEmits(['update:modelValue', 'apply'])
+const props = defineProps(["modelValue", "subtotal"])
+const emit = defineEmits(["update:modelValue", "apply"])
 
 const cartStore = usePOSCartStore()
 const settingsStore = usePOSSettingsStore()
 
 const show = computed({
 	get: () => props.modelValue,
-	set: (val) => emit('update:modelValue', val)
+	set: (val) => emit("update:modelValue", val),
 })
 
 const tabs = [
-	{ label: 'Discount', value: 'discount' },
-	{ label: 'Compliment', value: 'compliment' }
+	{ label: "Discount", value: "discount" },
+	{ label: "Compliment", value: "compliment" },
 ]
 
-const activeTab = ref('discount')
+const activeTab = ref("discount")
 const loading = ref(false)
 
 // Discount State
 const discountValue = ref(0)
-const discountType = ref('Percentage')
+const discountType = ref("Percentage")
 
 // Compliment State
 const complimentValue = ref(0)
-const complimentType = ref('Percentage')
-const complimentReason = ref('')
+const complimentType = ref("Percentage")
+const complimentReason = ref("")
 
-const currencySymbol = computed(() => settingsStore.currencySymbol || 'Rp')
+const currencySymbol = computed(() => settingsStore.currencySymbol || "Rp")
 
 const hasAppliedDiscount = computed(() => {
 	return cartStore.additionalDiscount > 0 || cartStore.appliedCoupon
 })
 
 const calculatedDiscountAmount = computed(() => {
-	if (discountType.value === 'Percentage') {
+	if (discountType.value === "Percentage") {
 		return roundCurrency((props.subtotal * discountValue.value) / 100)
 	} else {
 		return roundCurrency(discountValue.value)
@@ -176,7 +176,7 @@ const calculatedDiscountAmount = computed(() => {
 })
 
 const calculatedComplimentAmount = computed(() => {
-	if (complimentType.value === 'Percentage') {
+	if (complimentType.value === "Percentage") {
 		return roundCurrency((props.subtotal * complimentValue.value) / 100)
 	} else {
 		return roundCurrency(complimentValue.value)
@@ -184,12 +184,14 @@ const calculatedComplimentAmount = computed(() => {
 })
 
 function toggleDiscountType() {
-	discountType.value = discountType.value === 'Percentage' ? 'Amount' : 'Percentage'
+	discountType.value =
+		discountType.value === "Percentage" ? "Amount" : "Percentage"
 	discountValue.value = 0
 }
 
 function toggleComplimentType() {
-	complimentType.value = complimentType.value === 'Percentage' ? 'Amount' : 'Percentage'
+	complimentType.value =
+		complimentType.value === "Percentage" ? "Amount" : "Percentage"
 	complimentValue.value = 0
 }
 
@@ -199,12 +201,12 @@ function closeDialog() {
 
 function removeDiscount() {
 	cartStore.removeDiscountFromCart()
-	emit('apply') // Trigger update in parent if needed
+	emit("apply") // Trigger update in parent if needed
 	closeDialog()
 }
 
 function handleApply() {
-	if (activeTab.value === 'discount') {
+	if (activeTab.value === "discount") {
 		applyDiscount()
 	} else {
 		applyCompliment()
@@ -215,15 +217,15 @@ function applyDiscount() {
 	loading.value = true
 	try {
 		const discount = {
-			percentage: discountType.value === 'Percentage' ? discountValue.value : 0,
-			amount: discountType.value === 'Amount' ? discountValue.value : 0,
-			name: 'Manual Discount',
-			code: 'MANUAL',
-			is_manual: true
+			percentage: discountType.value === "Percentage" ? discountValue.value : 0,
+			amount: discountType.value === "Amount" ? discountValue.value : 0,
+			name: "Manual Discount",
+			code: "MANUAL",
+			is_manual: true,
 		}
-		
+
 		cartStore.applyDiscountToCart(discount)
-		emit('apply')
+		emit("apply")
 		closeDialog()
 	} catch (e) {
 		console.error(e)
@@ -236,16 +238,17 @@ function applyCompliment() {
 	loading.value = true
 	try {
 		const discount = {
-			percentage: complimentType.value === 'Percentage' ? complimentValue.value : 0,
-			amount: complimentType.value === 'Amount' ? complimentValue.value : 0,
-			name: 'Compliment',
-			code: 'COMPLIMENT',
+			percentage:
+				complimentType.value === "Percentage" ? complimentValue.value : 0,
+			amount: complimentType.value === "Amount" ? complimentValue.value : 0,
+			name: "Compliment",
+			code: "COMPLIMENT",
 			is_manual: true,
-			description: complimentReason.value
+			description: complimentReason.value,
 		}
-		
+
 		cartStore.applyDiscountToCart(discount)
-		emit('apply')
+		emit("apply")
 		closeDialog()
 	} catch (e) {
 		console.error(e)
@@ -257,13 +260,13 @@ function applyCompliment() {
 // Reset when opened
 watch(show, (val) => {
 	if (val) {
-		activeTab.value = 'discount'
+		activeTab.value = "discount"
 		discountValue.value = 0
-		
+
 		// Reset compliment state
 		complimentValue.value = 0
-		complimentReason.value = ''
-		complimentType.value = 'Percentage'
+		complimentReason.value = ""
+		complimentType.value = "Percentage"
 	}
 })
 </script>

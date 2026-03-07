@@ -715,7 +715,10 @@ import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailability
 import { useItemSearchStore } from "@/stores/itemSearch"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { useStock } from "@/composables/useStock"
-import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency"
+import {
+	DEFAULT_CURRENCY,
+	formatCurrency as formatCurrencyUtil,
+} from "@/utils/currency"
 import { useToast } from "@/composables/useToast"
 import { storeToRefs } from "pinia"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
@@ -723,7 +726,7 @@ import {
 	createOptimizedClickHandler,
 	throttleRAF,
 	addPassiveListener,
-	runWhenIdle
+	runWhenIdle,
 } from "@/utils/lowEndOptimizations"
 import { performanceConfig } from "@/utils/performanceConfig"
 
@@ -791,7 +794,7 @@ const scrollCleanupFns = ref([])
 
 // Pagination state (for client-side display)
 const currentPage = ref(1)
-const itemsPerPage = ref(performanceConfig.get('itemsPerPage') || 100)
+const itemsPerPage = ref(performanceConfig.get("itemsPerPage") || 100)
 const lastFilterSignature = ref("")
 
 // Computed paginated items — server fetches one page at a time,
@@ -830,36 +833,36 @@ const SEARCH_PLACEHOLDERS = Object.freeze({
 // Sort configuration
 const SORT_OPTIONS = Object.freeze([
 	{
-		field: 'name',
-		label: __('Name'),
-		icon: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z'
+		field: "name",
+		label: __("Name"),
+		icon: "M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z",
 	},
 	{
-		field: 'quantity',
-		label: __('Quantity'),
-		icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+		field: "quantity",
+		label: __("Quantity"),
+		icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
 	},
 	{
-		field: 'item_group',
-		label: __('Item Group'),
-		icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
+		field: "item_group",
+		label: __("Item Group"),
+		icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
 	},
 	{
-		field: 'price',
-		label: __('Price'),
-		icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+		field: "price",
+		label: __("Price"),
+		icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
 	},
 	{
-		field: 'item_code',
-		label: __('Item Code'),
-		icon: 'M7 20l4-16m2 16l4-16M6 9h14M4 15h14'
-	}
+		field: "item_code",
+		label: __("Item Code"),
+		icon: "M7 20l4-16m2 16l4-16M6 9h14M4 15h14",
+	},
 ])
 
 const SORT_ICONS = Object.freeze({
-	ascending: 'M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12',
-	descending: 'M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4',
-	inactive: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4'
+	ascending: "M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12",
+	descending: "M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4",
+	inactive: "M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4",
 })
 
 const searchMode = computed(() => {
@@ -884,7 +887,7 @@ watch(
 	() => {
 		itemStore.setCartItems(props.cartItems)
 	},
-	{ immediate: true, flush: 'sync' }, // Synchronous to ensure immediate stock updates
+	{ immediate: true, flush: "sync" }, // Synchronous to ensure immediate stock updates
 )
 
 watch(
@@ -961,26 +964,26 @@ onMounted(() => {
 
 	// Add passive scroll listeners for better performance
 	// Only bind to the currently active view
-	if (viewMode.value === 'grid' && gridScrollContainer.value) {
+	if (viewMode.value === "grid" && gridScrollContainer.value) {
 		const cleanup = addPassiveListener(
 			gridScrollContainer.value,
-			'scroll',
+			"scroll",
 			handleScroll,
-			{ passive: true }
+			{ passive: true },
 		)
 		scrollCleanupFns.value.push(cleanup)
-	} else if (viewMode.value === 'list' && listScrollContainer.value) {
+	} else if (viewMode.value === "list" && listScrollContainer.value) {
 		const cleanup = addPassiveListener(
 			listScrollContainer.value,
-			'scroll',
+			"scroll",
 			handleScroll,
-			{ passive: true }
+			{ passive: true },
 		)
 		scrollCleanupFns.value.push(cleanup)
 	}
 
 	// Add click outside listener for sort dropdown
-	document.addEventListener('click', handleClickOutside)
+	document.addEventListener("click", handleClickOutside)
 })
 
 onUnmounted(() => {
@@ -994,7 +997,7 @@ onUnmounted(() => {
 	}
 
 	// Cleanup passive listeners
-	scrollCleanupFns.value.forEach(cleanup => cleanup())
+	scrollCleanupFns.value.forEach((cleanup) => cleanup())
 	scrollCleanupFns.value = []
 
 	// Clear handlers and timers
@@ -1002,7 +1005,7 @@ onUnmounted(() => {
 	clearLongPress()
 
 	// Remove click outside listener for sort dropdown
-	document.removeEventListener('click', handleClickOutside)
+	document.removeEventListener("click", handleClickOutside)
 })
 
 // Handle keydown for barcode scanner detection
@@ -1085,11 +1088,14 @@ const optimizedClickHandlers = new Map()
 function getOptimizedClickHandler(item) {
 	const key = item.item_code
 	if (!optimizedClickHandlers.has(key)) {
-		const handler = createOptimizedClickHandler(() => {
-			handleItemClick(item.item_code)
-		}, {
-			feedback: true
-		})
+		const handler = createOptimizedClickHandler(
+			() => {
+				handleItemClick(item.item_code)
+			},
+			{
+				feedback: true,
+			},
+		)
 		optimizedClickHandlers.set(key, handler)
 	}
 	return optimizedClickHandlers.get(key)
@@ -1142,14 +1148,28 @@ function selectItem(item, autoAdd = false) {
 	if (!item) return false
 
 	// Skip stock validation for: variants (template), serial items, batch items (they have own validation)
-	const skipValidation = item.has_variants || item.has_serial_no || item.has_batch_no
+	const skipValidation =
+		item.has_variants || item.has_serial_no || item.has_batch_no
 	const isStockTracked = item.is_stock_item || item.is_bundle
 	const qty = Math.floor(item.actual_qty ?? item.stock_qty ?? 0)
 
-	if (!skipValidation && isStockTracked && qty <= 0 && settingsStore.shouldEnforceStockValidation()) {
-		showError(item.is_bundle
-			? __('"{0}" cannot be added to cart. Bundle is out of stock. Allow Negative Stock is disabled.', [item.item_name])
-			: __('"{0}" cannot be added to cart. Item is out of stock. Allow Negative Stock is disabled.', [item.item_name]))
+	if (
+		!skipValidation &&
+		isStockTracked &&
+		qty <= 0 &&
+		settingsStore.shouldEnforceStockValidation()
+	) {
+		showError(
+			item.is_bundle
+				? __(
+						'"{0}" cannot be added to cart. Bundle is out of stock. Allow Negative Stock is disabled.',
+						[item.item_name],
+					)
+				: __(
+						'"{0}" cannot be added to cart. Item is out of stock. Allow Negative Stock is disabled.',
+						[item.item_name],
+					),
+		)
 		return false
 	}
 
@@ -1163,7 +1183,7 @@ function handleItemClick(itemCode) {
 		itemHandledByLongPress = false
 		return
 	}
-	const item = filteredItems.value.find(i => i.item_code === itemCode)
+	const item = filteredItems.value.find((i) => i.item_code === itemCode)
 	selectItem(item)
 }
 
@@ -1200,7 +1220,9 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 			itemStore.clearSearch()
 		}
 	} else if (filteredItems.value.length === 0) {
-		showWarning(__('Item Not Found: No item found with barcode: {0}', [barcode]))
+		showWarning(
+			__("Item Not Found: No item found with barcode: {0}", [barcode]),
+		)
 
 		// If scanner mode is enabled, clear search immediately for next scan
 		if (shouldAutoAdd) {
@@ -1209,9 +1231,18 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 	} else {
 		if (shouldAutoAdd) {
 			// In scanner mode, don't show manual selection - just notify
-			showWarning(__('Multiple Items Found: {0} items match barcode. Please refine search.', [filteredItems.value.length]))
+			showWarning(
+				__(
+					"Multiple Items Found: {0} items match barcode. Please refine search.",
+					[filteredItems.value.length],
+				),
+			)
 		} else {
-			showWarning(__('Multiple Items Found: {0} items match. Please select one.', [filteredItems.value.length]))
+			showWarning(
+				__("Multiple Items Found: {0} items match. Please select one.", [
+					filteredItems.value.length,
+				]),
+			)
 		}
 	}
 }
@@ -1267,8 +1298,8 @@ function showWarehouseAvailability(item) {
 	warehouseDialogItem.value = {
 		itemCode: item.item_code,
 		itemName: item.item_name,
-		uom: item.uom || item.stock_uom || 'Nos',
-		company: settingsStore.company
+		uom: item.uom || item.stock_uom || "Nos",
+		company: settingsStore.company,
 	}
 	showWarehouseDialog.value = true
 }
@@ -1286,24 +1317,24 @@ watch(viewMode, async () => {
 	await nextTick()
 
 	// Clean up existing listeners
-	scrollCleanupFns.value.forEach(cleanup => cleanup())
+	scrollCleanupFns.value.forEach((cleanup) => cleanup())
 	scrollCleanupFns.value = []
 
 	// Rebind listeners to the new active container
-	if (viewMode.value === 'grid' && gridScrollContainer.value) {
+	if (viewMode.value === "grid" && gridScrollContainer.value) {
 		const cleanup = addPassiveListener(
 			gridScrollContainer.value,
-			'scroll',
+			"scroll",
 			handleScroll,
-			{ passive: true }
+			{ passive: true },
 		)
 		scrollCleanupFns.value.push(cleanup)
-	} else if (viewMode.value === 'list' && listScrollContainer.value) {
+	} else if (viewMode.value === "list" && listScrollContainer.value) {
 		const cleanup = addPassiveListener(
 			listScrollContainer.value,
-			'scroll',
+			"scroll",
 			handleScroll,
-			{ passive: true }
+			{ passive: true },
 		)
 		scrollCleanupFns.value.push(cleanup)
 	}
@@ -1386,29 +1417,34 @@ function handleSortToggle(field) {
 
 	// If clicking the same field, toggle between asc/desc
 	if (sortBy.value === field) {
-		const newOrder = sortOrder.value === 'asc' ? 'desc' : 'asc'
+		const newOrder = sortOrder.value === "asc" ? "desc" : "asc"
 		itemStore.setSortFilter(field, newOrder)
 	} else {
 		// New field - start with ascending
-		itemStore.setSortFilter(field, 'asc')
+		itemStore.setSortFilter(field, "asc")
 	}
 }
 
 function getSortLabel(sortByValue) {
-	const option = SORT_OPTIONS.find(opt => opt.field === sortByValue)
+	const option = SORT_OPTIONS.find((opt) => opt.field === sortByValue)
 	return option?.label || sortByValue
 }
 
 function getSortIconState(field) {
-	if (sortBy.value !== field) return 'inactive'
-	return sortOrder.value === 'asc' ? 'ascending' : 'descending'
+	if (sortBy.value !== field) return "inactive"
+	return sortOrder.value === "asc" ? "ascending" : "descending"
 }
 
 // Close dropdown when clicking outside
 function handleClickOutside(event) {
 	if (showSortDropdown.value) {
-		const dropdown = event.target.closest('.relative')
-		if (!dropdown || !dropdown.querySelector('button[data-sort-button]')?.contains(event.target)) {
+		const dropdown = event.target.closest(".relative")
+		if (
+			!dropdown ||
+			!dropdown
+				.querySelector("button[data-sort-button]")
+				?.contains(event.target)
+		) {
 			showSortDropdown.value = false
 		}
 	}
