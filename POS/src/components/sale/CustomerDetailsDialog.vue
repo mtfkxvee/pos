@@ -31,7 +31,7 @@
 					</div>
 					<div class="col-span-2">
 						<label class="block text-xs font-medium text-gray-500 uppercase">{{ __('Address') }}</label>
-						<p class="mt-1 text-sm text-gray-900">{{ customerAddress || '-' }}</p>
+						<p class="mt-1 text-sm text-gray-900">{{ customer.primary_address || '-' }}</p>
 					</div>
 				</div>
 
@@ -99,32 +99,6 @@ const customerNameInitials = computed(() => {
 const loadingLoyalty = ref(false)
 const loyaltyPoints = ref(0)
 const loyaltyProgram = ref("")
-const customerAddress = ref("")
-
-/** Fetch the primary address for a customer from ERPNext Address doctype */
-async function fetchCustomerAddress(customerName) {
-	try {
-		const links = await call("frappe.client.get_list", {
-			doctype: "Dynamic Link",
-			filters: { link_doctype: "Customer", link_name: customerName, parenttype: "Address" },
-			fields: ["parent"],
-			limit_page_length: 1,
-		})
-		if (links?.length) {
-			const addr = await call("frappe.client.get_value", {
-				doctype: "Address",
-				filters: { name: links[0].parent },
-				fieldname: ["address_line1"],
-			})
-			customerAddress.value = addr?.address_line1 || ""
-		} else {
-			customerAddress.value = ""
-		}
-	} catch (error) {
-		console.error("Failed to fetch customer address:", error)
-		customerAddress.value = ""
-	}
-}
 
 watch(
 	() => props.customer,
@@ -134,10 +108,8 @@ watch(
 				console.log("Using offline loyalty points for", newCustomer.name)
 				loyaltyPoints.value = newCustomer.loyalty_points || 0
 				loyaltyProgram.value = newCustomer.loyalty_program || ""
-				customerAddress.value = newCustomer.address_line1 || ""
 			} else {
 				await fetchLoyaltyDetails(newCustomer.name)
-				await fetchCustomerAddress(newCustomer.name)
 			}
 		}
 	},
@@ -147,7 +119,6 @@ watch(
 async function fetchLoyaltyDetails(customerName) {
 	loadingLoyalty.value = true
 	try {
-		// Use the dedicated ERPNext method for fetching loyalty details including points
 		const result = await call(
 			"erpnext.accounts.doctype.loyalty_program.loyalty_program.get_loyalty_program_details_with_points",
 			{
@@ -172,6 +143,6 @@ async function fetchLoyaltyDetails(customerName) {
 }
 
 function confirmSelect() {
-	emit("select", props.customer) // Pass original customer object (or enriched one if we stored it)
+	emit("select", props.customer)
 }
 </script>

@@ -118,7 +118,7 @@ export const saveOfflineCustomer = async (customerData) => {
 		mobile_no: cleanData.mobile_no || "",
 		email_id: cleanData.email_id || "",
 		custom_kode_pelanggan: cleanData.custom_kode_pelanggan || "",
-		address_line1: cleanData.address_line1 || "",
+		address_line1: cleanData.address_line1 || cleanData.primary_address || "",
 		custom_tanggal_lahir: cleanData.custom_tanggal_lahir || null,
 		offline_id: offlineId,
 	})

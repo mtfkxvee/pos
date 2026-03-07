@@ -134,7 +134,7 @@
 						{{ __("Address") }}
 					</label>
 					<textarea
-						v-model="customerData.address_line1"
+						v-model="customerData.primary_address"
 						rows="2"
 						:placeholder="__('Enter complete address')"
 						class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-start"
@@ -204,7 +204,6 @@
 import { usePOSPermissions } from "@/composables/usePermissions"
 import { useToast } from "@/composables/useToast"
 import { useCountriesStore } from "@/stores/countries"
-import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { saveOfflineCustomer } from "@/utils/offline"
 import { offlineState } from "@/utils/offline/offlineState"
@@ -264,7 +263,7 @@ const customerData = ref({
 	mobile_no: "",
 	email_id: "",
 	customer_group: "Individual",
-	address_line1: "",
+	primary_address: "",
 	custom_tanggal_lahir: "",
 })
 
@@ -344,64 +343,6 @@ const setCountryFromName = (countryName) => {
 // API Resources
 // =============================================================================
 
-/** Create or update an Address record linked to a Customer */
-const saveAddressForCustomer = async (customerName, addressText) => {
-	if (!addressText) return
-	try {
-		// Check if customer already has an address
-		const existing = await call("frappe.client.get_list", {
-			doctype: "Dynamic Link",
-			filters: { link_doctype: "Customer", link_name: customerName, parenttype: "Address" },
-			fields: ["parent"],
-			limit_page_length: 1,
-		})
-		if (existing?.length) {
-			// Update existing address
-			await call("frappe.client.set_value", {
-				doctype: "Address",
-				name: existing[0].parent,
-				fieldname: { address_line1: addressText },
-			})
-		} else {
-			// Create new address
-			await call("frappe.client.insert", {
-				doc: {
-					doctype: "Address",
-					address_title: customerName,
-					address_type: "Billing",
-					address_line1: addressText,
-					links: [{ link_doctype: "Customer", link_name: customerName }],
-				},
-			})
-		}
-	} catch (err) {
-		log.error("Failed to save address", err)
-	}
-}
-
-/** Fetch the primary address for a customer */
-const fetchCustomerAddress = async (customerName) => {
-	try {
-		const links = await call("frappe.client.get_list", {
-			doctype: "Dynamic Link",
-			filters: { link_doctype: "Customer", link_name: customerName, parenttype: "Address" },
-			fields: ["parent"],
-			limit_page_length: 1,
-		})
-		if (links?.length) {
-			const addr = await call("frappe.client.get_value", {
-				doctype: "Address",
-				filters: { name: links[0].parent },
-				fieldname: ["address_line1"],
-			})
-			return addr?.address_line1 || ""
-		}
-	} catch (err) {
-		log.error("Failed to fetch address", err)
-	}
-	return ""
-}
-
 const createCustomerResource = createResource({
 	url: "frappe.client.insert",
 	makeParams: () => ({
@@ -413,12 +354,11 @@ const createCustomerResource = createResource({
 			customer_group: customerData.value.customer_group || __("Individual"),
 			mobile_no: customerData.value.mobile_no || "",
 			email_id: customerData.value.email_id || "",
+			primary_address: customerData.value.primary_address || "",
 			custom_tanggal_lahir: customerData.value.custom_tanggal_lahir || null,
 		},
 	}),
-	onSuccess: async (data) => {
-		// Save address as a linked Address record
-		await saveAddressForCustomer(data.name, customerData.value.address_line1)
+	onSuccess: (data) => {
 		showSuccess(__("Customer {0} created successfully", [data.customer_name]))
 		emit("customer-created", data)
 		show.value = false
@@ -440,12 +380,11 @@ const updateCustomerResource = createResource({
 			customer_group: customerData.value.customer_group || __("Individual"),
 			mobile_no: customerData.value.mobile_no || "",
 			email_id: customerData.value.email_id || "",
+			primary_address: customerData.value.primary_address || "",
 			custom_tanggal_lahir: customerData.value.custom_tanggal_lahir || null,
 		},
 	}),
-	onSuccess: async (data) => {
-		// Save address as a linked Address record
-		await saveAddressForCustomer(props.customer?.name, customerData.value.address_line1)
+	onSuccess: (data) => {
 		showSuccess(__("Customer {0} updated successfully", [data.customer_name]))
 		emit("customer-updated", data)
 		show.value = false
@@ -546,7 +485,7 @@ const handleCreate = async () => {
 				customer_group: customerData.value.customer_group || __("Individual"),
 				mobile_no: customerData.value.mobile_no || "",
 				email_id: customerData.value.email_id || "",
-				address_line1: customerData.value.address_line1 || "",
+				primary_address: customerData.value.primary_address || "",
 				custom_tanggal_lahir: customerData.value.custom_tanggal_lahir || null,
 			})
 			showSuccess(
@@ -576,7 +515,7 @@ const resetForm = () => {
 		mobile_no: "",
 		email_id: "",
 		customer_group: "Individual",
-		address_line1: "",
+		primary_address: "",
 		custom_tanggal_lahir: "",
 	})
 	selectedCountryCode.value = ""
@@ -603,10 +542,7 @@ watch(
 			customerData.value.email_id = customer.email_id || ""
 			customerData.value.customer_group =
 				customer.customer_group || "Individual"
-			// Fetch address from Address doctype
-			fetchCustomerAddress(customer.name).then((addr) => {
-				customerData.value.address_line1 = addr
-			})
+			customerData.value.primary_address = customer.primary_address || ""
 			customerData.value.custom_tanggal_lahir =
 				customer.custom_tanggal_lahir || ""
 			// Handle mobile_no with country code
