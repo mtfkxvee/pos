@@ -49,6 +49,7 @@ const SYMBOLS = {
 	JPY: "¥",
 	CNY: "¥",
 	INR: "₹",
+	IDR: "Rp",
 	EGP: "E£",
 	SAR: "\u00EA",
 	AED: "د.إ",

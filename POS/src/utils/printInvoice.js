@@ -289,7 +289,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 					</tr>
 
 					<!-- Payment Methods -->
-					${(invoiceData.payments || [])
+					${(invoiceData.payments || []).filter(function(row) { return Number(row.amount) > 0; })
 						.map(
 							(row) => `
 					<tr>
@@ -426,7 +426,7 @@ export function printShiftClosing(closingData) {
 				0,
 			)
 		: 0
-	const paymentReconciliation = closingData.payment_reconciliation || []
+	const paymentReconciliation = (closingData.payment_reconciliation || []).filter(function(p) { return Number(p.expected_amount) > 0 || Number(p.closing_amount) > 0; })
 
 	const totalExpected = paymentReconciliation.reduce(
 		(acc, p) => acc + (Number.parseFloat(p.expected_amount) || 0),
@@ -554,19 +554,19 @@ export function printShiftClosing(closingData) {
                 <div class="section-title">${__("SALES SUMMARY")}</div>
                 <div class="row">
                     <span>${__("Gross Sales:")}</span>
-                    <span>${formatCurrency(salesTotal)}</span>
+                    <span>${formatCurrency(salesTotal, "IDR", "id-ID")}</span>
                 </div>
                 <div class="row">
                     <span>${__("Returns:")}</span>
-                    <span>${formatCurrency(closingData.returns_total)}</span>
+                    <span>${formatCurrency(closingData.returns_total, "IDR", "id-ID")}</span>
                 </div>
                 <div class="row">
                     <span>${__("Tax Collected:")}</span>
-                    <span>${formatCurrency(taxesTotal)}</span>
+                    <span>${formatCurrency(taxesTotal, "IDR", "id-ID")}</span>
                 </div>
                 <div class="row bold" style="margin-top: 5px; border-top: 1px solid #000; padding-top: 2px;">
                     <span>${__("NET SALES:")}</span>
-                    <span>${formatCurrency(closingData.grand_total)}</span>
+                    <span>${formatCurrency(closingData.grand_total, "IDR", "id-ID")}</span>
                 </div>
             </div>
 
@@ -581,19 +581,19 @@ export function printShiftClosing(closingData) {
                         </div>
                         <div class="row">
                             <span>Open:</span>
-                            <span>${formatCurrency(p.opening_amount)}</span>
+                            <span>${formatCurrency(p.opening_amount, "IDR", "id-ID")}</span>
                         </div>
                         <div class="row">
                             <span>Expected:</span>
-                            <span>${formatCurrency(p.expected_amount)}</span>
+                            <span>${formatCurrency(p.expected_amount, "IDR", "id-ID")}</span>
                         </div>
                          <div class="row">
                             <span>Actual:</span>
-                            <span>${formatCurrency(p.closing_amount)}</span>
+                            <span>${formatCurrency(p.closing_amount, "IDR", "id-ID")}</span>
                         </div>
                          <div class="row">
                             <span>Diff:</span>
-                            <span>${formatCurrency(Number.parseFloat(p.closing_amount || 0) - Number.parseFloat(p.expected_amount || 0))}</span>
+                            <span>${formatCurrency(Number.parseFloat(p.closing_amount || 0) - Number.parseFloat(p.expected_amount || 0), "IDR", "id-ID")}</span>
                         </div>
                     </div>
                 `,
@@ -604,15 +604,15 @@ export function printShiftClosing(closingData) {
              <div class="section">
                  <div class="row bold">
                     <span>${__("TOTAL EXPECTED:")}</span>
-                    <span>${formatCurrency(totalExpected)}</span>
+                    <span>${formatCurrency(totalExpected, "IDR", "id-ID")}</span>
                 </div>
                 <div class="row bold">
                     <span>${__("TOTAL ACTUAL:")}</span>
-                    <span>${formatCurrency(totalActual)}</span>
+                    <span>${formatCurrency(totalActual, "IDR", "id-ID")}</span>
                 </div>
                  <div class="row bold">
                     <span>${__("VARIANCE:")}</span>
-                    <span>${formatCurrency(totalDifference)}</span>
+                    <span>${formatCurrency(totalDifference, "IDR", "id-ID")}</span>
                 </div>
             </div>
 
