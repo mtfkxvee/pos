@@ -687,6 +687,7 @@
 				@sync-all="handleSyncAll"
 				@items-synced="handleItemsSynced"
 				@customers-synced="handleCustomersSynced"
+				@view-pending="handleViewPendingFromSync"
 			/>
 
 			<!-- Print Format Dialog -->
@@ -2183,6 +2184,12 @@ async function handlePaymentCompleted(paymentData) {
 			showWarning(errorContext.message);
 		}
 	}
+}
+
+function handleViewPendingFromSync() {
+	showSyncStatusDialog.value = false;
+	uiStore.showOfflineInvoicesDialog = true;
+	offlineStore.loadPendingInvoices();
 }
 
 function handleClearCart() {

@@ -114,14 +114,23 @@
 					<p class="text-sm text-orange-700 mb-3">
 						{{ __('These invoices are saved locally and waiting to be synced to the server.') }}
 					</p>
-					<button
-						v-if="!isOffline"
-						@click="handleSyncPending"
-						:disabled="isSyncingPending"
-						class="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg shadow-sm transition-colors text-sm"
-					>
-						{{ isSyncingPending ? __('Syncing Invoices...') : __('Sync Pending Invoices') }}
-					</button>
+					<!-- Button Group -->
+					<div class="flex flex-col sm:flex-row gap-2 mt-3 w-full">
+						<button
+							v-if="!isOffline"
+							@click="handleSyncPending"
+							:disabled="isSyncingPending"
+							class="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg shadow-sm transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							{{ isSyncingPending ? __('Syncing...') : __('Sync Now') }}
+						</button>
+						<button
+							@click="$emit('view-pending')"
+							class="flex-1 py-2 bg-white border border-orange-200 hover:bg-orange-50 text-orange-700 font-semibold rounded-lg shadow-sm transition-colors text-sm"
+						>
+							{{ __('View Invoices') }}
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -156,6 +165,7 @@ const emit = defineEmits([
 	"sync-all",
 	"items-synced",
 	"customers-synced",
+	"view-pending",
 ])
 const { showSuccess, showError } = useToast()
 
