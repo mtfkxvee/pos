@@ -170,12 +170,14 @@ import { usePrintFormat } from "@/composables/usePrintFormat"
 import { useToast } from "@/composables/useToast"
 import { usePOSShiftStore } from "@/stores/posShift"
 import { usePOSSyncStore } from "@/stores/posSync"
+import { useUserData } from "@/data/user"
 import { Button, Dialog, createResource } from "frappe-ui"
 import { onMounted, ref, watch } from "vue"
 
 const { showSuccess, showError } = useToast()
 const shiftStore = usePOSShiftStore()
 const offlineStore = usePOSSyncStore()
+const { userName } = useUserData()
 const { getEffectiveFormat } = usePrintFormat()
 
 const props = defineProps({
@@ -265,6 +267,7 @@ function handlePrintDraft(draft) {
 			posting_date: draft.created_at,
 			customer_name:
 				draft.customer?.customer_name || draft.customer?.name || draft.customer,
+			owner: draft.owner || userName.value || "Administrator",
 			status: "Draft",
 		}
 		printInvoiceCustom(invoiceData, getEffectiveFormat())

@@ -2074,6 +2074,7 @@ async function handlePaymentCompleted(paymentData) {
 				name: offlineName,
 				company: shiftStore.company || invoiceData.company || "POS",
 				customer_name: cartStore.customerName || invoiceData.customer,
+				owner: userName.value || "Administrator",
 				posting_date: new Date().toISOString().split("T")[0],
 				paid_amount: paymentData.paid_amount || 0,
 				change_amount: paymentData.change_amount || 0,
