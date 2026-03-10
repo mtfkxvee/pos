@@ -2039,6 +2039,8 @@ async function handlePaymentCompleted(paymentData) {
 			// are all correctly formatted for ERPNext
 			const preparedItems = cartStore.formatItemsForSubmission(cartStore.invoiceItems);
 
+			const now = new Date();
+			
 			const invoiceData = {
 				pos_profile: cartStore.posProfile,
 				posa_pos_opening_shift: cartStore.posOpeningShift,
@@ -2062,6 +2064,11 @@ async function handlePaymentCompleted(paymentData) {
 				loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
 				loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 				remarks: paymentData.remarks || null,
+				
+				// Keep real posting time when synced
+				set_posting_time: 1,
+				posting_date: now.toISOString().split("T")[0],
+				posting_time: now.toTimeString().split(" ")[0],
 			};
 
 			await offlineStore.saveInvoiceOffline(invoiceData);
