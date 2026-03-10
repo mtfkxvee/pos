@@ -28,6 +28,8 @@
 				@printer-click="uiStore.showHistoryDialog = true"
 				@refresh-click="handleRefresh"
 				@clear-cache="handleClearCache"
+				@print-format-change="setPrintFormat"
+				:print-format="printFormat"
 				@logout="uiStore.showLogoutDialog = true"
 			>
 				<template #menu-items>
@@ -687,6 +689,13 @@
 				@customers-synced="handleCustomersSynced"
 			/>
 
+			<!-- Print Format Dialog -->
+			<PrintFormatDialog
+				v-model="showFormatDialog"
+				:current-format="printFormat"
+				@format-selected="setPrintFormat"
+			/>
+
 			<!-- Clear Cart Confirmation Dialog -->
 			<Dialog
 				v-model="uiStore.showClearCartDialog"
@@ -1032,6 +1041,8 @@ import { parseError } from "@/utils/errorHandler";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sync";
 import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
+import { usePrintFormat } from "@/composables/usePrintFormat";
+import PrintFormatDialog from "@/components/pos/PrintFormatDialog.vue";
 import { Button, Dialog, createResource } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
 import { computed, onMounted, onUnmounted, ref, watch, toRaw } from "vue";
@@ -1062,6 +1073,9 @@ const stockStore = useStockStore();
 const customerSearchStore = useCustomerSearchStore();
 // Note: settingsStore is an alias to posSettingsStore (same Pinia store singleton)
 const settingsStore = posSettingsStore;
+
+// Print Format Composable
+const { printFormat, showFormatDialog, setPrintFormat, promptForFormat, getEffectiveFormat } = usePrintFormat();
 
 // Real-time stock updates
 const { onStockUpdate } = useRealtimeStock();
@@ -1146,6 +1160,16 @@ const invoiceHistoryData = ref([]);
 
 // Sync Status Dialog
 const showSyncStatusDialog = ref(false);
+
+// Add a watcher for offline mode to prompt for print format
+watch(
+	() => offlineStore.isOffline,
+	(isNwOffline) => {
+		if (isNwOffline) {
+			promptForFormat();
+		}
+	}
+);
 
 // Stock sync status
 const isStockSyncActive = ref(false);
@@ -2075,7 +2099,7 @@ async function handlePaymentCompleted(paymentData) {
 			// No auto-print: show success dialog (has its own Print button)
 			if (shiftStore.autoPrintEnabled) {
 				try {
-					printInvoiceCustom(offlinePrintData);
+					printInvoiceCustom(offlinePrintData, getEffectiveFormat());
 					showSuccess(__("Invoice saved offline and sent to printer"));
 				} catch (printError) {
 					log.warn("Offline print failed:", printError);
