@@ -166,6 +166,7 @@ import {
 } from "@/utils/currency"
 import { clearAllDrafts, deleteDraft, getAllDrafts } from "@/utils/draftManager"
 import { printInvoiceCustom } from "@/utils/printInvoice"
+import { usePrintFormat } from "@/composables/usePrintFormat"
 import { useToast } from "@/composables/useToast"
 import { usePOSShiftStore } from "@/stores/posShift"
 import { usePOSSyncStore } from "@/stores/posSync"
@@ -175,6 +176,7 @@ import { onMounted, ref, watch } from "vue"
 const { showSuccess, showError } = useToast()
 const shiftStore = usePOSShiftStore()
 const offlineStore = usePOSSyncStore()
+const { getEffectiveFormat } = usePrintFormat()
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -265,7 +267,7 @@ function handlePrintDraft(draft) {
 				draft.customer?.customer_name || draft.customer?.name || draft.customer,
 			status: "Draft",
 		}
-		printInvoiceCustom(invoiceData)
+		printInvoiceCustom(invoiceData, getEffectiveFormat())
 	} catch (error) {
 		console.error("Error printing draft:", error)
 		showError(__("Failed to print draft"))

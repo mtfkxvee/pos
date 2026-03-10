@@ -60,6 +60,54 @@
 
 				<!-- Right Side: Controls -->
 				<div class="flex items-center gap-0.5 sm:gap-1 md:gap-2 flex-shrink-0">
+					<!-- Print Format Selector (next to WiFi) -->
+					<div class="relative">
+						<button
+							@click="showPrintFormatMenu = !showPrintFormatMenu"
+							@blur="handlePrintMenuBlur"
+							:class="[
+								'p-1.5 sm:p-2 rounded-lg transition-colors flex items-center gap-1 touch-manipulation',
+								printFormat
+									? 'bg-blue-50 hover:bg-blue-100 text-blue-600'
+									: 'bg-orange-50 hover:bg-orange-100 text-orange-600'
+							]"
+							:title="printFormat ? __('Print format: {0}', [printFormat]) : __('Pilih ukuran kertas print')"
+							aria-label="Print format selector"
+						>
+							<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+								<path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+							</svg>
+							<span class="text-[10px] sm:text-xs font-bold leading-none">
+								{{ printFormat ? (printFormat.includes('58') ? '58' : '80') : '?' }}
+							</span>
+						</button>
+
+						<!-- Dropdown -->
+						<div
+							v-if="showPrintFormatMenu"
+							@mousedown.prevent
+							class="absolute top-full mt-2 end-0 z-[999] w-40 bg-gray-900 rounded-lg shadow-xl py-1 overflow-hidden"
+						>
+							<div class="px-3 py-1.5 text-[10px] text-gray-400 uppercase tracking-wider font-semibold border-b border-gray-700">
+								{{ __('Ukuran Kertas') }}
+							</div>
+							<button
+								v-for="fmt in ['58 PRINTER', '80 PRINTER']"
+								:key="fmt"
+								@click="selectPrintFormat(fmt)"
+								:class="[
+									'w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between',
+									printFormat === fmt
+										? 'bg-blue-600 text-white'
+										: 'text-gray-200 hover:bg-gray-700'
+								]"
+							>
+								<span>{{ fmt.includes('58') ? '58mm' : '80mm' }}</span>
+								<span v-if="printFormat === fmt" class="text-[11px]">✓</span>
+							</button>
+						</div>
+					</div>
+
 					<!-- WiFi/Offline Status -->
 					<button
 						@click="$emit('sync-click')"
@@ -287,7 +335,26 @@ const emit = defineEmits([
 	"menu-opened",
 	"menu-closed",
 	"clear-cache",
+	"print-format-change",
 ])
+
+const showPrintFormatMenu = ref(false)
+
+function selectPrintFormat(fmt) {
+	showPrintFormatMenu.value = false
+	emit("print-format-change", fmt)
+}
+
+function handlePrintMenuBlur(event) {
+	if (
+		!event.relatedTarget ||
+		!event.currentTarget.parentElement.contains(event.relatedTarget)
+	) {
+		setTimeout(() => {
+			showPrintFormatMenu.value = false
+		}, 200)
+	}
+}
 
 function handleClearCacheClick() {
 	showCacheTooltip.value = false
@@ -362,6 +429,10 @@ const props = defineProps({
 	isRefreshing: {
 		type: Boolean,
 		default: false,
+	},
+	printFormat: {
+		type: String,
+		default: null,
 	},
 })
 
