@@ -1687,6 +1687,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// === OFFLINE MODE ===
 		// When offline, use cached offers and apply discounts client-side
 		if (offlineState.isOffline) {
+			// Wipe any orphaned free items before re-evaluating
+			if (appliedOffers.value.length === 0) {
+				processFreeItems([])
+			}
 			applyOffersOffline()
 			offerProcessingState.value.lastCartHash = generateCartHash()
 			offerProcessingState.value.lastProcessedAt = Date.now()
@@ -1705,6 +1709,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Validate and auto-remove invalid offers (if any are applied)
 		if (appliedOffers.value.length > 0) {
 			await reapplyOffer(currentProfile, signal)
+		} else {
+			// No offers applied - forcibly wipe out any orphaned free items
+			processFreeItems([])
 		}
 
 		// Check cancellation before auto-apply
@@ -1845,6 +1852,16 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			() => customer.value?.name || customer.value,
 		],
 		(_newVals, oldVals) => {
+			// Safeguard: If the cart ONLY has free items (no regular items), nuke it entirely.
+			// This covers the case where the user deleted the last regular item that was a trigger.
+			const regularItems = invoiceItems.value.filter((i) => !i.is_free_item)
+			if (regularItems.length === 0 && invoiceItems.value.length > 0) {
+				invoiceItems.value = []
+				appliedOffers.value = []
+				appliedCoupon.value = null
+				rebuildIncrementalCache()
+			}
+
 			// Skip if this is initial render with empty cart
 			if (!oldVals && invoiceItems.value.length === 0) {
 				return
