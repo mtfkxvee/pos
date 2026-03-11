@@ -681,21 +681,48 @@ export function useInvoice() {
 	 * @returns {Array} Items formatted for ERPNext Sales Invoice
 	 */
 	function formatItemsForSubmission(items) {
-		return items.map((item) => ({
-			item_code: item.item_code,
-			item_name: item.item_name,
-			qty: item.quantity || item.qty || 1,
-			rate: computeBackendRate(item),
-			price_list_rate: roundCurrency(item.price_list_rate || item.rate),
-			uom: item.uom,
-			warehouse: item.warehouse,
-			batch_no: item.batch_no,
-			serial_no: item.serial_no,
-			conversion_factor: item.conversion_factor || 1,
-			discount_percentage: roundCurrency(item.discount_percentage || 0),
-			discount_amount: roundCurrency(item.discount_amount || 0),
-			pricing_rules: stringifyPricingRules(item.pricing_rules),
-		}))
+		const formattedItems = []
+
+		for (const item of items) {
+			// Base item
+			formattedItems.push({
+				item_code: item.item_code,
+				item_name: item.item_name,
+				qty: item.quantity || item.qty || 1,
+				rate: computeBackendRate(item),
+				price_list_rate: roundCurrency(item.price_list_rate || item.rate),
+				uom: item.uom,
+				warehouse: item.warehouse,
+				batch_no: item.batch_no,
+				serial_no: item.serial_no,
+				conversion_factor: item.conversion_factor || 1,
+				discount_percentage: roundCurrency(item.discount_percentage || 0),
+				discount_amount: roundCurrency(item.discount_amount || 0),
+				pricing_rules: stringifyPricingRules(item.pricing_rules),
+			})
+
+			// If offline calculation yielded free_qty, explicitly separate it for the backend
+			if (item.free_qty && item.free_qty > 0) {
+				formattedItems.push({
+					item_code: item.item_code,
+					item_name: item.item_name,
+					qty: item.free_qty,
+					rate: 0, // Free items have 0 rate
+					price_list_rate: 0,
+					uom: item.uom,
+					warehouse: item.warehouse,
+					batch_no: item.batch_no,
+					serial_no: item.serial_no,
+					conversion_factor: item.conversion_factor || 1,
+					discount_percentage: 100, // Important for backend validation
+					discount_amount: roundCurrency(computeBackendRate(item) * item.free_qty),
+					is_free_item: 1, // Crucial flag for ERPNext
+					pricing_rules: stringifyPricingRules(item.pricing_rules),
+				})
+			}
+		}
+
+		return formattedItems
 	}
 
 	function addPayment(payment) {
