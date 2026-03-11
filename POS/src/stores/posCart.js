@@ -451,7 +451,15 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * // Result: Cart item gets free_qty = 1 (shown as "2 items + 1 FREE")
 	 */
 	function processFreeItems(freeItems) {
-		// Reset all free quantities
+		// Keep track of existing free items to detect newly added ones
+		const existingFreeItems = invoiceItems.value.filter(item => item.is_free_item)
+		const existingFreeItemCodes = existingFreeItems.map(item => item.item_code)
+		
+		// First, remove any previously added "is_free_item" from the cart
+		// We filter them out completely instead of just resetting
+		invoiceItems.value = invoiceItems.value.filter(item => !item.is_free_item)
+
+		// Reset free_qty for existing normal items
 		invoiceItems.value.forEach((item) => {
 			item.free_qty = 0
 		})
@@ -461,21 +469,63 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
-		// Match free items to cart items and set free_qty
+		let newlyAddedFreeItems = []
+
+		// Match free items to cart items and set free_qty OR add as new item
 		for (const freeItem of freeItems) {
 			const freeQty = Number.parseFloat(freeItem.qty) || 0
 			if (freeQty <= 0) continue
 
-			// Find matching cart item by item_code and uom
+			// Find matching cart item by item_code and uom (that is NOT a free item line)
 			const cartItem = invoiceItems.value.find(
 				(item) =>
+					!item.is_free_item &&
 					item.item_code === freeItem.item_code &&
 					(item.uom || item.stock_uom) === (freeItem.uom || freeItem.stock_uom),
 			)
 
 			if (cartItem) {
-				cartItem.free_qty = freeQty
+				// Same-item BOGO: just increment free_qty badge
+				cartItem.free_qty = (cartItem.free_qty || 0) + freeQty
+			} else {
+				// Different-item BOGO (or item not in cart): add to cart as a free item line
+				const newFreeItem = {
+					...freeItem,
+					is_free_item: true,
+					quantity: freeQty,
+					rate: 0,
+					price_list_rate: freeItem.rate || 0, // Fallback if rate is missing
+					discount_percentage: 100,
+					discount_amount: (freeItem.rate || 0) * freeQty,
+					amount: 0,
+					tax_amount: 0,
+				}
+				
+				// Push to cart
+				invoiceItems.value.push(newFreeItem)
+				
+				// Track if this is a newly added free item to notify user later
+				if (!existingFreeItemCodes.includes(freeItem.item_code)) {
+					newlyAddedFreeItems.push(freeItem)
+				}
 			}
+		}
+		
+		// Ensure cache is rebuilt to reflect new free items
+		rebuildIncrementalCache()
+		
+		// Notify user about new free items
+		if (newlyAddedFreeItems.length > 0) {
+			const { useUIStore } = require("./uiStore")
+			const uiStore = useUIStore()
+			
+			const itemNames = newlyAddedFreeItems.map(item => item.item_name || item.item_code).join(", ")
+			uiStore.showToast({
+				type: "success",
+				title: "Free Item Added!",
+				message: `Added ${itemNames} to your cart as a free gift.`,
+				duration: 3000,
+			})
 		}
 	}
 

@@ -665,10 +665,9 @@
 				<div
 					v-for="(item, index) in items"
 					:key="index"
-					@click="openEditDialog(item)"
-					class="bg-white border border-gray-200 rounded-md p-1.5 sm:p-2 hover:border-blue-300 hover:shadow-md transition-all duration-200 active:scale-[0.99] cursor-pointer group"
+					@click="!item.is_free_item && openEditDialog(item)" :class="['bg-white border rounded-md p-1.5 sm:p-2 transition-all duration-200 active:scale-[0.99] group', item.is_free_item ? 'border-green-300 bg-green-50/30 cursor-default relative overflow-hidden' : 'border-gray-200 hover:border-blue-300 hover:shadow-md cursor-pointer']"
 				>
-					<div class="flex gap-1.5 sm:gap-2">
+					<div v-if="item.is_free_item" class="absolute top-0 start-0 w-1 h-full bg-green-500"></div><div class="flex gap-1.5 sm:gap-2 relative z-10">
 						<!-- Item Image Thumbnail -->
 						<div
 							class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200"
@@ -730,7 +729,7 @@
 									</span>
 									<!-- Discount Badge -->
 									<div
-										v-if="item.discount_amount && item.discount_amount > 0"
+										v-if="item.discount_amount && item.discount_amount > 0 && !item.is_free_item"
 										class="inline-flex items-center px-1.5 py-0.5 bg-gradient-to-r from-red-50 to-orange-50 text-red-700 rounded-full text-[9px] font-bold border border-red-200 flex-shrink-0"
 									>
 										<svg
@@ -751,9 +750,7 @@
 										}}
 									</div>
 								</div>
-								<button
-									type="button"
-									@click.stop="$emit('remove-item', item.item_code, item.uom)"
+								<button v-if="!item.is_free_item" type="button" @click.stop="$emit('remove-item', item.item_code, item.uom)"
 									class="text-gray-400 hover:text-red-600 active:text-red-700 transition-colors flex-shrink-0 p-0.5 -m-0.5 touch-manipulation active:scale-90"
 									:aria-label="__('Remove {0}', [item.item_name])"
 									:title="__('Remove item')"
@@ -818,15 +815,14 @@
 										<button
 											type="button"
 											@click.stop="decrementQuantity(item)"
-											:disabled="item.is_resolved_barcode"
+											:disabled="item.is_resolved_barcode || item.is_free_item"
 											:class="[
 												'w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center font-bold transition-colors touch-manipulation border-e',
-												item.is_resolved_barcode
-													? 'bg-gray-100 text-gray-400 cursor-not-allowed border-amber-300'
+												item.is_resolved_barcode || item.is_free_item ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-amber-300'
 													: 'bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 border-gray-200'
 											]"
 											:aria-label="__('Decrease quantity')"
-											:title="item.is_resolved_barcode ? __('Quantity locked (barcode item)') : __('Decrease quantity')"
+											:title="item.is_free_item ? __('Quantity locked (free item)') : item.is_resolved_barcode ? __('Quantity locked (barcode item)') : __('Decrease quantity')"
 										>
 											<svg
 												class="w-3 h-3"
@@ -850,28 +846,26 @@
 											@keydown.enter="$event.target.blur()"
 											type="text"
 											inputmode="decimal"
-											:disabled="item.is_resolved_barcode"
+											:disabled="item.is_resolved_barcode || item.is_free_item"
 											:class="[
 												'w-14 sm:w-16 h-6 sm:h-7 text-center border-0 text-xs sm:text-sm font-bold focus:outline-none',
-												item.is_resolved_barcode
-													? 'bg-amber-50 text-amber-700 cursor-not-allowed'
+												item.is_resolved_barcode || item.is_free_item ? 'bg-amber-50 text-amber-700 cursor-not-allowed'
 													: 'bg-white text-gray-900 focus:ring-2 focus:ring-blue-500'
 											]"
 											:aria-label="__('Quantity')"
-											:title="item.is_resolved_barcode ? __('Quantity locked (barcode item)') : ''"
+											:title="item.is_free_item ? __('Quantity locked (free item)') : item.is_resolved_barcode ? __('Quantity locked (barcode item)') : ''"
 										/>
 										<button
 											type="button"
 											@click.stop="incrementQuantity(item)"
-											:disabled="item.is_resolved_barcode"
+											:disabled="item.is_resolved_barcode || item.is_free_item"
 											:class="[
 												'w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center font-bold transition-colors touch-manipulation border-s',
-												item.is_resolved_barcode
-													? 'bg-gray-100 text-gray-400 cursor-not-allowed border-amber-300'
+												item.is_resolved_barcode || item.is_free_item ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-amber-300'
 													: 'bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 border-gray-200'
 											]"
 											:aria-label="__('Increase quantity')"
-											:title="item.is_resolved_barcode ? __('Quantity locked (barcode item)') : __('Increase quantity')"
+											:title="item.is_free_item ? __('Quantity locked (free item)') : item.is_resolved_barcode ? __('Quantity locked (barcode item)') : __('Increase quantity')"
 										>
 											<svg
 												class="w-3 h-3"
@@ -895,19 +889,17 @@
 											type="button"
 											@click="toggleUomDropdown(item.item_code, item.uom)"
 											:disabled="
-												item.is_resolved_barcode || !item.item_uoms || item.item_uoms.length === 0
+												item.is_resolved_barcode || item.is_free_item || !item.item_uoms || item.item_uoms.length === 0
 											"
 											:class="[
 												'h-6 sm:h-7 text-[10px] sm:text-xs font-bold rounded ps-2 pe-5 transition-all touch-manipulation flex items-center justify-center min-w-[45px]',
-												item.is_resolved_barcode
-													? 'bg-amber-100 text-amber-700 border border-amber-300 cursor-not-allowed'
+												item.is_resolved_barcode || item.is_free_item ? 'bg-amber-100 text-amber-700 border border-amber-300 cursor-not-allowed'
 													: item.item_uoms && item.item_uoms.length > 0
 														? 'bg-blue-500 text-white border border-blue-400 hover:bg-blue-600 active:scale-95 cursor-pointer'
 														: 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed opacity-60',
 											]"
 											:title="
-												item.is_resolved_barcode
-													? __('UOM locked (barcode item)')
+												item.is_free_item ? __('UOM locked (free item)') : item.is_resolved_barcode ? __('UOM locked (barcode item)')
 													: item.item_uoms && item.item_uoms.length > 0
 														? __('Click to change unit')
 														: __('Only one unit available')
@@ -988,15 +980,7 @@
 
 								<!-- Item Total -->
 								<div class="text-end flex-shrink-0">
-									<div
-										class="text-xs sm:text-sm font-bold text-blue-600 leading-none"
-									>
-										{{
-											formatCurrency(
-												item.amount || item.rate * item.quantity
-											)
-										}}
-									</div>
+									<div v-if="!item.is_free_item" class="text-xs sm:text-sm font-bold text-blue-600 leading-none">{{ formatCurrency(item.amount || item.rate * item.quantity) }}</div><div v-else class="text-xs sm:text-sm font-bold text-green-600 leading-none mt-1">{{ __("FREE") }}</div>
 								</div>
 							</div>
 						</div>
@@ -1912,3 +1896,5 @@ onBeforeUnmount(() => {
 })
 </script>
 ```
+
+
