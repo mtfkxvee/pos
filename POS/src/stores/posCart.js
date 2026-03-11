@@ -363,7 +363,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 	function buildOfferEvaluationPayload(currentProfile) {
 		// Use toRaw() to ensure we get current, non-reactive values (prevents stale cached quantities)
-		const rawItems = toRaw(invoiceItems.value)
+		const rawItems = toRaw(invoiceItems.value).filter(i => !i.is_free_item)
 
 		return {
 			doctype: "Sales Invoice",
@@ -1307,7 +1307,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * Builds cart snapshot for offer validation
 	 */
 	function buildCartSnapshot() {
-		const items = invoiceItems.value
+		const items = invoiceItems.value.filter(i => !i.is_free_item)
 		const totalQty = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
 		const itemCodes = items.map((item) => item.item_code)
 		const itemGroups = items.map((item) => item.item_group).filter(Boolean)
@@ -1560,22 +1560,24 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	function syncOfferSnapshot() {
 		// Only sync if values are initialized
 		if (subtotal.value !== undefined && invoiceItems.value) {
+			const activeItems = invoiceItems.value.filter(i => !i.is_free_item)
+			
 			// Create hash for item codes and quantities to detect actual changes
-			const currentHash = invoiceItems.value
+			const currentHash = activeItems
 				.map((item) => `${item.item_code}:${item.quantity}`)
 				.join(",")
 
 			// Only recalculate expensive operations if items actually changed
 			if (currentHash !== previousItemCodesHash) {
-				cachedItemCodes = invoiceItems.value.map((item) => item.item_code)
+				cachedItemCodes = activeItems.map((item) => item.item_code)
 				cachedItemGroups = [
 					...new Set(
-						invoiceItems.value.map((item) => item.item_group).filter(Boolean),
+						activeItems.map((item) => item.item_group).filter(Boolean),
 					),
 				]
 				cachedBrands = [
 					...new Set(
-						invoiceItems.value.map((item) => item.brand).filter(Boolean),
+						activeItems.map((item) => item.brand).filter(Boolean),
 					),
 				]
 
@@ -1584,7 +1586,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				cachedItemGroupQuantities = {}
 				cachedBrandQuantities = {}
 
-				for (const item of invoiceItems.value) {
+				for (const item of activeItems) {
 					const qty = item.quantity || 0
 
 					if (item.item_code) {
@@ -1605,7 +1607,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			}
 
 			// Calculate total quantity (sum of all item quantities, not line count)
-			const totalQty = invoiceItems.value.reduce((sum, item) => {
+			const totalQty = activeItems.reduce((sum, item) => {
 				return sum + (item.quantity || 0)
 			}, 0)
 
