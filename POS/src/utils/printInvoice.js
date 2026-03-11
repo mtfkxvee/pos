@@ -83,14 +83,13 @@ export async function printInvoice(
  */
 export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	const is58mm = printFormat && printFormat.includes("58")
-	const widthCSS = is58mm ? "57mm" : "80mm"
+	const widthCSS = is58mm ? "48mm" : "72mm" // 48mm safe area for 58mm paper
 	const windowWidth = is58mm ? "220" : "350"
-
-	// Determine Date and Time intelligently (Extract from OFFLINE ID if present)
+    
 	let docDateStr = new Date(
 		invoiceData.posting_date || Date.now(),
-	).toLocaleDateString()
-	let docTimeStr = invoiceData.posting_time || new Date().toLocaleTimeString()
+	).toLocaleDateString("id-ID", {day: '2-digit', month: '2-digit', year: '2-digit'})
+	let docTimeStr = invoiceData.posting_time ? invoiceData.posting_time.substring(0, 5) : new Date().toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'})
 
 	if (invoiceData.name && invoiceData.name.startsWith("OFFLINE-")) {
 		const parts = invoiceData.name.split("-")
@@ -98,18 +97,16 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			const timestamp = Number.parseInt(parts[1], 10)
 			if (!isNaN(timestamp)) {
 				const dateObj = new Date(timestamp)
-				docDateStr = dateObj.toLocaleDateString()
-				docTimeStr = dateObj.toLocaleTimeString()
+				docDateStr = dateObj.toLocaleDateString("id-ID", {day: '2-digit', month: '2-digit', year: '2-digit'})
+				docTimeStr = dateObj.toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'})
 			}
 		}
 	}
 
-	// Open print window with receipt size dimensions
-	const printWindow = window.open(
-		"",
-		"_blank",
-		`width=${windowWidth},height=600`,
-	)
+	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
+
+	// Helper to format number without currency symbol for compact items
+    const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0)
 
 	const printContent = `
 		<!DOCTYPE html>
@@ -119,64 +116,45 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<title>${__("Invoice - {0}", [invoiceData.name])}</title>
 			<style>
 				@page {
-					size: ${widthCSS} auto;
+					size: ${is58mm ? '58mm' : '80mm'} auto;
 					margin: 0mm;
 				}
-				.print-format table, .print-format tr,
-				.print-format td, .print-format div, .print-format p {
-					line-height: 1.4;
-					vertical-align: middle;
-				}
 				body, .print-format {
-					font-family: 'DejaVu Sans', 'Arial', sans-serif;
+					font-family: 'Courier New', Courier, monospace;
 					width: ${widthCSS};
 					max-width: ${widthCSS};
 					margin: 0 auto;
-					padding: 5px 9px;
-					font-size: 9px;
+					padding: 0mm;
+					font-size: ${is58mm ? '10px' : '11px'};
 					box-sizing: border-box;
 					color: black;
 				}
+				.print-format table, .print-format tr,
+				.print-format td, .print-format div, .print-format p {
+					line-height: 1.2;
+					vertical-align: top;
+				}
 				.text-center { text-align: center; }
 				.text-right { text-align: right; }
+				.text-left { text-align: left; }
 				p { margin: 0 0 4px 0; }
 				hr {
 					border: none;
-					border-top: 1px dashed #333;
+					border-top: 1px dashed #000;
 					margin: 6px 0;
 				}
 				table {
 					width: 100%;
 					border-collapse: collapse;
-					font-size: 9px;
+					font-size: ${is58mm ? '10px' : '11px'};
+                    table-layout: fixed;
 				}
-				table.table-condensed td,
-				table.table-condensed th {
-					padding: 2px 1px;
-					vertical-align: top;
+				table td {
+					padding: 1px 0px;
 				}
-				table.table-condensed thead th {
-					border-bottom: 1px solid #333;
-					font-weight: bold;
-					font-size: 8.5px;
-				}
-				table.table-condensed tbody tr:not(:last-child) td {
-					border-bottom: 1px dotted #ccc;
-				}
-				table.no-border td {
-					border: none !important;
-				}
-				.grand-total-row td {
-					font-size: 11px;
-					font-weight: bold;
-					border-top: 2px solid #000;
-					padding-top: 4px;
-				}
-				.paid-row td { font-weight: bold; }
-				.change-row td { font-weight: bold; color: #28a745; }
 				
 				@media print {
-					body, .print-format { padding: 2mm 3mm; }
+					body, .print-format { padding: 3mm 0mm; }
 					.no-print { display: none; }
 				}
 			</style>
@@ -184,30 +162,24 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 		<body class="print-format">
 			<!-- HEADER -->
 			<p class="text-center" style="margin-bottom: 6px;">
-				<b style="font-size: 13px;">X-SHA</b><br>
-				<span style="font-size: 9px; letter-spacing: 1px;">INVOICE</span>
+				<b style="font-size: ${is58mm ? '12px' : '14px'};">${invoiceData.company || "X-SHA"}</b><br>
 			</p>
 
 			<!-- INFO -->
-			<p style="font-size: 8.5px; line-height: 1.7;">
-				<b>No &nbsp;:</b> ${invoiceData.name}<br>
-				<b>Kasir:</b> ${invoiceData.owner || "Administrator"}<br>
-				<b>Plg &nbsp;:</b> ${invoiceData.customer_name || invoiceData.customer || "Guest"}<br>
-				<b>Tgl &nbsp;:</b> ${docDateStr}<br>
-				<b>Jam &nbsp;:</b> ${docTimeStr}<br>
-			</p>
+			<table style="margin-bottom: 4px;">
+				<tr>
+                    <td colspan="2" class="text-left">${invoiceData.name}</td>
+                </tr>
+                <tr>
+                    <td class="text-left" style="width: 50%;">${docDateStr + " " + docTimeStr}</td>
+					<td class="text-right" style="width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${invoiceData.owner || "Kasir"}/${invoiceData.customer_name || invoiceData.customer || "Guest"}</td>
+				</tr>
+			</table>
 
 			<hr>
 
 			<!-- ITEMS TABLE -->
-			<table class="table table-condensed">
-				<thead>
-					<tr>
-						<th width="48%">${__("Item")}</th>
-						<th width="20%" class="text-right">${__("Qty")}</th>
-						<th width="32%" class="text-right">${__("Amount")}</th>
-					</tr>
-				</thead>
+			<table>
 				<tbody>
 					${invoiceData.items
 						.map((item) => {
@@ -216,42 +188,42 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 							const subtotal = qty * displayRate
 							const isFree = item.is_free_item
 
+                            const itemName = item.item_name || item.item_code
+                            let itemDisplayName = itemName + (isFree ? " (F)" : "")
+
 							return `
 						<tr>
-							<td>
-								${item.item_code} ${isFree ? __("(FREE)") : ""}
-								${item.item_name && item.item_name !== item.item_code ? `<br><span style="font-size:8px; color:#555;">${item.item_name}</span>` : ""}
-								${item.serial_no ? `<br><span style="font-size:7.5px;"><b>S/N:</b> ${item.serial_no.replace(/\n/g, ", ")}</span>` : ""}
+							<td class="text-left" style="width: 44%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 2px;">
+								${itemDisplayName}
 							</td>
-							<td class="text-right">
-								${qty}<br>
-								<span style="font-size:8px; color:#555;">@${formatCurrency(displayRate, "IDR", "id-ID")}</span>
-							</td>
-							<td class="text-right">${formatCurrency(subtotal, "IDR", "id-ID")}</td>
+							<td class="text-right" style="width: 8%;">${qty}</td>
+							<td class="text-right" style="width: 23%; padding-right: 2px;">${formatNumber(displayRate)}</td>
+							<td class="text-right" style="width: 25%;">${formatNumber(subtotal)}</td>
 						</tr>
+						${item.serial_no ? `<tr><td colspan="4" style="font-size: 8.5px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</td></tr>` : ""}
 						`
 						})
 						.join("")}
 				</tbody>
 			</table>
 
-			<hr>
+			<hr style="margin: 4px 0;">
 
 			<!-- TOTALS TABLE -->
-			<table class="table table-condensed no-border">
+			<table>
 				<tbody>
 					<!-- Subtotal / Total -->
 					<tr>
+                        <td style="width:30%"></td>
 						${
-							invoiceData.total_taxes_and_charges &&
-							invoiceData.total_taxes_and_charges > 0
+							invoiceData.total_taxes_and_charges && invoiceData.total_taxes_and_charges > 0
 								? `
-						<td class="text-right" style="width:62%;">${__("Total Excl. Tax")}</td>
-						<td class="text-right">${formatCurrency((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0), "IDR", "id-ID")}</td>
+						<td class="text-right" style="width:45%;">TOTAL SBM PPN:</td>
+						<td class="text-right" style="width:25%;">${formatNumber((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0))}</td>
 						`
 								: `
-						<td class="text-right" style="width:62%;">${__("Subtotal")}</td>
-						<td class="text-right">${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</td>
+						<td class="text-right" style="width:45%;">HARGA JUAL :</td>
+						<td class="text-right" style="width:25%;">${formatNumber(invoiceData.grand_total)}</td>
 						`
 						}
 					</tr>
@@ -261,10 +233,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 						.map(
 							(row) => `
 					<tr>
-						<td class="text-right" style="width:62%; color:#555; font-size:8.5px;">
-							${row.description.includes("%") ? row.description : `${row.description}@${row.rate}%`}
-						</td>
-						<td class="text-right" style="color:#555; font-size:8.5px;">${formatCurrency(row.tax_amount, "IDR", "id-ID")}</td>
+                        <td></td>
+						<td class="text-right">${row.description.includes("%") ? row.description : row.description}:</td>
+						<td class="text-right">${formatNumber(row.tax_amount)}</td>
 					</tr>
 					`,
 						)
@@ -275,17 +246,21 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 						invoiceData.discount_amount
 							? `
 					<tr>
-						<td class="text-right" style="width:62%; color:#28a745;">${__("Discount")} ${invoiceData.additional_discount_percentage ? `(${Number(invoiceData.additional_discount_percentage).toFixed(1)}%)` : ""}</td>
-						<td class="text-right" style="color:#28a745;">-${formatCurrency(Math.abs(invoiceData.discount_amount), "IDR", "id-ID")}</td>
+                        <td></td>
+						<td class="text-right">DISCOUNT :</td>
+						<td class="text-right">(${formatNumber(Math.abs(invoiceData.discount_amount))})</td>
 					</tr>
 					`
 							: ""
 					}
+					
+					<tr><td colspan="3"><hr style="margin: 2px 0;"></td></tr>
 
 					<!-- Grand Total -->
-					<tr class="grand-total-row">
-						<td class="text-right" style="width:62%;"><b>${__("Grand Total")}</b></td>
-						<td class="text-right"><b>${formatCurrency(invoiceData.grand_total, "IDR", "id-ID")}</b></td>
+					<tr>
+                        <td></td>
+						<td class="text-right"><b>TOTAL :</b></td>
+						<td class="text-right"><b>${formatNumber(invoiceData.grand_total)}</b></td>
 					</tr>
 
 					<!-- Payment Methods -->
@@ -293,26 +268,22 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 						.map(
 							(row) => `
 					<tr>
-						<td class="text-right" style="width:62%; font-size:8.5px;">${row.mode_of_payment}:</td>
-						<td class="text-right" style="font-size:8.5px;">${formatCurrency(row.amount, "IDR", "id-ID")}</td>
+                        <td></td>
+						<td class="text-right">${row.mode_of_payment.toUpperCase()} :</td>
+						<td class="text-right">${formatNumber(row.amount)}</td>
 					</tr>
 					`,
 						)
 						.join("")}
 
-					<!-- Paid Amount -->
-					<tr class="paid-row" style="border-top:1px solid #ccc;">
-						<td class="text-right" style="width:62%; padding-top:4px;"><b>${__("Paid Amount")}</b></td>
-						<td class="text-right" style="padding-top:4px;"><b>${formatCurrency(invoiceData.paid_amount || 0, "IDR", "id-ID")}</b></td>
-					</tr>
-
 					<!-- Change Amount -->
 					${
 						invoiceData.change_amount && invoiceData.change_amount > 0
 							? `
-					<tr class="change-row">
-						<td class="text-right" style="width:62%;"><b>${__("Change Amount")}</b></td>
-						<td class="text-right"><b>${formatCurrency(invoiceData.change_amount, "IDR", "id-ID")}</b></td>
+					<tr>
+                        <td></td>
+						<td class="text-right"><b>KEMBALI :</b></td>
+						<td class="text-right"><b>${formatNumber(invoiceData.change_amount)}</b></td>
 					</tr>
 					`
 							: ""
@@ -323,12 +294,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 						invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
 							? `
 					<tr>
-						<td class="text-right" style="width:62%; color:#dc3545; font-weight:bold; background:#fff3cd; padding:3px 4px;">
-							${__("Balance Due")}
-						</td>
-						<td class="text-right" style="color:#dc3545; font-weight:bold; background:#fff3cd; padding:3px 4px;">
-							${formatCurrency(invoiceData.outstanding_amount, "IDR", "id-ID")}
-						</td>
+                        <td></td>
+						<td class="text-right">KURANG BAYAR :</td>
+						<td class="text-right">${formatNumber(invoiceData.outstanding_amount)}</td>
 					</tr>
 					`
 							: ""
@@ -339,8 +307,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<hr>
 
 			<!-- TERMS & FOOTER -->
-			<p class="text-center" style="font-size:9px; margin-top:5px;">${__("Thank you, please visit again.")}</p>
-
+			<p class="text-center" style="margin-top:5px; margin-bottom: 2px;">Terima kasih atas kunjungan Anda.</p>
+			<p class="text-center" style="font-size: 8px;">Simpan struk ini sebagai bukti pembayaran.</p>
+			
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
 				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
 					${__("Print Receipt")}
