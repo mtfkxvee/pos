@@ -125,7 +125,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 					max-width: ${widthCSS};
 					margin: 0 auto;
 					padding: 0mm;
-					font-size: ${is58mm ? '10px' : '11px'};
+					font-size: ${is58mm ? '8.5px' : '11px'};
 					box-sizing: border-box;
 					color: black;
 				}
@@ -146,7 +146,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 				table {
 					width: 100%;
 					border-collapse: collapse;
-					font-size: ${is58mm ? '10px' : '11px'};
+					font-size: ${is58mm ? '8.5px' : '11px'};
                     table-layout: fixed;
 				}
 				table td {
@@ -198,9 +198,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 							</td>
 							<td class="text-right" style="width: 8%;">${qty}</td>
 							<td class="text-right" style="width: 23%; padding-right: 2px;">${formatNumber(displayRate)}</td>
-							<td class="text-right" style="width: 25%;">${formatNumber(subtotal)}</td>
+							<td class="text-right" style="width: 25%; font-size: ${is58mm ? '9px' : '11px'};">${formatNumber(subtotal)}</td>
 						</tr>
-						${item.serial_no ? `<tr><td colspan="4" style="font-size: 8.5px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</td></tr>` : ""}
+						${item.serial_no ? `<tr><td colspan="4" style="font-size: ${is58mm ? '7.5px' : '8.5px'};">S/N: ${item.serial_no.replace(/\n/g, ", ")}</td></tr>` : ""}
 						`
 						})
 						.join("")}
