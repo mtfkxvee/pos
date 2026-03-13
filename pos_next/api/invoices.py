@@ -2572,9 +2572,20 @@ def apply_offers(invoice_data, selected_offers=None):
                 free_item_doc.warehouse = profile.warehouse  # Always use POS profile warehouse
                 free_items.append(free_item_doc)
 
+        # Deduplicate free items: ERPNext may return the same free item once per
+        # evaluated cart item that matches the rule. Keep only the first occurrence
+        # per (item_code, pricing_rules) combination.
+        seen_free = set()
+        deduped_free_items = []
+        for fi in free_items:
+            key = (fi.get("item_code"), fi.get("pricing_rules"))
+            if key not in seen_free:
+                seen_free.add(key)
+                deduped_free_items.append(fi)
+
         return {
             "items": [dict(item) for item in prepared_items],
-            "free_items": [dict(item) for item in free_items],
+            "free_items": [dict(item) for item in deduped_free_items],
             "applied_pricing_rules": sorted(applied_rules),
         }
     except Exception as e:
