@@ -2267,6 +2267,10 @@ def apply_offers(invoice_data, selected_offers=None):
             if not item_code or qty <= 0:
                 continue
 
+            # Skip free items — they must not re-trigger pricing rules
+            if item.get("is_free_item"):
+                continue
+
             # Use batch-fetched item details
             cached = item_details_map.get(item_code)
 
