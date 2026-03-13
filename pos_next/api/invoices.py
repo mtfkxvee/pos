@@ -2569,6 +2569,7 @@ def apply_offers(invoice_data, selected_offers=None):
                 free_item_doc.applied_promotional_scheme = rule_map[
                     rule_name
                 ].promotional_scheme
+                free_item_doc.warehouse = profile.warehouse  # Always use POS profile warehouse
                 free_items.append(free_item_doc)
 
         return {
