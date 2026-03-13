@@ -1008,7 +1008,7 @@ def submit_invoice(invoice=None, data=None):
                 try:
                     frappe.rename_doc(
                         doctype, auto_name, custom_offline_name,
-                        force=True, ignore_permissions=True
+                        force=True
                     )
                     invoice_name = custom_offline_name
                 except Exception as rename_err:
