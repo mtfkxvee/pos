@@ -433,13 +433,9 @@ def update_invoice(data):
             invoice_doc = frappe.get_doc(doctype, data.get("name"))
             invoice_doc.update(data)
         else:
-            # Create new doc; apply custom name if provided (not the old OFFLINE- temp format)
-            custom_name = data.get("name")
+            # Strip name so ERPNext auto-generates one; rename after save if needed
             data_no_name = {k: v for k, v in data.items() if k != "name"}
             invoice_doc = frappe.get_doc(data_no_name)
-            if custom_name and not custom_name.startswith("OFFLINE-"):
-                invoice_doc.name = custom_name
-                invoice_doc.flags.ignore_autoname = True
 
         pos_profile_doc = None
         if pos_profile:
@@ -991,15 +987,39 @@ def submit_invoice(invoice=None, data=None):
 
     try:
         invoice_name = invoice.get("name")
+        # Custom offline name (e.g. XPYREG130309430001) — not an OFFLINE- temp name
+        custom_offline_name = (
+            invoice_name
+            if invoice_name and not invoice_name.startswith("OFFLINE-")
+            else None
+        )
 
         # Get or create invoice
         if not invoice_name or not frappe.db.exists(doctype, invoice_name):
             created = update_invoice(json.dumps(invoice))
             if not created or not isinstance(created, dict):
                 frappe.throw(_("Failed to create invoice draft"))
-            invoice_name = created.get("name")
-            if not invoice_name:
+            auto_name = created.get("name")
+            if not auto_name:
                 frappe.throw(_("Failed to get invoice name from draft"))
+
+            # Rename auto-generated draft to our custom offline name
+            if custom_offline_name and auto_name != custom_offline_name:
+                try:
+                    frappe.rename_doc(
+                        doctype, auto_name, custom_offline_name,
+                        force=True, ignore_permissions=True
+                    )
+                    invoice_name = custom_offline_name
+                except Exception as rename_err:
+                    frappe.log_error(
+                        f"Failed to rename {auto_name} to {custom_offline_name}: {rename_err}",
+                        "Offline Invoice Rename"
+                    )
+                    invoice_name = auto_name
+            else:
+                invoice_name = auto_name
+
             invoice_doc = frappe.get_doc(doctype, invoice_name)
         else:
             invoice_doc = frappe.get_doc(doctype, invoice_name)
