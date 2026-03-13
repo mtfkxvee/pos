@@ -428,11 +428,18 @@ def update_invoice(data):
         standardize_pricing_rules(data.get("items"))
 
         # Create or update invoice
-        if data.get("name"):
+        if data.get("name") and frappe.db.exists(doctype, data.get("name")):
+            # Fetch and update existing draft
             invoice_doc = frappe.get_doc(doctype, data.get("name"))
             invoice_doc.update(data)
         else:
-            invoice_doc = frappe.get_doc(data)
+            # Create new doc; apply custom name if provided (not the old OFFLINE- temp format)
+            custom_name = data.get("name")
+            data_no_name = {k: v for k, v in data.items() if k != "name"}
+            invoice_doc = frappe.get_doc(data_no_name)
+            if custom_name and not custom_name.startswith("OFFLINE-"):
+                invoice_doc.name = custom_name
+                invoice_doc.flags.ignore_autoname = True
 
         pos_profile_doc = None
         if pos_profile:

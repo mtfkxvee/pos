@@ -1041,6 +1041,7 @@ import { useUserData } from "@/data/user";
 import { parseError } from "@/utils/errorHandler";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sync";
+import { generateOfflineInvoiceId } from "@/utils/offline/invoiceId";
 import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
 import { usePrintFormat } from "@/composables/usePrintFormat";
 import PrintFormatDialog from "@/components/pos/PrintFormatDialog.vue";
@@ -2040,7 +2041,8 @@ async function handlePaymentCompleted(paymentData) {
 			const preparedItems = cartStore.formatItemsForSubmission(cartStore.invoiceItems);
 
 			const now = new Date();
-			
+			const offlineName = generateOfflineInvoiceId(shiftStore.profileName, userName.value, now);
+
 			const invoiceData = {
 				pos_profile: cartStore.posProfile,
 				posa_pos_opening_shift: cartStore.posOpeningShift,
@@ -2054,7 +2056,7 @@ async function handlePaymentCompleted(paymentData) {
 				discount_amount: cartStore.additionalDiscount || 0,
 				apply_discount_on: "Grand Total", // Tell ERPNext to apply this to grand total
 				coupon_code: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
-					? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name) 
+					? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name)
 					: undefined,
 				write_off_amount: paymentData.write_off_amount || 0,
 				redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
@@ -2064,25 +2066,25 @@ async function handlePaymentCompleted(paymentData) {
 				loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
 				loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 				remarks: paymentData.remarks || null,
-				
+
 				// Keep real posting time when synced
 				set_posting_time: 1,
 				posting_date: now.toISOString().split("T")[0],
 				posting_time: now.toTimeString().split(" ")[0],
+
+				// Custom offline invoice ID — persists to ERPNext on sync
+				name: offlineName,
 			};
 
 			await offlineStore.saveInvoiceOffline(invoiceData);
 			uiStore.showPaymentDialog = false;
 
 			// Build print data BEFORE clearing cart (cart data will be gone after clear)
-			const offlineName = `OFFLINE-${Date.now()}`;
 			const offlinePrintData = {
 				...invoiceData,
-				name: offlineName,
 				company: shiftStore.company || invoiceData.company || "POS",
 				customer_name: cartStore.customer?.customer_name || cartStore.customer?.name || cartStore.customer || invoiceData.customer,
 				owner: userName.value || "Administrator",
-				posting_date: new Date().toISOString().split("T")[0],
 				paid_amount: paymentData.paid_amount || 0,
 				change_amount: paymentData.change_amount || 0,
 				outstanding_amount: paymentData.outstanding_amount || 0,
