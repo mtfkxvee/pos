@@ -85,10 +85,16 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	const is58mm = printFormat && printFormat.includes("58")
 	const windowWidth = is58mm ? "220" : "350"
 
-	let docDateStr = new Date(
-		invoiceData.posting_date || Date.now(),
-	).toLocaleDateString("id-ID", {day: '2-digit', month: '2-digit', year: '2-digit'})
-	let docTimeStr = invoiceData.posting_time ? invoiceData.posting_time.substring(0, 5) : new Date().toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'})
+	const fmtDate = (d) => {
+		const dd = String(d.getDate()).padStart(2, '0')
+		const mm = String(d.getMonth() + 1).padStart(2, '0')
+		const yyyy = d.getFullYear()
+		return `${dd}-${mm}-${yyyy}`
+	}
+	const fmtTime = (d) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+
+	let docDateStr = fmtDate(new Date(invoiceData.posting_date || Date.now()))
+	let docTimeStr = invoiceData.posting_time ? invoiceData.posting_time.substring(0, 5) : fmtTime(new Date())
 
 	if (invoiceData.name && invoiceData.name.startsWith("OFFLINE-")) {
 		const parts = invoiceData.name.split("-")
@@ -96,8 +102,8 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			const timestamp = Number.parseInt(parts[1], 10)
 			if (!isNaN(timestamp)) {
 				const dateObj = new Date(timestamp)
-				docDateStr = dateObj.toLocaleDateString("id-ID", {day: '2-digit', month: '2-digit', year: '2-digit'})
-				docTimeStr = dateObj.toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'})
+				docDateStr = fmtDate(dateObj)
+				docTimeStr = fmtTime(dateObj)
 			}
 		}
 	}
@@ -155,12 +161,13 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 </head>
 <body class="print-format">
 
-<p class="tc" style="font-size:11px; letter-spacing:1px;">${invoiceData.company || ""}</p>
+<p class="tc" style="font-size:9px; letter-spacing:1px;">${invoiceData.company || ""}</p>
 <p class="tc" style="font-size:9px; font-weight:normal;">${invoiceData.select_print_heading || "Invoice"}</p>
 <hr>
-<p>No : ${invoiceData.name}</p>
-<p>Ksr: ${(invoiceData.owner || "Kasir").substring(0, 8)} Tgl: ${docDateStr}</p>
-<p>Pel: ${trimmedCustomer}</p>
+<p>No  : ${invoiceData.name}</p>
+<p>Ksr : ${invoiceData.owner || "Kasir"}</p>
+<p>Tgl : ${docDateStr} ${docTimeStr}</p>
+<p>Pel : ${trimmedCustomer}</p>
 <hr>
 
 ${(invoiceData.items || []).map((item) => {
