@@ -155,7 +155,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 </head>
 <body class="print-format">
 
-<p class="tc" style="font-size:13px; letter-spacing:1px;">${invoiceData.company || ""}</p>
+<p class="tc" style="font-size:11px; letter-spacing:1px;">${invoiceData.company || ""}</p>
 <p class="tc" style="font-size:9px; font-weight:normal;">${invoiceData.select_print_heading || "Invoice"}</p>
 <hr>
 <p>No : ${invoiceData.name}</p>
