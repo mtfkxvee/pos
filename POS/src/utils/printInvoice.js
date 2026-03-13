@@ -83,9 +83,8 @@ export async function printInvoice(
  */
 export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	const is58mm = printFormat && printFormat.includes("58")
-	const widthCSS = is58mm ? "48mm" : "72mm" // 48mm safe area for 58mm paper
 	const windowWidth = is58mm ? "220" : "350"
-    
+
 	let docDateStr = new Date(
 		invoiceData.posting_date || Date.now(),
 	).toLocaleDateString("id-ID", {day: '2-digit', month: '2-digit', year: '2-digit'})
@@ -105,10 +104,117 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 
 	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
 
-	// Helper to format number without currency symbol for compact items
-    const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0)
+	let printContent
 
-	const printContent = `
+	if (is58mm) {
+		// 58mm thermal format — matches Jinja print template exactly
+		const rp = (val) => {
+			const v = Math.floor(val || 0)
+			if (v >= 1000000) return `Rp${Math.floor(v/1000000)}.${String(Math.floor((v%1000000)/1000)).padStart(3,'0')}.${String(v%1000).padStart(3,'0')}`
+			if (v >= 1000) return `Rp${Math.floor(v/1000)}.${String(v%1000).padStart(3,'0')}`
+			return `Rp${v}`
+		}
+		const num = (val) => {
+			const v = Math.floor(val || 0)
+			if (v >= 1000000) return `${Math.floor(v/1000000)}.${String(Math.floor((v%1000000)/1000)).padStart(3,'0')}.${String(v%1000).padStart(3,'0')}`
+			if (v >= 1000) return `${Math.floor(v/1000)}.${String(v%1000).padStart(3,'0')}`
+			return `${v}`
+		}
+
+		const showInclusiveTax = invoiceData.flags?.show_inclusive_tax_in_print || invoiceData.show_inclusive_tax_in_print
+		const paidAmount = invoiceData.paid_amount || (invoiceData.payments || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+		const rawCustomer = invoiceData.customer_name || invoiceData.customer || "Guest"
+		const trimmedCustomer = rawCustomer.split(' XSA')[0].split(' XPY')[0].split(' XS')[0].split(' - ')[0]
+
+		printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${__("Invoice - {0}", [invoiceData.name])}</title>
+<style>
+	@page { size: 58mm auto; margin: 0; }
+	* { box-sizing: border-box; }
+	body, .print-format {
+		font-family: 'Courier New', 'Courier', monospace;
+		width: 58mm;
+		max-width: 58mm;
+		margin: 0;
+		padding: 2px 20px;
+		font-size: 12px;
+		line-height: 1.4;
+		background: #fff;
+		font-weight: bold;
+	}
+	p { margin: 0; padding: 0; font-weight: bold; }
+	hr { border: none; border-top: 1px dashed #333; margin: 2px 0; }
+	.tc { text-align: center; }
+	.rgt { text-align: right; }
+	@media print { .no-print { display: none; } }
+</style>
+</head>
+<body class="print-format">
+
+<p class="tc" style="font-size:13px; letter-spacing:1px;">${invoiceData.company || ""}</p>
+<p class="tc" style="font-size:9px; font-weight:normal;">${invoiceData.select_print_heading || "Invoice"}</p>
+<hr>
+<p>No : ${invoiceData.name}</p>
+<p>Ksr: ${(invoiceData.owner || "Kasir").substring(0, 8)} Tgl: ${docDateStr}</p>
+<p>Pel: ${trimmedCustomer}</p>
+<hr>
+
+${(invoiceData.items || []).map((item) => {
+	const qty = item.qty !== undefined ? item.qty : (item.quantity || 0)
+	const rate = item.rate || item.price_list_rate || 0
+	const amount = item.amount !== undefined ? item.amount : qty * rate
+	const displayQty = qty % 1 === 0 ? Math.floor(qty) : qty
+	const itemName = item.item_name || item.item_code
+	return `<p>${itemName}</p>
+<p>${displayQty} x ${num(rate)}<span style="float:right;">${num(amount)}</span></p>${item.serial_no ? `\n<p style="font-size:7px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</p>` : ""}`
+}).join("\n")}
+
+<hr>
+
+${showInclusiveTax
+	? `<p>Total Excl. Tax<span style="float:right;">${num(invoiceData.net_total || invoiceData.grand_total)}</span></p>`
+	: `<p>Total<span style="float:right;">${num(invoiceData.total || invoiceData.grand_total)}</span></p>`
+}
+
+${(invoiceData.taxes || []).filter(row => !row.included_in_print_rate || showInclusiveTax).map(row => {
+	const desc = row.description || ""
+	const label = desc.includes('%') ? desc : `${desc}@${row.rate}%`
+	return `<p>${label}<span style="float:right;">${num(row.tax_amount)}</span></p>`
+}).join("\n")}
+
+${invoiceData.discount_amount ? `<p>Diskon<span style="float:right;">-${num(invoiceData.discount_amount)}</span></p>` : ""}
+
+<p style="font-size:11px; border-top:2px solid #000; border-bottom:2px solid #000; margin-top:2px; padding:3px 0;">Grand Total<span style="float:right;">${rp(invoiceData.grand_total)}</span></p>
+
+${invoiceData.rounded_total ? `<p>Dibulatkan<span style="float:right;">${rp(invoiceData.rounded_total)}</span></p>` : ""}
+
+${(invoiceData.payments || []).map(row => `<p>${row.mode_of_payment}<span style="float:right;">${num(row.amount)}</span></p>`).join("\n")}
+
+<p style="border-top:1px dashed #333; margin-top:2px; padding-top:2px;">Bayar<span style="float:right;">${num(paidAmount)}</span></p>
+
+${invoiceData.change_amount && invoiceData.change_amount > 0 ? `<p>Kembali<span style="float:right;">${num(invoiceData.change_amount)}</span></p>` : ""}
+
+${invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0 ? `<p>Sisa Tagihan<span style="float:right;">${num(invoiceData.outstanding_amount)}</span></p>` : ""}
+
+<hr>
+${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
+<p class="tc" style="font-size:8px; margin-top:2px;">Terima kasih, sampai jumpa lagi.</p>
+
+<div class="no-print" style="text-align: center; margin-top: 20px;">
+	<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">${__("Print Receipt")}</button>
+	<button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">${__("Close")}</button>
+</div>
+</body>
+</html>`
+	} else {
+		// 80mm thermal format
+		const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0)
+
+		printContent = `
 		<!DOCTYPE html>
 		<html>
 		<head>
@@ -116,16 +222,16 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<title>${__("Invoice - {0}", [invoiceData.name])}</title>
 			<style>
 				@page {
-					size: ${is58mm ? '58mm' : '80mm'} auto;
+					size: 80mm auto;
 					margin: 0mm;
 				}
 				body, .print-format {
 					font-family: 'Courier New', Courier, monospace;
-					width: ${widthCSS};
-					max-width: ${widthCSS};
+					width: 72mm;
+					max-width: 72mm;
 					margin: 0 auto;
 					padding: 0mm;
-					font-size: ${is58mm ? '8.5px' : '11px'};
+					font-size: 11px;
 					box-sizing: border-box;
 					color: black;
 				}
@@ -146,13 +252,13 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 				table {
 					width: 100%;
 					border-collapse: collapse;
-					font-size: ${is58mm ? '8.5px' : '11px'};
+					font-size: 11px;
                     table-layout: fixed;
 				}
 				table td {
 					padding: 1px 0px;
 				}
-				
+
 				@media print {
 					body, .print-format { padding: 3mm 0mm; }
 					.no-print { display: none; }
@@ -162,7 +268,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 		<body class="print-format">
 			<!-- HEADER -->
 			<p class="text-center" style="margin-bottom: 6px;">
-				<b style="font-size: ${is58mm ? '12px' : '14px'};">${invoiceData.company || "X-SHA"}</b><br>
+				<b style="font-size: 14px;">${invoiceData.company || "X-SHA"}</b><br>
 			</p>
 
 			<!-- INFO -->
@@ -181,7 +287,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<!-- ITEMS TABLE -->
 			<table>
 				<tbody>
-					${invoiceData.items
+					${(invoiceData.items || [])
 						.map((item) => {
 							const qty = item.quantity || item.qty
 							const displayRate = item.price_list_rate || item.rate
@@ -198,9 +304,9 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 							</td>
 							<td class="text-right" style="width: 8%;">${qty}</td>
 							<td class="text-right" style="width: 23%; padding-right: 2px;">${formatNumber(displayRate)}</td>
-							<td class="text-right" style="width: 25%; font-size: ${is58mm ? '9px' : '11px'};">${formatNumber(subtotal)}</td>
+							<td class="text-right" style="width: 25%; font-size: 11px;">${formatNumber(subtotal)}</td>
 						</tr>
-						${item.serial_no ? `<tr><td colspan="4" style="font-size: ${is58mm ? '7.5px' : '8.5px'};">S/N: ${item.serial_no.replace(/\n/g, ", ")}</td></tr>` : ""}
+						${item.serial_no ? `<tr><td colspan="4" style="font-size: 8.5px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</td></tr>` : ""}
 						`
 						})
 						.join("")}
@@ -234,7 +340,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 							(row) => `
 					<tr>
                         <td></td>
-						<td class="text-right">${row.description.includes("%") ? row.description : row.description}:</td>
+						<td class="text-right">${row.description}:</td>
 						<td class="text-right">${formatNumber(row.tax_amount)}</td>
 					</tr>
 					`,
@@ -253,7 +359,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 					`
 							: ""
 					}
-					
+
 					<tr><td colspan="3"><hr style="margin: 2px 0;"></td></tr>
 
 					<!-- Grand Total -->
@@ -309,7 +415,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 			<!-- TERMS & FOOTER -->
 			<p class="text-center" style="margin-top:5px; margin-bottom: 2px;">Terima kasih atas kunjungan Anda.</p>
 			<p class="text-center" style="font-size: 8px;">Simpan struk ini sebagai bukti pembayaran.</p>
-			
+
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
 				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
 					${__("Print Receipt")}
@@ -321,6 +427,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 		</body>
 		</html>
 	`
+	}
 
 	printWindow.document.write(printContent)
 	printWindow.document.close()
