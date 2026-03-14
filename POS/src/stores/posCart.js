@@ -471,12 +471,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		// Deduplicate free items by (item_code, uom) — multiple pricing rules may
 		// each return the same free item; show it once (first occurrence wins)
-		const _seenFreeKeys = new Set()
+		const seenFreeKeys = new Set()
 		const dedupedFreeItems = []
 		for (const fi of freeItems) {
 			const key = fi.item_code + ":" + (fi.uom || fi.stock_uom || "")
-			if (!_seenFreeKeys.has(key)) {
-				_seenFreeKeys.add(key)
+			if (!seenFreeKeys.has(key)) {
+				seenFreeKeys.add(key)
 				dedupedFreeItems.push(fi)
 			}
 		}
