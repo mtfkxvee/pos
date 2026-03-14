@@ -1100,7 +1100,7 @@ const { showSuccess, showError, showWarning } = useToast();
 const log = logger.create("POSSale");
 
 // App version
-const appVersion = "1.0.11";
+const appVersion = "1.9.9";
 
 // User data composable
 const { userName, userImage } = useUserData();
@@ -1628,10 +1628,8 @@ watch(
 );
 
 onUnmounted(() => {
-	window.removeEventListener("resize", () => {
-		uiStore.setWindowWidth(window.innerWidth);
-		updateLayoutBounds();
-	});
+	// Note: resize and keyboard listeners are cleaned up in the inner onUnmounted
+	// registered inside onMounted (which has access to the named handler references)
 	stopResize();
 
 	// Stop periodic stock sync on unmount

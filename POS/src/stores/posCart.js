@@ -528,16 +528,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		
 		// Notify user about new free items
 		if (newlyAddedFreeItems.length > 0) {
-			const { useUIStore } = require("./uiStore")
-			const uiStore = useUIStore()
-			
 			const itemNames = newlyAddedFreeItems.map(item => item.item_name || item.item_code).join(", ")
-			uiStore.showToast({
-				type: "success",
-				title: "Free Item Added!",
-				message: `Added ${itemNames} to your cart as a free gift.`,
-				duration: 3000,
-			})
+			showSuccess(__("Free item added: " + itemNames))
 		}
 	}
 

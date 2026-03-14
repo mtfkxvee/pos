@@ -27,6 +27,19 @@ except Exception:  # pragma: no cover - ERPNext not installed in some environmen
 # ==========================================
 
 
+def _get_return_validity_days(pos_profile):
+    """Get return_validity_days from POS Settings for a given POS Profile."""
+    if not pos_profile:
+        return 0
+    return cint(
+        frappe.db.get_value(
+            "POS Settings",
+            {"pos_profile": pos_profile},
+            "return_validity_days",
+        ) or 0
+    )
+
+
 def standardize_pricing_rules(items):
     """
     Standardize pricing_rules field on invoice items.
@@ -340,13 +353,7 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 
     # Check return validity period from POS Settings
     if invoice_info.pos_profile:
-        return_validity_days = cint(
-            frappe.db.get_value(
-                "POS Settings",
-                {"pos_profile": invoice_info.pos_profile},
-                "return_validity_days"
-            ) or 0
-        )
+        return_validity_days = _get_return_validity_days(invoice_info.pos_profile)
 
         if return_validity_days > 0:
             days_since_invoice = date_diff(getdate(nowdate()), getdate(invoice_info.posting_date))
@@ -678,17 +685,23 @@ def get_pos_draft_invoices(pos_profile):
         filters={"docstatus": 0, "is_pos": 1, "pos_profile": pos_profile},
         fields=["name", "customer", "customer_name", "grand_total", "creation"]
     )
-    
-    for inv in invoices:
-        items = frappe.get_all(
+
+    if invoices:
+        invoice_names = [inv.name for inv in invoices]
+        all_items = frappe.get_all(
             "Sales Invoice Item",
-            filters={"parent": inv.name},
-            fields=["item_code", "item_name", "qty", "rate", "amount"]
+            filters={"parent": ["in", invoice_names]},
+            fields=["parent", "item_code", "item_name", "qty", "rate", "amount"]
         )
-        inv.items = items
-        inv.draft_id = inv.name
-        inv.created_at = inv.creation
-        
+        items_by_invoice = {}
+        for item in all_items:
+            items_by_invoice.setdefault(item.parent, []).append(item)
+
+        for inv in invoices:
+            inv.items = items_by_invoice.get(inv.name, [])
+            inv.draft_id = inv.name
+            inv.created_at = inv.creation
+
     return invoices
 
 
@@ -1313,10 +1326,12 @@ def get_invoices(pos_profile, limit=100):
 		"limit": limit
 	}, as_dict=True)
 
-	# Load items for each invoice for filtering purposes
-	for invoice in invoices:
-		items = frappe.db.sql("""
+	# Load items for all invoices in a single batch query
+	if invoices:
+		invoice_names = [inv.name for inv in invoices]
+		all_items = frappe.db.sql("""
 			SELECT
+				parent,
 				item_code,
 				item_name,
 				qty,
@@ -1325,13 +1340,15 @@ def get_invoices(pos_profile, limit=100):
 			FROM
 				`tabSales Invoice Item`
 			WHERE
-				parent = %(invoice_name)s
+				parent IN %(names)s
 			ORDER BY
-				idx
-		""", {
-			"invoice_name": invoice.name
-		}, as_dict=True)
-		invoice.items = items
+				parent, idx
+		""", {"names": invoice_names}, as_dict=True)
+		items_by_invoice = {}
+		for item in all_items:
+			items_by_invoice.setdefault(item.parent, []).append(item)
+		for invoice in invoices:
+			invoice.items = items_by_invoice.get(invoice.name, [])
 
 	return invoices
 
@@ -1451,15 +1468,7 @@ def get_returnable_invoices(limit=50, pos_profile=None):
     from frappe.utils import add_days, today
 
     # Check return validity days from POS Settings
-    return_validity_days = 0
-    if pos_profile:
-        return_validity_days = cint(
-            frappe.db.get_value(
-                "POS Settings",
-                {"pos_profile": pos_profile},
-                "return_validity_days"
-            ) or 0
-        )
+    return_validity_days = _get_return_validity_days(pos_profile)
 
     # Define tables
     si = frappe.qb.DocType("Sales Invoice")
@@ -1625,13 +1634,7 @@ def check_invoice_return_validity(invoice_name):
 
     # Check return validity period from POS Settings
     if invoice_info.pos_profile:
-        return_validity_days = cint(
-            frappe.db.get_value(
-                "POS Settings",
-                {"pos_profile": invoice_info.pos_profile},
-                "return_validity_days"
-            ) or 0
-        )
+        return_validity_days = _get_return_validity_days(invoice_info.pos_profile)
 
         if return_validity_days > 0:
             days_since_invoice = date_diff(getdate(nowdate()), getdate(invoice_info.posting_date))
@@ -1675,13 +1678,7 @@ def get_invoice_for_return(invoice_name):
 
     # Check return validity period from POS Settings
     if invoice_info.pos_profile:
-        return_validity_days = cint(
-            frappe.db.get_value(
-                "POS Settings",
-                {"pos_profile": invoice_info.pos_profile},
-                "return_validity_days"
-            ) or 0
-        )
+        return_validity_days = _get_return_validity_days(invoice_info.pos_profile)
 
         if return_validity_days > 0:
             days_since_invoice = date_diff(getdate(nowdate()), getdate(invoice_info.posting_date))
@@ -1838,13 +1835,7 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
 
     # Check return validity period from POS Settings
     if invoice_info.pos_profile:
-        return_validity_days = cint(
-            frappe.db.get_value(
-                "POS Settings",
-                {"pos_profile": invoice_info.pos_profile},
-                "return_validity_days"
-            ) or 0
-        )
+        return_validity_days = _get_return_validity_days(invoice_info.pos_profile)
 
         if return_validity_days > 0:
             days_since_invoice = date_diff(getdate(nowdate()), getdate(invoice_info.posting_date))

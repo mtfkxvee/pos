@@ -3,70 +3,72 @@ import { defineStore } from "pinia"
 import { computed, ref } from "vue"
 import { useBootstrapStore } from "./bootstrap"
 
+const DEFAULT_SETTINGS = {
+	pos_profile: "",
+	enabled: 0,
+	// Wallet & Loyalty Settings
+	enable_loyalty_program: 0,
+	default_loyalty_program: "",
+	wallet_account: "",
+	auto_create_wallet: 1,
+	loyalty_to_wallet: 1,
+	redeem_loyalty_points: 0,
+	loyalty_redemption_account: "",
+	loyalty_redemption_cost_center: "",
+	// General Settings
+	max_discount_allowed: 0,
+	use_percentage_discount: 0,
+	allow_user_to_edit_additional_discount: 0,
+	allow_user_to_edit_item_discount: 1,
+	disable_rounded_total: 1,
+	allow_credit_sale: 0,
+	allow_customer_credit_payment: 0,
+	allow_return: 0,
+	allow_write_off_change: 0,
+	allow_partial_payment: 0,
+	use_exact_amount: 0,
+	// Display Settings
+	default_card_view: 0,
+	display_item_code: 0,
+	show_customer_balance: 0,
+	hide_expected_amount: 0,
+	display_discount_percentage: 0,
+	display_discount_amount: 0,
+	// Operations
+	allow_sales_order: 0,
+	allow_select_sales_order: 0,
+	create_only_sales_order: 0,
+	allow_return_without_invoice: 0,
+	allow_free_batch_return: 0,
+	allow_print_draft_invoices: 0,
+	// Pricing & Display
+	decimal_precision: "2",
+	// Customer Settings
+	allow_customer_purchase_order: 0,
+	allow_duplicate_customer_names: 0,
+	fetch_coupon: 0,
+	// Printing
+	allow_print_last_invoice: 0,
+	silent_print: 0,
+	// Delivery
+	use_delivery_charges: 0,
+	auto_set_delivery_charges: 0,
+	// Advanced Settings
+	use_limit_search: 0,
+	search_limit: 1000,
+	allow_submissions_in_background_job: 0,
+	allow_delete_offline_invoice: 0,
+	allow_change_posting_date: 0,
+	// Miscellaneous
+	input_qty: 0,
+	allow_negative_stock: 0,
+	// Sales Persons
+	enable_sales_persons: "Disabled",
+}
+
 export const usePOSSettingsStore = defineStore("posSettings", () => {
 	// State
-	const settings = ref({
-		pos_profile: "",
-		enabled: 0,
-		// Wallet & Loyalty Settings
-		enable_loyalty_program: 0,
-		default_loyalty_program: "",
-		wallet_account: "",
-		auto_create_wallet: 1,
-		loyalty_to_wallet: 1,
-		redeem_loyalty_points: 0,
-		loyalty_redemption_account: "",
-		loyalty_redemption_cost_center: "",
-		// General Settings
-		max_discount_allowed: 0,
-		use_percentage_discount: 0,
-		allow_user_to_edit_additional_discount: 0,
-		allow_user_to_edit_item_discount: 1, // Allow item-level discounts
-		disable_rounded_total: 1, // Disable rounding for accurate totals
-		allow_credit_sale: 0,
-		allow_customer_credit_payment: 0,
-		allow_return: 0,
-		allow_write_off_change: 0,
-		allow_partial_payment: 0,
-		use_exact_amount: 0,
-		// Display Settings
-		default_card_view: 0,
-		display_item_code: 0,
-		show_customer_balance: 0,
-		hide_expected_amount: 0,
-		display_discount_percentage: 0,
-		display_discount_amount: 0,
-		// Operations
-		allow_sales_order: 0,
-		allow_select_sales_order: 0,
-		create_only_sales_order: 0,
-		allow_return_without_invoice: 0,
-		allow_free_batch_return: 0,
-		allow_print_draft_invoices: 0,
-		// Pricing & Display
-		decimal_precision: "2",
-		// Customer Settings
-		allow_customer_purchase_order: 0,
-		allow_duplicate_customer_names: 0,
-		fetch_coupon: 0,
-		// Printing
-		allow_print_last_invoice: 0,
-		silent_print: 0,
-		// Delivery
-		use_delivery_charges: 0,
-		auto_set_delivery_charges: 0,
-		// Advanced Settings
-		use_limit_search: 0,
-		search_limit: 1000,
-		allow_submissions_in_background_job: 0,
-		allow_delete_offline_invoice: 0,
-		allow_change_posting_date: 0,
-		// Miscellaneous
-		input_qty: 0,
-		allow_negative_stock: 0,
-		// Sales Persons
-		enable_sales_persons: "Disabled",
-	})
+	const settings = ref({ ...DEFAULT_SETTINGS })
 
 	const isLoading = ref(false)
 	const isLoaded = ref(false)
@@ -275,59 +277,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	}
 
 	function resetSettings() {
-		settings.value = {
-			pos_profile: "",
-			enabled: 0,
-			// Wallet & Loyalty Settings
-			enable_loyalty_program: 0,
-			default_loyalty_program: "",
-			wallet_account: "",
-			auto_create_wallet: 1,
-			loyalty_to_wallet: 1,
-			redeem_loyalty_points: 0,
-			loyalty_redemption_account: "",
-			loyalty_redemption_cost_center: "",
-			// General Settings
-			max_discount_allowed: 0,
-			use_percentage_discount: 0,
-			allow_user_to_edit_additional_discount: 0,
-			allow_user_to_edit_item_discount: 1,
-			disable_rounded_total: 1,
-			allow_credit_sale: 0,
-			allow_customer_credit_payment: 0,
-			allow_return: 0,
-			allow_write_off_change: 0,
-			allow_partial_payment: 0,
-			use_exact_amount: 0,
-			default_card_view: 0,
-			display_item_code: 0,
-			show_customer_balance: 0,
-			hide_expected_amount: 0,
-			display_discount_percentage: 0,
-			display_discount_amount: 0,
-			allow_sales_order: 0,
-			allow_select_sales_order: 0,
-			create_only_sales_order: 0,
-			allow_return_without_invoice: 0,
-			allow_free_batch_return: 0,
-			allow_print_draft_invoices: 0,
-			decimal_precision: "2",
-			allow_customer_purchase_order: 0,
-			allow_duplicate_customer_names: 0,
-			fetch_coupon: 0,
-			allow_print_last_invoice: 0,
-			silent_print: 0,
-			use_delivery_charges: 0,
-			auto_set_delivery_charges: 0,
-			use_limit_search: 0,
-			search_limit: 1000,
-			allow_submissions_in_background_job: 0,
-			allow_delete_offline_invoice: 0,
-			allow_change_posting_date: 0,
-			input_qty: 0,
-			allow_negative_stock: 0,
-			enable_sales_persons: "Disabled",
-		}
+		settings.value = { ...DEFAULT_SETTINGS }
 		isLoaded.value = false
 	}
 
