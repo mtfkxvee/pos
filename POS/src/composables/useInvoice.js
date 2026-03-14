@@ -699,6 +699,7 @@ export function useInvoice() {
 				discount_percentage: roundCurrency(item.discount_percentage || 0),
 				discount_amount: roundCurrency(item.discount_amount || 0),
 				pricing_rules: stringifyPricingRules(item.pricing_rules),
+				...(item.is_free_item ? { is_free_item: 1 } : {}),
 			})
 
 			// If offline calculation yielded free_qty, explicitly separate it for the backend
