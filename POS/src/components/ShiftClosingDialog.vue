@@ -614,8 +614,10 @@ async function loadClosingData() {
 		if (data.payment_reconciliation) {
 			data.payment_reconciliation = data.payment_reconciliation.map(
 				(payment) => {
-					const initialClosing =
-						payment.closing_amount ?? payment.expected_amount ?? 0
+					const isCash = (payment.mode_of_payment || '').toLowerCase() === 'cash'
+					const initialClosing = isCash
+						? (payment.closing_amount ?? payment.expected_amount ?? 0)
+						: (payment.expected_amount ?? 0)
 					return reactive({
 						...payment,
 						closing_amount: initialClosing,
