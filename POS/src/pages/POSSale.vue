@@ -614,6 +614,8 @@
 				@sync-all="handleSyncAll"
 				@delete-invoice="handleDeleteOfflineInvoice"
 				@edit-invoice="handleEditOfflineInvoice"
+				@print-invoice="handlePrintOfflineInvoice"
+				@return-invoice="handleReturnOfflineInvoice"
 				@refresh="offlineStore.loadPendingInvoices"
 			/>
 
@@ -2730,6 +2732,22 @@ async function handleDeleteOfflineInvoice(invoiceId) {
 	} catch (error) {
 		log.error("Error deleting offline invoice:", error);
 	}
+}
+
+function handlePrintOfflineInvoice(invoiceData) {
+	try {
+		printInvoiceCustom(invoiceData, getEffectiveFormat());
+	} catch (error) {
+		log.error("Error printing offline invoice:", error);
+	}
+}
+
+function handleReturnOfflineInvoice(invoice) {
+	if (!invoice.synced) {
+		showError(__('Invoice belum tersinkronisasi. Sync terlebih dahulu untuk melakukan return.'));
+		return;
+	}
+	uiStore.showReturnDialog = true;
 }
 
 async function handleItemsSynced() {
