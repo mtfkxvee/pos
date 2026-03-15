@@ -13,20 +13,60 @@
 							<p class="text-xs sm:text-sm text-gray-600 truncate">{{ __("These invoices will be submitted when you're back online") }}</p>
 						</div>
 					</div>
-					<Button
-						v-if="!isOffline && invoices.length > 0"
-						@click="syncAll"
-						:loading="isSyncing"
-						variant="solid"
-						class="flex-shrink-0 whitespace-nowrap w-full sm:w-auto text-sm"
-					>
-						<template #prefix>
-							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-							</svg>
-						</template>
-						{{ __('Sync All') }}
-					</Button>
+					<div class="flex flex-wrap gap-2 justify-end w-full sm:w-auto">
+						<Button
+							v-if="invoices.length > 0"
+							@click="exportBackup"
+							variant="subtle"
+							class="flex-shrink-0 whitespace-nowrap text-sm"
+							:title="__('Export all pending invoices as a backup file')"
+						>
+							<template #prefix>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+								</svg>
+							</template>
+							{{ __('Export') }}
+						</Button>
+						<Button
+							@click="triggerImport"
+							variant="subtle"
+							class="flex-shrink-0 whitespace-nowrap text-sm"
+							:title="__('Restore invoices from a backup file')"
+						>
+							<template #prefix>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"/>
+								</svg>
+							</template>
+							{{ __('Import') }}
+						</Button>
+						<input ref="fileInput" type="file" accept=".json" class="hidden" @change="handleImportFile" />
+						<Button
+							v-if="!isOffline && invoices.length > 0"
+							@click="syncAll"
+							:loading="isSyncing"
+							variant="solid"
+							class="flex-shrink-0 whitespace-nowrap text-sm"
+						>
+							<template #prefix>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+								</svg>
+							</template>
+							{{ __('Sync All') }}
+						</Button>
+					</div>
+				</div>
+
+				<!-- Import Result Banner -->
+				<div v-if="importResult" class="flex items-start gap-2 p-3 rounded-lg text-sm" :class="importResult.error ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'">
+					<svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path v-if="importResult.error" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+						<path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+					</svg>
+					<span v-if="importResult.error">{{ importResult.error }}</span>
+					<span v-else>{{ __("{0} transaction(s) restored, {1} already existed", [importResult.restored, importResult.skipped]) }}</span>
 				</div>
 
 				<!-- Loading State -->
@@ -242,6 +282,10 @@ import {
 	DEFAULT_CURRENCY,
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
+import {
+	exportBackupToFile,
+	importBackupFromFile,
+} from "@/utils/offline/backup"
 import { Button, Dialog } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 
@@ -286,6 +330,8 @@ const selectedInvoice = ref(null)
 const showDetails = ref(false)
 const showDeleteConfirm = ref(false)
 const invoiceToDelete = ref(null)
+const fileInput = ref(null)
+const importResult = ref(null)
 
 // Load invoices when dialog opens
 watch(show, async (newVal) => {
@@ -369,6 +415,31 @@ async function confirmDelete() {
 		// Emit the delete event and let parent handle the refresh
 		// The watcher on pendingInvoices will update the list automatically
 		emit("delete-invoice", invoiceId)
+	}
+}
+
+function exportBackup() {
+	exportBackupToFile(invoices.value)
+}
+
+function triggerImport() {
+	importResult.value = null
+	fileInput.value?.click()
+}
+
+async function handleImportFile(event) {
+	const file = event.target.files?.[0]
+	if (!file) return
+	// Reset file input so same file can be imported again if needed
+	event.target.value = ""
+	try {
+		const result = await importBackupFromFile(file)
+		importResult.value = result
+		if (result.restored > 0) {
+			emit("refresh")
+		}
+	} catch (err) {
+		importResult.value = { error: err.message || __("Failed to read backup file") }
 	}
 }
 </script>

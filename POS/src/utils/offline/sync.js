@@ -1,6 +1,7 @@
 import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { CoalescingMutex } from "@/utils/mutex"
+import { saveLocalStorageMirror } from "./backup"
 import { db } from "./db"
 import { offlineState } from "./offlineState"
 import { generateOfflineId } from "./uuid"
@@ -240,6 +241,7 @@ export const saveOfflineInvoice = async (invoiceData) => {
 	})
 
 	await updateLocalStock(cleanData.items)
+	saveLocalStorageMirror().catch(() => {}) // fire-and-forget mirror update
 
 	log.info(`Invoice saved to offline queue`, { offline_id: offlineId })
 	return { success: true, id, offline_id: offlineId }
@@ -279,6 +281,7 @@ export const getOfflineInvoiceCount = async () => {
 export const deleteOfflineInvoice = async (id) => {
 	try {
 		await db.invoice_queue.delete(id)
+		saveLocalStorageMirror().catch(() => {}) // fire-and-forget mirror update
 		return true
 	} catch (error) {
 		log.error("Failed to delete offline invoice", { id, error })
@@ -363,6 +366,7 @@ const markInvoiceSynced = async (id, serverInvoice) => {
 		synced: true,
 		server_invoice: serverInvoice,
 	})
+	saveLocalStorageMirror().catch(() => {}) // fire-and-forget mirror update
 }
 
 /**
