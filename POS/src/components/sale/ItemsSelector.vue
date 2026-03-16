@@ -383,6 +383,9 @@
 									<span class="font-semibold text-blue-600">{{ formatCurrency(item.rate || item.price_list_rate || 0) }}</span>
 									<span class="text-gray-400">/ {{ item.uom || item.stock_uom || __('Nos', null, 'UOM') }}</span>
 							</p>
+							<p v-if="item.barcodes?.length" class="text-[8px] sm:text-[9px] text-gray-400 leading-tight truncate font-mono">
+								{{ item.barcodes[0] }}
+							</p>
 						</div>
 					</div>
 				</div>
@@ -508,6 +511,7 @@
 							<th scope="col" class="px-2 sm:px-3 py-2 sm:py-2.5 text-start text-[10px] sm:text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-b-2 border-gray-200 sticky top-0 z-10 w-[70px] sm:w-[100px]">{{ __('Rate') }}</th>
 							<th scope="col" class="px-2 sm:px-3 py-2 sm:py-2.5 text-start text-[10px] sm:text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-b-2 border-gray-200 sticky top-0 z-10 w-[70px] sm:w-[100px]">{{ __('Qty') }}</th>
 							<th scope="col" class="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-2.5 text-start text-[10px] sm:text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-b-2 border-gray-200 sticky top-0 z-10 md:w-[80px]">{{ __('UOM') }}</th>
+							<th scope="col" class="hidden md:table-cell px-2 sm:px-3 py-2 sm:py-2.5 text-start text-[10px] sm:text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-b-2 border-gray-200 sticky top-0 z-10">{{ __('Barcode') }}</th>
 						</tr>
 					</thead>
 					<tbody class="bg-white divide-y divide-gray-200">
@@ -581,10 +585,13 @@
 							<td class="hidden md:table-cell px-2 sm:px-3 py-2 whitespace-nowrap md:w-[80px]">
 								<div class="text-xs sm:text-sm text-gray-500">{{ item.uom || item.stock_uom || __('Nos', null, 'UOM') }}</div>
 							</td>
+							<td class="hidden md:table-cell px-2 sm:px-3 py-2 whitespace-nowrap">
+								<div class="text-xs sm:text-sm text-gray-500 font-mono">{{ item.barcodes?.[0] || '—' }}</div>
+							</td>
 						</tr>
 						<!-- Loading More Indicator Row -->
 						<tr v-if="loadingMore">
-							<td colspan="6" class="px-2 sm:px-3 py-4 text-center bg-white">
+							<td colspan="7" class="px-2 sm:px-3 py-4 text-center bg-white">
 								<div class="flex justify-center items-center">
 									<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
 									<p class="ms-2 text-xs text-gray-500">{{ __('Loading more items...') }}</p>
@@ -594,14 +601,14 @@
 
 						<!-- End of Results Indicator Row - Show on last page when no more data -->
 						<tr v-else-if="filteredItems.length > 0 && !searchTerm && currentPage === totalPages && totalPages >= 1">
-							<td colspan="6" class="px-2 sm:px-3 py-3 text-center bg-white">
+							<td colspan="7" class="px-2 sm:px-3 py-3 text-center bg-white">
 								<p class="text-xs text-gray-400">{{ __('All items loaded') }}</p>
 							</td>
 						</tr>
 
 						<!-- Search Results Count Row -->
 						<tr v-else-if="searchTerm && filteredItems.length > 0">
-							<td colspan="6" class="px-2 sm:px-3 py-3 text-center bg-white">
+							<td colspan="7" class="px-2 sm:px-3 py-3 text-center bg-white">
 								<p class="text-xs text-gray-500">{{ __('{0} items found', [filteredItems.length]) }}</p>
 							</td>
 						</tr>
