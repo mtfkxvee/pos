@@ -383,8 +383,8 @@
 									<span class="font-semibold text-blue-600">{{ formatCurrency(item.rate || item.price_list_rate || 0) }}</span>
 									<span class="text-gray-400">/ {{ item.uom || item.stock_uom || __('Nos', null, 'UOM') }}</span>
 							</p>
-							<p v-if="item.barcodes?.length" class="text-[8px] sm:text-[9px] text-gray-400 leading-tight truncate font-mono">
-								{{ item.barcodes[0] }}
+							<p v-if="item.barcodes?.length || item.barcode" class="text-[8px] sm:text-[9px] text-gray-400 leading-tight truncate font-mono">
+								{{ item.barcodes?.[0] || item.barcode }}
 							</p>
 						</div>
 					</div>
@@ -586,7 +586,7 @@
 								<div class="text-xs sm:text-sm text-gray-500">{{ item.uom || item.stock_uom || __('Nos', null, 'UOM') }}</div>
 							</td>
 							<td class="hidden md:table-cell px-2 sm:px-3 py-2 whitespace-nowrap">
-								<div class="text-xs sm:text-sm text-gray-500 font-mono">{{ item.barcodes?.[0] || '—' }}</div>
+								<div class="text-xs sm:text-sm text-gray-500 font-mono">{{ item.barcodes?.[0] || item.barcode || '—' }}</div>
 							</td>
 						</tr>
 						<!-- Loading More Indicator Row -->

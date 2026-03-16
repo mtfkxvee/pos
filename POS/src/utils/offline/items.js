@@ -12,7 +12,9 @@ export const cacheItems = async (items, priceList = null) => {
 				? Array.isArray(item.item_barcode)
 					? item.item_barcode.map((b) => b.barcode).filter(Boolean)
 					: [item.item_barcode]
-				: [],
+				: item.barcode
+					? String(item.barcode).split(",").map((b) => b.trim()).filter(Boolean)
+					: [],
 		}))
 
 		// Save to items table
