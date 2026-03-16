@@ -2197,6 +2197,20 @@ def search_invoices_for_return(
 # ==========================================
 
 
+def _item_qualifies_for_rule(item_doc, rule_doc):
+    """Check if a cart item qualifies as a trigger for a pricing rule."""
+    apply_on = rule_doc.apply_on
+    if apply_on == "Item Code":
+        return item_doc.get("item_code") in [r.item_code for r in (rule_doc.items or [])]
+    elif apply_on == "Item Group":
+        return item_doc.get("item_group") in [r.item_group for r in (rule_doc.item_groups or [])]
+    elif apply_on == "Brand":
+        return item_doc.get("brand") in [r.brand for r in (rule_doc.brands or [])]
+    elif apply_on == "Transaction":
+        return True
+    return False
+
+
 @frappe.whitelist()
 def apply_offers(invoice_data, selected_offers=None):
     """Calculate and apply promotional offers using ERPNext Pricing Rules.
@@ -2566,6 +2580,60 @@ def apply_offers(invoice_data, selected_offers=None):
                 ].promotional_scheme
                 free_item_doc.warehouse = profile.warehouse  # Always use POS profile warehouse
                 free_items.append(free_item_doc)
+
+        # Post-process: apply selected offers skipped by ERPNext's priority resolution.
+        # When multiple rules share the same priority, ERPNext picks only one. We bypass
+        # this for explicitly selected offers that the user/auto-apply chose.
+        if selected_offer_names:
+            unapplied = [n for n in selected_offer_names if n not in applied_rules and n in rule_map]
+            for rule_name in unapplied:
+                rule_info = rule_map[rule_name]
+                full_rule = frappe.get_cached_doc("Pricing Rule", rule_name)
+
+                if rule_info.price_or_product_discount == "Product":
+                    # Free item rule — check if any non-free cart item qualifies
+                    if not full_rule.free_item:
+                        continue
+                    min_qty = flt(full_rule.min_qty or 0)
+                    for item_doc in prepared_items:
+                        if item_doc.get("is_free_item"):
+                            continue
+                        qty = flt(item_doc.get("qty") or 0)
+                        if min_qty and qty < min_qty:
+                            continue
+                        if _item_qualifies_for_rule(item_doc, full_rule):
+                            free_items.append(frappe._dict({
+                                "item_code": full_rule.free_item,
+                                "qty": flt(full_rule.free_qty or 1),
+                                "uom": full_rule.free_item_uom or full_rule.stock_uom or "Nos",
+                                "rate": 0,
+                                "pricing_rules": rule_name,
+                                "warehouse": profile.warehouse,
+                                "applied_promotional_scheme": rule_info.promotional_scheme,
+                            }))
+                            applied_rules.add(rule_name)
+                            break  # one free item entry per rule
+
+                elif rule_info.price_or_product_discount == "Price":
+                    # Discount rule — apply to all matching items manually
+                    if not full_rule.discount_percentage and not full_rule.discount_amount:
+                        continue
+                    for item_doc in prepared_items:
+                        if item_doc.get("is_free_item"):
+                            continue
+                        if not _item_qualifies_for_rule(item_doc, full_rule):
+                            continue
+                        price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
+                        qty = flt(item_doc.get("qty") or 0)
+                        if full_rule.discount_percentage:
+                            item_doc.discount_percentage = flt(item_doc.discount_percentage or 0) + flt(full_rule.discount_percentage)
+                            item_doc.discount_amount = flt(item_doc.discount_amount or 0) + price_list_rate * qty * flt(full_rule.discount_percentage) / 100
+                        elif full_rule.discount_amount:
+                            item_doc.discount_amount = flt(item_doc.discount_amount or 0) + flt(full_rule.discount_amount) * qty
+                        # Append rule name to item's pricing_rules string
+                        existing = item_doc.pricing_rules or ""
+                        item_doc.pricing_rules = (existing + "," + rule_name).strip(",")
+                        applied_rules.add(rule_name)
 
         # Deduplicate free items: ERPNext may return the same free item once per
         # evaluated cart item that matches the rule. Keep only the first occurrence
