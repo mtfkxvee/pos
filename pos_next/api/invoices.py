@@ -501,22 +501,35 @@ def update_invoice(data):
         # Ensure customer exists
         customer_name = invoice_doc.get("customer")
         if customer_name and not frappe.db.exists("Customer", customer_name):
-            try:
-                cust = frappe.get_doc(
-                    {
-                        "doctype": "Customer",
-                        "customer_name": customer_name,
-                        "customer_group": "All Customer Groups",
-                        "territory": "All Territories",
-                        "customer_type": "Individual",
-                    }
+            found_customer = None
+
+            # Fallback: find existing customer by kode_pelanggan (offline sync edge case where
+            # the temp OFL-CUST-* reference could not be replaced before invoice submission)
+            kode = invoice_doc.get("custom_kode_pelanggan")
+            if kode:
+                found_customer = frappe.db.get_value(
+                    "Customer", {"custom_kode_pelanggan": kode}, "name"
                 )
-                cust.flags.ignore_permissions = True
-                cust.insert()
-                invoice_doc.customer = cust.name
-                invoice_doc.customer_name = cust.customer_name
-            except Exception as e:
-                frappe.log_error(f"Failed to create customer {customer_name}: {e}")
+
+            if found_customer:
+                invoice_doc.customer = found_customer
+            else:
+                try:
+                    cust = frappe.get_doc(
+                        {
+                            "doctype": "Customer",
+                            "customer_name": customer_name,
+                            "customer_group": "All Customer Groups",
+                            "territory": "All Territories",
+                            "customer_type": "Individual",
+                        }
+                    )
+                    cust.flags.ignore_permissions = True
+                    cust.insert()
+                    invoice_doc.customer = cust.name
+                    invoice_doc.customer_name = cust.customer_name
+                except Exception as e:
+                    frappe.log_error(f"Failed to create customer {customer_name}: {e}")
 
         # Disable automatic pricing rules (we handle discounts manually from POS)
         invoice_doc.ignore_pricing_rule = 1

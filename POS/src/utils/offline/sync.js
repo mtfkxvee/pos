@@ -205,10 +205,71 @@ export const syncOfflineCustomers = async () => {
 			}
 		} catch (error) {
 			log.error("Failed to sync offline customer", { id: customer.id, error })
-			const newRetryCount = (customer.retry_count || 0) + 1
-			await db.customer_queue.update(customer.id, {
-				retry_count: newRetryCount,
-			})
+
+			// Fallback: customer may already exist in ERPNext (e.g. duplicate kode_pelanggan)
+			// Try to find and reuse it instead of failing permanently
+			let fallbackResolved = false
+			if (customer.data.custom_kode_pelanggan) {
+				try {
+					const existing = await call("frappe.client.get_list", {
+						doctype: "Customer",
+						filters: {
+							custom_kode_pelanggan: customer.data.custom_kode_pelanggan,
+						},
+						fields: ["name", "customer_name"],
+						limit: 1,
+					})
+					if (existing?.length) {
+						const serverName = existing[0].name
+
+						// Update any offline invoices referencing the temp customer name
+						await db.invoice_queue
+							.filter((inv) => inv.data.customer === customer.data.name)
+							.modify((inv) => {
+								inv.data.customer = serverName
+								inv.data.customer_name =
+									existing[0].customer_name || serverName
+							})
+
+						// Mark customer as synced (matched existing)
+						await db.customer_queue.update(customer.id, {
+							synced: true,
+							server_customer: serverName,
+						})
+
+						// Update local customer cache
+						const oldCached = await db.customers
+							.where("name")
+							.equals(customer.data.name)
+							.first()
+						if (oldCached) {
+							await db.customers
+								.where("name")
+								.equals(customer.data.name)
+								.delete()
+							await db.customers.put({
+								...oldCached,
+								name: serverName,
+								offline_id: undefined,
+							})
+						}
+
+						log.info(
+							`Offline customer matched existing in ERPNext: ${customer.data.customer_name} -> ${serverName}`,
+						)
+						fallbackResolved = true
+					}
+				} catch (fallbackErr) {
+					log.warn("Fallback customer lookup failed", fallbackErr)
+				}
+			}
+
+			if (!fallbackResolved) {
+				const newRetryCount = (customer.retry_count || 0) + 1
+				await db.customer_queue.update(customer.id, {
+					retry_count: newRetryCount,
+				})
+			}
 		}
 	}
 }

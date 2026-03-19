@@ -801,6 +801,7 @@ export function useInvoice() {
 			pos_profile: posProfile.value,
 			posa_pos_opening_shift: posOpeningShift.value,
 			customer: customer.value?.name || customer.value,
+			custom_kode_pelanggan: customer.value?.custom_kode_pelanggan || "",
 			items: formatItemsForSubmission(rawItems),
 			payments: rawPayments.map((p) => ({
 				mode_of_payment: p.mode_of_payment,
