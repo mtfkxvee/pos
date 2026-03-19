@@ -531,35 +531,32 @@ watch(
 	(name) => name && (customerData.value.customer_name = name),
 )
 
-// Pre-fill form when customer prop changes (edit mode)
-watch(
-	() => props.customer,
-	(customer) => {
-		if (customer?.name) {
-			customerData.value.customer_name = customer.customer_name || ""
-			customerData.value.custom_kode_pelanggan =
-				customer.custom_kode_pelanggan || ""
-			customerData.value.email_id = customer.email_id || ""
-			customerData.value.customer_group =
-				customer.customer_group || "Individual"
-			customerData.value.primary_address = customer.primary_address || ""
-			customerData.value.custom_tanggal_lahir =
-				customer.custom_tanggal_lahir || ""
-			// Handle mobile_no with country code
-			if (customer.mobile_no) {
-				customerData.value.mobile_no = customer.mobile_no
-				if (customer.mobile_no.includes("-")) {
-					const [code, ...rest] = customer.mobile_no.split("-")
-					selectedCountryCode.value = code
-					phoneNumber.value = rest.join("-")
-				} else {
-					phoneNumber.value = customer.mobile_no
-				}
-			}
+// Pre-fill form from a customer object
+function populateFromCustomer(customer) {
+	if (!customer?.name) return
+	customerData.value.customer_name = customer.customer_name || ""
+	customerData.value.custom_kode_pelanggan =
+		customer.custom_kode_pelanggan || ""
+	customerData.value.email_id = customer.email_id || ""
+	customerData.value.customer_group = customer.customer_group || "Individual"
+	customerData.value.primary_address = customer.primary_address || ""
+	customerData.value.custom_tanggal_lahir = customer.custom_tanggal_lahir || ""
+	if (customer.mobile_no) {
+		customerData.value.mobile_no = customer.mobile_no
+		if (customer.mobile_no.includes("-")) {
+			const [code, ...rest] = customer.mobile_no.split("-")
+			selectedCountryCode.value = code
+			phoneNumber.value = rest.join("-")
+		} else {
+			phoneNumber.value = customer.mobile_no
 		}
-	},
-	{ immediate: true },
-)
+	}
+}
+
+// Pre-fill form when customer prop changes (edit mode)
+watch(() => props.customer, (customer) => populateFromCustomer(customer), {
+	immediate: true,
+})
 
 watch(
 	() => customerData.value.mobile_no,
@@ -583,7 +580,12 @@ watch(
 	() => props.modelValue,
 	async (isOpen) => {
 		show.value = isOpen
-		isOpen ? await loadDialogData() : resetForm()
+		if (isOpen) {
+			populateFromCustomer(props.customer)
+			await loadDialogData()
+		} else {
+			resetForm()
+		}
 	},
 )
 
