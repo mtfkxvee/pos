@@ -15,31 +15,6 @@ def get_sw():
         content = content.replace('importScripts("workbox-', 'importScripts("/assets/pos_next/pos/workbox-')
         content = content.replace("importScripts('workbox-", "importScripts('/assets/pos_next/pos/workbox-")
             
-        custom_fallback = """
-// Custom Navigate Fallback added via Frappe API
-self.addEventListener('fetch', (event) => {
-    if (event.request.mode === 'navigate' && !event.request.url.includes('/api/') && !event.request.url.includes('/app/')) {
-        event.respondWith(
-            fetch(event.request).catch(async () => {
-                const cacheNames = await caches.keys();
-                for (const cacheName of cacheNames) {
-                    const cache = await caches.open(cacheName);
-                    const requests = await cache.keys();
-                    for (const req of requests) {
-                        if (req.url.endsWith('index.html') || req.url.includes('index.html')) {
-                            const match = await cache.match(req);
-                            if (match) return match;
-                        }
-                    }
-                }
-                return new Response('Offline - App Shell not found', { status: 503, headers: { 'Content-Type': 'text/html' } });
-            })
-        );
-    }
-});
-"""
-        content += custom_fallback
-        
         resp = Response(content, mimetype="application/javascript")
         resp.headers["Service-Worker-Allowed"] = "/"
         return resp
