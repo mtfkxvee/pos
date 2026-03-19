@@ -1100,7 +1100,7 @@ const { showSuccess, showError, showWarning } = useToast();
 const log = logger.create("POSSale");
 
 // App version
-const appVersion = "1.9.9";
+const appVersion = "2.0.3";
 
 // User data composable
 const { userName, userImage } = useUserData();
