@@ -59,11 +59,8 @@ def get_customer_balance(customer, company=None):
 		if company:
 			base_filters = base_filters & (SalesInvoice.company == company)
 
-		# Query for regular invoices (non-returns)
-		# Only count positive outstanding (what customer owes)
-		# Negative outstanding on regular invoices comes from returns linked to them,
-		# so we don't count it here to avoid double-counting (credit comes from returns only)
-		regular_query = (
+		# Query 1: Regular invoices — positive outstanding (what customer owes)
+		regular_owed_query = (
 			frappe.qb.from_(SalesInvoice)
 			.select(
 				Coalesce(
@@ -78,30 +75,55 @@ def get_customer_balance(customer, company=None):
 			.where(base_filters & (SalesInvoice.is_return == 0))
 		)
 
-		# Query for return invoices
-		# Only count returns where outstanding_amount < 0 (not refunded in cash)
-		# If cash refund was given, outstanding_amount = 0 and should NOT count as credit
-		# If no cash refund (added to customer credit), outstanding_amount < 0
-		return_query = (
+		# Query 2: Regular invoices — negative outstanding
+		# Happens when a cash-paid invoice is more-than-fully returned (cash overpayment).
+		# With update_outstanding_for_self=0 on linked returns, the original invoice outstanding
+		# is reduced by the return amount. If return > original payment, outstanding goes negative.
+		regular_credit_query = (
+			frappe.qb.from_(SalesInvoice)
+			.select(
+				Coalesce(
+					Sum(
+						Case()
+						.when(SalesInvoice.outstanding_amount < 0, Abs(SalesInvoice.outstanding_amount))
+						.else_(0)
+					),
+					0
+				).as_("overpaid_credit")
+			)
+			.where(base_filters & (SalesInvoice.is_return == 0))
+		)
+
+		# Query 3: Standalone return invoices (NOT linked to a specific invoice via return_against).
+		# Returns linked via return_against already reduced the original invoice's outstanding
+		# (update_outstanding_for_self=0), so counting them here would double-count that credit.
+		# Only standalone credit notes (no return_against) represent unallocated available credit.
+		standalone_return_query = (
 			frappe.qb.from_(SalesInvoice)
 			.select(
 				Coalesce(Sum(Abs(SalesInvoice.outstanding_amount)), 0).as_("return_credit")
 			)
 			.where(
-				base_filters &
-				(SalesInvoice.is_return == 1) &
-				(SalesInvoice.outstanding_amount < 0)
+				base_filters
+				& (SalesInvoice.is_return == 1)
+				& (SalesInvoice.outstanding_amount < 0)
+				& (
+					(SalesInvoice.return_against.isnull())
+					| (SalesInvoice.return_against == "")
+				)
 			)
 		)
 
 		# Execute queries
-		regular_result = regular_query.run(as_dict=True)
-		return_result = return_query.run(as_dict=True)
+		regular_owed_result = regular_owed_query.run(as_dict=True)
+		regular_credit_result = regular_credit_query.run(as_dict=True)
+		standalone_return_result = standalone_return_query.run(as_dict=True)
 
 		# Calculate totals
-		total_outstanding = flt(regular_result[0].total_outstanding) if regular_result else 0.0
-		# Credit only comes from return invoices where no cash refund was given
-		total_credit = flt(return_result[0].return_credit) if return_result else 0.0
+		total_outstanding = flt(regular_owed_result[0].total_outstanding) if regular_owed_result else 0.0
+		overpaid_credit = flt(regular_credit_result[0].overpaid_credit) if regular_credit_result else 0.0
+		standalone_credit = flt(standalone_return_result[0].return_credit) if standalone_return_result else 0.0
+		total_credit = overpaid_credit + standalone_credit
 
 		# Net balance: positive = owes, negative = has credit
 		net_balance = total_outstanding - total_credit
