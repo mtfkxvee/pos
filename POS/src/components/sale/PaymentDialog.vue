@@ -482,7 +482,7 @@
 				<div
 					ref="rightColumnRef"
 					:class="[
-						'lg:col-span-3 bg-gray-50 rounded-lg border border-gray-200 flex flex-col',
+						'lg:col-span-3 bg-gray-50 rounded-lg border border-gray-200 flex flex-col overflow-y-auto',
 						isSmallMobile ? 'p-1.5' : 'p-2 lg:p-3'
 					]"
 					:style="isMobileView ? {} : { minHeight: rightColumnMinHeight }"

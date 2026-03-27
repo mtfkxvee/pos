@@ -264,6 +264,92 @@ export const syncOfflineCustomers = async () => {
 				}
 			}
 
+			// Fallback 2: match by mobile number
+			if (!fallbackResolved && customer.data.mobile_no) {
+				try {
+					const byPhone = await call("frappe.client.get_list", {
+						doctype: "Customer",
+						filters: { mobile_no: customer.data.mobile_no },
+						fields: ["name", "customer_name"],
+						limit: 1,
+					})
+					if (byPhone?.length) {
+						const serverName = byPhone[0].name
+						await db.invoice_queue
+							.filter((inv) => inv.data.customer === customer.data.name)
+							.modify((inv) => {
+								inv.data.customer = serverName
+								inv.data.customer_name = byPhone[0].customer_name || serverName
+							})
+						await db.customer_queue.update(customer.id, {
+							synced: true,
+							server_customer: serverName,
+						})
+						const oldCached = await db.customers
+							.where("name")
+							.equals(customer.data.name)
+							.first()
+						if (oldCached) {
+							await db.customers.where("name").equals(customer.data.name).delete()
+							await db.customers.put({
+								...oldCached,
+								name: serverName,
+								offline_id: undefined,
+							})
+						}
+						log.info(
+							`Offline customer matched by mobile_no: ${customer.data.customer_name} -> ${serverName}`,
+						)
+						fallbackResolved = true
+					}
+				} catch (e) {
+					log.warn("Fallback by mobile_no failed", e)
+				}
+			}
+
+			// Fallback 3: match by customer_name (last resort)
+			if (!fallbackResolved && customer.data.customer_name) {
+				try {
+					const byName = await call("frappe.client.get_list", {
+						doctype: "Customer",
+						filters: { customer_name: customer.data.customer_name },
+						fields: ["name", "customer_name"],
+						limit: 1,
+					})
+					if (byName?.length) {
+						const serverName = byName[0].name
+						await db.invoice_queue
+							.filter((inv) => inv.data.customer === customer.data.name)
+							.modify((inv) => {
+								inv.data.customer = serverName
+								inv.data.customer_name = byName[0].customer_name || serverName
+							})
+						await db.customer_queue.update(customer.id, {
+							synced: true,
+							server_customer: serverName,
+						})
+						const oldCached = await db.customers
+							.where("name")
+							.equals(customer.data.name)
+							.first()
+						if (oldCached) {
+							await db.customers.where("name").equals(customer.data.name).delete()
+							await db.customers.put({
+								...oldCached,
+								name: serverName,
+								offline_id: undefined,
+							})
+						}
+						log.info(
+							`Offline customer matched by name: ${customer.data.customer_name} -> ${serverName}`,
+						)
+						fallbackResolved = true
+					}
+				} catch (e) {
+					log.warn("Fallback by customer_name failed", e)
+				}
+			}
+
 			if (!fallbackResolved) {
 				const newRetryCount = (customer.retry_count || 0) + 1
 				await db.customer_queue.update(customer.id, {
