@@ -711,8 +711,12 @@ async function submitClosing() {
 		}
 	} catch (error) {
 		console.error("Error submitting closing shift:", error)
-		errorMessage.value =
-			"Failed to close shift. Please verify all amounts and try again."
+		const serverMsg = error?.exc_type === "ValidationError"
+			? (error?.message || error?.exception || "")
+			: ""
+		errorMessage.value = serverMsg
+			? `Gagal menutup shift: ${serverMsg}`
+			: "Failed to close shift. Please verify all amounts and try again."
 	}
 }
 

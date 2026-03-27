@@ -179,6 +179,10 @@ def submit_closing_shift(closing_shift):
 
 		result = submit_shift(closing_shift)
 		return {"name": result, "status": "success"}
+	except frappe.exceptions.ValidationError:
+		# Re-raise ValidationError as-is so the real message reaches the frontend
+		frappe.log_error(frappe.get_traceback(), "Submit Closing Shift Error")
+		raise
 	except Exception as e:
 		frappe.log_error(frappe.get_traceback(), "Submit Closing Shift Error")
 		frappe.throw(_("Error submitting closing shift: {0}").format(str(e)))

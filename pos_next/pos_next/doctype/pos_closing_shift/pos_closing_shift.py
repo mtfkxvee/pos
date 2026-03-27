@@ -579,6 +579,21 @@ def make_closing_shift_from_opening(opening_shift):
 @frappe.whitelist()
 def submit_closing_shift(closing_shift):
     closing_shift = json.loads(closing_shift)
+
+    # Idempotency: if a submitted closing shift already exists for this opening shift,
+    # return it instead of throwing "already exists" or "opening shift not open".
+    # This handles the case where the submission succeeded but the HTTP response was lost
+    # (network error, page refresh) and the user retries.
+    pos_opening_shift = closing_shift.get("pos_opening_shift")
+    if pos_opening_shift:
+        existing = frappe.db.get_value(
+            "POS Closing Shift",
+            {"pos_opening_shift": pos_opening_shift, "docstatus": 1},
+            "name",
+        )
+        if existing:
+            return existing
+
     closing_shift_doc = frappe.get_doc(closing_shift)
     closing_shift_doc.flags.ignore_permissions = True
     closing_shift_doc.save()
