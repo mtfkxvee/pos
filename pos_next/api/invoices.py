@@ -2403,6 +2403,15 @@ def apply_offers(invoice_data, selected_offers=None):
         if not customer_group:
             customer_group = "All Customer Groups"
 
+        # Calculate transaction total so ERPNext can evaluate min_amount / max_amount
+        # conditions in Promotional Scheme Price Slabs.
+        # Without grand_total in pricing_args, filter_pricing_rules() sees 0 and
+        # skips any rule that has a minimum amount threshold.
+        transaction_total = sum(
+            flt(pi.get("price_list_rate") or 0) * flt(pi.get("qty") or 0)
+            for pi in pricing_items
+        )
+
         pricing_args = frappe._dict(
             {
                 "doctype": invoice.get("doctype") or "Sales Invoice",
@@ -2421,6 +2430,11 @@ def apply_offers(invoice_data, selected_offers=None):
                 "customer": customer,
                 "customer_group": customer_group,
                 "territory": territory,
+                "grand_total": transaction_total,
+                "base_grand_total": transaction_total,
+                "net_total": transaction_total,
+                "base_net_total": transaction_total,
+                "total": transaction_total,
                 "items": pricing_items,
             }
         )
