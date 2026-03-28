@@ -460,9 +460,7 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 
 	// Auto print after load
 	printWindow.onload = () => {
-		setTimeout(() => {
-			printWindow.print()
-		}, 250)
+		printWindow.print()
 	}
 }
 
@@ -756,8 +754,6 @@ export function printShiftClosing(closingData) {
 
 	// Auto print after load
 	printWindow.onload = () => {
-		setTimeout(() => {
-			printWindow.print()
-		}, 250)
+		printWindow.print()
 	}
 }
