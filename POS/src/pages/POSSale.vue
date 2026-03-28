@@ -1100,7 +1100,7 @@ const { showSuccess, showError, showWarning } = useToast();
 const log = logger.create("POSSale");
 
 // App version
-const appVersion = "2.0.8";
+const appVersion = "2.0.9";
 
 // User data composable
 const { userName, userImage } = useUserData();
@@ -1244,13 +1244,20 @@ onMounted(async () => {
 
 	// Keyboard shortcuts for POS operations
 	const handleKeyboard = (e) => {
-		// Skip if user is typing in an input/textarea
-		const tag = e.target?.tagName?.toLowerCase();
-		if (tag === "input" || tag === "textarea" || tag === "select") return;
+		const activeEl = document.activeElement;
+		const isInputFocused = ["INPUT", "TEXTAREA", "SELECT"].includes(activeEl?.tagName);
+		const isSearchFocused = activeEl?.id === "item-search";
+
+		// Skip if user is typing in an input/textarea — EXCEPT End when search input is focused
+		if (isInputFocused && !(e.key === "End" && isSearchFocused)) return;
 		// Skip if any dialog is open (payment dialog has its own shortcuts)
 		if (uiStore.showPaymentDialog) return;
 
 		switch (e.key) {
+			case "F1":
+				e.preventDefault();
+				document.getElementById("item-search")?.focus();
+				break;
 			case "End":
 				e.preventDefault();
 				handleProceedToPayment();
