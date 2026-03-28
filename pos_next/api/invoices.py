@@ -1286,6 +1286,40 @@ def get_invoice(invoice_name):
 
 
 @frappe.whitelist()
+def get_invoice_loyalty_points(invoice_name):
+	"""Get loyalty points earned in a transaction and customer total balance."""
+	if not invoice_name:
+		frappe.throw(_("Invoice name is required"))
+
+	invoice = frappe.get_cached_doc("Sales Invoice", invoice_name)
+	if not invoice.loyalty_program:
+		return {"earned_points": 0, "total_points": 0}
+
+	# Points earned in this specific transaction
+	earned_entries = frappe.get_all(
+		"Loyalty Point Entry",
+		filters={"invoice": invoice_name, "loyalty_points": [">", 0]},
+		fields=["loyalty_points"],
+	)
+	earned_points = int(sum(flt(e.loyalty_points) for e in earned_entries))
+
+	# Total customer balance (non-expired)
+	total_result = frappe.db.sql(
+		"""
+		SELECT COALESCE(SUM(loyalty_points), 0) AS total
+		FROM `tabLoyalty Point Entry`
+		WHERE customer = %s AND loyalty_program = %s
+		  AND (expiry_date >= CURDATE() OR expiry_date IS NULL)
+		""",
+		(invoice.customer, invoice.loyalty_program),
+		as_dict=1,
+	)
+	total_points = int(flt(total_result[0].total)) if total_result else 0
+
+	return {"earned_points": earned_points, "total_points": total_points}
+
+
+@frappe.whitelist()
 def get_invoices(pos_profile, limit=100):
 	"""
 	Get list of invoices for a POS Profile.

@@ -207,6 +207,10 @@ ${invoiceData.change_amount && invoiceData.change_amount > 0 ? `<p>Kembali<span 
 
 ${invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0 ? `<p>Sisa Tagihan<span style="float:right;">${num(invoiceData.outstanding_amount)}</span></p>` : ""}
 
+${invoiceData._earned_loyalty_points !== undefined ? `<hr>
+<p style="font-size:9px;">Poin Diperoleh<span style="float:right;">${invoiceData._earned_loyalty_points}</span></p>
+<p style="font-size:9px;">Total Poin Anda<span style="float:right;">${invoiceData._total_loyalty_points}</span></p>` : ""}
+
 <hr>
 ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 <p class="tc" style="font-size:8px; margin-top:2px;">Terima kasih, sampai jumpa lagi.</p>
@@ -414,6 +418,21 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 					`
 							: ""
 					}
+
+					<!-- Loyalty Points -->
+					${invoiceData._earned_loyalty_points !== undefined ? `
+					<tr><td colspan="3"><hr style="margin: 2px 0;"></td></tr>
+					<tr>
+                        <td></td>
+						<td class="text-right">POIN DIPEROLEH :</td>
+						<td class="text-right">${invoiceData._earned_loyalty_points}</td>
+					</tr>
+					<tr>
+                        <td></td>
+						<td class="text-right">TOTAL POIN :</td>
+						<td class="text-right">${invoiceData._total_loyalty_points}</td>
+					</tr>
+					` : ""}
 				</tbody>
 			</table>
 
@@ -483,6 +502,21 @@ export async function printInvoiceByName(
 			} catch (error) {
 				log.warn("Could not fetch POS Profile print settings:", error)
 				// Continue with default print format
+			}
+		}
+
+		// Fetch loyalty points if invoice has a loyalty program
+		if (invoiceDoc.loyalty_program) {
+			try {
+				const loyaltyData = await call("pos_next.api.invoices.get_invoice_loyalty_points", {
+					invoice_name: invoiceName,
+				})
+				if (loyaltyData) {
+					invoiceDoc._earned_loyalty_points = loyaltyData.earned_points
+					invoiceDoc._total_loyalty_points = loyaltyData.total_points
+				}
+			} catch (err) {
+				log.warn("Could not fetch loyalty points for print:", err)
 			}
 		}
 
