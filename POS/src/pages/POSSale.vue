@@ -1047,7 +1047,7 @@ import { generateOfflineInvoiceId } from "@/utils/offline/invoiceId";
 import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
 import { usePrintFormat } from "@/composables/usePrintFormat";
 import PrintFormatDialog from "@/components/pos/PrintFormatDialog.vue";
-import { Button, Dialog, createResource } from "frappe-ui";
+import { Button, Dialog, createResource, frappeRequest } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
 import { computed, onMounted, onUnmounted, ref, watch, toRaw } from "vue";
 import { useToast } from "@/composables/useToast";
@@ -1100,7 +1100,7 @@ const { showSuccess, showError, showWarning } = useToast();
 const log = logger.create("POSSale");
 
 // App version
-const appVersion = "2.0.14";
+const appVersion = "2.0.15";
 
 // User data composable
 const { userName, userImage } = useUserData();
