@@ -2510,7 +2510,7 @@ def apply_offers(invoice_data, selected_offers=None):
         # See: erpnext/accounts/doctype/pricing_rule/utils.py -> get_qty_and_rate_for_mixed_conditions()
         pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
 
-        if not pricing_results:
+        if not pricing_results and not selected_offer_names:
             return {"items": items}
 
         raw_rule_names = set()
@@ -2577,7 +2577,7 @@ def apply_offers(invoice_data, selected_offers=None):
                 if name in selected_offer_names
             }
 
-        if not rule_map:
+        if not rule_map and not selected_offer_names:
             return {"items": items}
 
         applied_rules = set()
