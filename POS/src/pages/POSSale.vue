@@ -1100,7 +1100,7 @@ const { showSuccess, showError, showWarning } = useToast();
 const log = logger.create("POSSale");
 
 // App version
-const appVersion = "2.0.11";
+const appVersion = "2.0.12";
 
 // User data composable
 const { userName, userImage } = useUserData();
@@ -2510,11 +2510,21 @@ async function handleLoadDraft(draft) {
 			// No need to clear here as we're about to overwrite cart contents
 		}
 
-		// When loading an online draft, we just use its items. The items structure is slightly different (Sales Invoice Item).
-		// But let's assume `draftData.items` maps correctly, or if we need a custom mapper we can add it.
-		// For now we'll just map `item_name` to `qty` etc.
-		const draftData = draft.is_server 
-			? { items: draft.items, customer: draft.customer, additionalDiscount: draft.discount_amount } 
+		// Server drafts come from Sales Invoice documents (ERPNext field names).
+		// Cart uses `quantity` but Sales Invoice uses `qty` — map it explicitly.
+		// Customer is stored as a string ID on the invoice; reconstruct a minimal object.
+		const draftData = draft.is_server
+			? {
+				items: (draft.items || []).map(item => ({
+					...item,
+					quantity: Number(item.qty) || Number(item.quantity) || 0,
+					price_list_rate: item.price_list_rate || item.rate || 0,
+				})),
+				customer: draft.customer
+					? { name: draft.customer, customer_name: draft.customer_name || draft.customer }
+					: null,
+				additionalDiscount: draft.discount_amount || 0,
+			}
 			: await draftsStore.loadDraft(draft);
 
 		cartStore.invoiceItems = draftData.items;
