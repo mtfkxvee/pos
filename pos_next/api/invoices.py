@@ -2244,13 +2244,71 @@ def search_invoices_for_return(
 # ==========================================
 
 
+def _rule_qualifies_for_transaction(full_rule, customer_group, transaction_total, transaction_date):
+    """Check whether a Pricing Rule is valid for the current transaction context.
+
+    Used as a direct fallback when ERPNext's apply_pricing_rule does not detect
+    the rule (common for Promotional Scheme rules with customer_group + min_amount
+    conditions that are evaluated at the transaction level, not per-item).
+    """
+    # Rule must be enabled
+    if full_rule.disable:
+        return False
+
+    # Date range check
+    if transaction_date:
+        if full_rule.valid_from and str(full_rule.valid_from) > str(transaction_date):
+            return False
+        if full_rule.valid_upto and str(full_rule.valid_upto) < str(transaction_date):
+            return False
+
+    # Customer group check — rule targets a specific group; current customer must
+    # be in that group or one of its child groups.
+    if full_rule.customer_group and customer_group:
+        try:
+            # get_ancestors_of returns the parent chain, e.g. ["MEMBER", "All Customer Groups"]
+            # for a customer in a subgroup of MEMBER.
+            from frappe.utils.nestedset import get_ancestors_of
+            ancestors = get_ancestors_of("Customer Group", customer_group)
+            allowed_groups = set([customer_group] + (ancestors or []))
+            if full_rule.customer_group not in allowed_groups:
+                return False
+        except Exception:
+            # If hierarchy check fails, fall back to exact match
+            if full_rule.customer_group != customer_group:
+                return False
+    elif full_rule.customer_group and not customer_group:
+        # Rule requires a specific group but we have none
+        return False
+
+    # Transaction amount (min/max)
+    if full_rule.min_amount and flt(transaction_total) < flt(full_rule.min_amount):
+        return False
+    if full_rule.max_amount and flt(transaction_total) > flt(full_rule.max_amount):
+        return False
+
+    return True
+
+
 def _item_qualifies_for_rule(item_doc, rule_doc):
     """Check if a cart item qualifies as a trigger for a pricing rule."""
     apply_on = rule_doc.apply_on
     if apply_on == "Item Code":
         return item_doc.get("item_code") in [r.item_code for r in (rule_doc.items or [])]
     elif apply_on == "Item Group":
-        return item_doc.get("item_group") in [r.item_group for r in (rule_doc.item_groups or [])]
+        rule_groups = {r.item_group for r in (rule_doc.item_groups or [])}
+        if "All Item Groups" in rule_groups:
+            return True
+        item_group = item_doc.get("item_group")
+        if item_group in rule_groups:
+            return True
+        # Also check ancestors — rule may target a parent group
+        try:
+            from frappe.utils.nestedset import get_ancestors_of
+            ancestors = get_ancestors_of("Item Group", item_group) if item_group else []
+            return bool(rule_groups & set(ancestors))
+        except Exception:
+            return False
     elif apply_on == "Brand":
         return item_doc.get("brand") in [r.brand for r in (rule_doc.brands or [])]
     elif apply_on == "Transaction":
@@ -2642,10 +2700,26 @@ def apply_offers(invoice_data, selected_offers=None):
                 free_item_doc.warehouse = profile.warehouse  # Always use POS profile warehouse
                 free_items.append(free_item_doc)
 
-        # Post-process: apply selected offers skipped by ERPNext's priority resolution.
-        # When multiple rules share the same priority, ERPNext picks only one. We bypass
-        # this for explicitly selected offers that the user/auto-apply chose.
+        # Post-process: apply selected offers skipped by ERPNext's priority resolution
+        # OR completely missed by the engine (e.g. Promotional Scheme rules with
+        # customer_group + min_amount that ERPNext evaluates at transaction level,
+        # not per-item — so they never appear in pricing_results / rule_map).
         if selected_offer_names:
+            # Populate rule_map with any selected rules ERPNext missed entirely
+            missed_names = [n for n in selected_offer_names if n not in applied_rules and n not in rule_map]
+            if missed_names:
+                missed_records = frappe.get_all(
+                    "Pricing Rule",
+                    filters={"name": ["in", missed_names], "disable": 0, "coupon_code_based": 0},
+                    fields=["name", "promotional_scheme", "coupon_code_based", "price_or_product_discount"],
+                )
+                for rec in missed_records:
+                    full_rule = frappe.get_cached_doc("Pricing Rule", rec.name)
+                    if _rule_qualifies_for_transaction(
+                        full_rule, customer_group, transaction_total, pricing_args.get("transaction_date")
+                    ):
+                        rule_map[rec.name] = frappe._dict(rec)
+
             unapplied = [n for n in selected_offer_names if n not in applied_rules and n in rule_map]
             for rule_name in unapplied:
                 rule_info = rule_map[rule_name]
