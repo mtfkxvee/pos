@@ -2352,8 +2352,7 @@ def apply_offers(invoice_data, selected_offers=None):
         if not items:
             return {"items": []}
 
-        if not invoice.get("pos_profile") or not erpnext_apply_pricing_rule:
-            # Either no POS profile supplied or ERPNext promotional engine unavailable
+        if not invoice.get("pos_profile"):
             return {"items": items}
 
         profile = frappe.get_cached_doc("POS Profile", invoice.get("pos_profile"))
@@ -2511,7 +2510,12 @@ def apply_offers(invoice_data, selected_offers=None):
         # needs to see ALL items (1 Book + 1 Camera) to know total qty=2, not just each item's qty=1
         #
         # See: erpnext/accounts/doctype/pricing_rule/utils.py -> get_qty_and_rate_for_mixed_conditions()
-        pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
+        # Call ERPNext pricing engine when available; otherwise fall through to
+        # our own post-processing (which handles selected_offers directly).
+        if erpnext_apply_pricing_rule:
+            pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
+        else:
+            pricing_results = []
 
         if not pricing_results and not selected_offer_names:
             return {"items": items}
