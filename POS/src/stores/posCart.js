@@ -124,6 +124,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const appliedCompliment = ref(null)
 	const manualDiscountAmount = ref(0)
 	const complimentDiscountAmount = ref(0)
+	// Transaction-level promo discount preview (applied at invoice level by ERPNext,
+	// not per-item — tracked separately so it doesn't get double-submitted)
+	const promoTransactionDiscount = ref(0)
 	const selectionMode = ref("uom") // 'uom' or 'variant'
 	const suppressOfferReapply = ref(false)
 	const currentDraftId = ref(null)
@@ -261,6 +264,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		appliedCompliment.value = null
 		manualDiscountAmount.value = 0
 		complimentDiscountAmount.value = 0
+		promoTransactionDiscount.value = 0
 		currentDraftId.value = null
 		targetDoctype.value = "Sales Invoice"
 		remarks.value = ""
@@ -380,6 +384,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		additionalDiscount.value = 0
 		manualDiscountAmount.value = 0
 		complimentDiscountAmount.value = 0
+		promoTransactionDiscount.value = 0
 		appliedCoupon.value = null
 		appliedCompliment.value = null
 		rebuildIncrementalCache()
@@ -579,6 +584,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			appliedRules: Array.isArray(payload.applied_pricing_rules)
 				? payload.applied_pricing_rules
 				: [],
+			// Transaction-level pricing rules return a separate discount amount
+			// (not per-item) so ERPNext can apply it at validate time without double-discount
+			transactionDiscountAmount: Number.parseFloat(payload.transaction_discount_amount) || 0,
 		}
 	}
 
@@ -589,6 +597,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	function filterActiveOffers(appliedRuleNames = []) {
 		if (!Array.isArray(appliedRuleNames) || appliedRuleNames.length === 0) {
 			appliedOffers.value = []
+			promoTransactionDiscount.value = 0
 			return
 		}
 
@@ -1009,11 +1018,23 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				items: responseItems,
 				freeItems,
 				appliedRules,
+				transactionDiscountAmount,
 			} = parseOfferResponse(response)
 
 			applyDiscountsFromServer(responseItems)
 			processFreeItems(freeItems)
 			filterActiveOffers(appliedRules)
+
+			// Apply transaction-level promo discount for UI preview
+			// (ERPNext applies this at invoice validate time, so we only track it here
+			// for display — it is NOT included in the submission payload)
+			if (transactionDiscountAmount > 0) {
+				promoTransactionDiscount.value = transactionDiscountAmount
+				rebuildIncrementalCache()
+			} else if (appliedRules.length === 0) {
+				promoTransactionDiscount.value = 0
+				rebuildIncrementalCache()
+			}
 
 			// Collect newly applied offers for notification
 			const newlyAppliedOffers = []
@@ -1891,6 +1912,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				appliedCompliment.value = null
 				manualDiscountAmount.value = 0
 				complimentDiscountAmount.value = 0
+				promoTransactionDiscount.value = 0
 				rebuildIncrementalCache()
 			}
 
@@ -1918,6 +1940,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		},
 	)
 
+	// Grand total adjusted for transaction-level promo discounts (for UI display only).
+	// promoTransactionDiscount is NOT sent at submission — ERPNext applies it via
+	// apply_pricing_rule_on_transaction during invoice validate.
+	const adjustedGrandTotal = computed(() =>
+		Math.max(0, (grandTotal.value || 0) - (promoTransactionDiscount.value || 0)),
+	)
+
 	return {
 		// State
 		invoiceItems,
@@ -1925,7 +1954,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		subtotal,
 		totalTax,
 		totalDiscount,
-		grandTotal,
+		grandTotal: adjustedGrandTotal, // override: includes promo transaction discount
 		posProfile,
 		posOpeningShift,
 		payments,
@@ -1939,6 +1968,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		appliedCompliment,
 		manualDiscountAmount,
 		complimentDiscountAmount,
+		promoTransactionDiscount,
 		selectionMode,
 		suppressOfferReapply,
 		currentDraftId,
