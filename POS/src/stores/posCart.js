@@ -104,6 +104,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		setDefaultCustomer,
 		applyDiscount,
 		removeDiscount,
+		calculateDiscountAmount,
 		applyOffersResource,
 		getItemDetailsResource,
 		recalculateItem,
@@ -120,6 +121,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const pendingItemQty = ref(1)
 	const appliedOffers = ref([])
 	const appliedCoupon = ref(null)
+	const appliedCompliment = ref(null)
+	const manualDiscountAmount = ref(0)
+	const complimentDiscountAmount = ref(0)
 	const selectionMode = ref("uom") // 'uom' or 'variant'
 	const suppressOfferReapply = ref(false)
 	const currentDraftId = ref(null)
@@ -254,6 +258,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		customer.value = null
 		appliedOffers.value = []
 		appliedCoupon.value = null
+		appliedCompliment.value = null
+		manualDiscountAmount.value = 0
+		complimentDiscountAmount.value = 0
 		currentDraftId.value = null
 		targetDoctype.value = "Sales Invoice"
 		remarks.value = ""
@@ -348,16 +355,34 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 	// Discount & Offer Management
 	function applyDiscountToCart(discount) {
-		applyDiscount(discount)
-		appliedCoupon.value = discount
+		const isCompliment = discount.code === "COMPLIMENT"
+		const amount = calculateDiscountAmount(discount, subtotal.value)
+
+		if (isCompliment) {
+			complimentDiscountAmount.value = amount
+			appliedCompliment.value = discount
+		} else {
+			manualDiscountAmount.value = amount
+			appliedCoupon.value = discount
+		}
+
+		// Stack both amounts
+		const combined = manualDiscountAmount.value + complimentDiscountAmount.value
+		additionalDiscount.value = Math.min(combined, subtotal.value)
+		rebuildIncrementalCache()
+
 		showSuccess(__("{0} applied successfully", [discount.name]))
 	}
 
 	function removeDiscountFromCart() {
 		suppressOfferReapply.value = true
 		appliedOffers.value = []
-		removeDiscount()
+		additionalDiscount.value = 0
+		manualDiscountAmount.value = 0
+		complimentDiscountAmount.value = 0
 		appliedCoupon.value = null
+		appliedCompliment.value = null
+		rebuildIncrementalCache()
 		showSuccess(__("Discount has been removed from cart"))
 	}
 
@@ -1863,6 +1888,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				invoiceItems.value = []
 				appliedOffers.value = []
 				appliedCoupon.value = null
+				appliedCompliment.value = null
+				manualDiscountAmount.value = 0
+				complimentDiscountAmount.value = 0
 				rebuildIncrementalCache()
 			}
 
@@ -1908,6 +1936,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		pendingItemQty,
 		appliedOffers,
 		appliedCoupon,
+		appliedCompliment,
+		manualDiscountAmount,
+		complimentDiscountAmount,
 		selectionMode,
 		suppressOfferReapply,
 		currentDraftId,

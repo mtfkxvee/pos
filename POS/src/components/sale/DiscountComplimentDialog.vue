@@ -91,6 +91,23 @@
 					</div>
 				</div>
 
+				<!-- Stacked discount summary -->
+				<div v-if="cartStore.appliedCoupon || cartStore.appliedCompliment" class="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 space-y-1 text-sm">
+					<p class="font-medium text-gray-700 mb-1">{{ __('Applied') }}</p>
+					<div v-if="cartStore.appliedCoupon" class="flex justify-between text-gray-600">
+						<span>{{ __('Discount') }}</span>
+						<span class="font-semibold text-red-600">- {{ formatCurrency(cartStore.manualDiscountAmount) }}</span>
+					</div>
+					<div v-if="cartStore.appliedCompliment" class="flex justify-between text-gray-600">
+						<span>{{ __('Compliment') }}</span>
+						<span class="font-semibold text-red-600">- {{ formatCurrency(cartStore.complimentDiscountAmount) }}</span>
+					</div>
+					<div class="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-1 mt-1">
+						<span>{{ __('Total Discount') }}</span>
+						<span class="text-red-700">- {{ formatCurrency(cartStore.additionalDiscount) }}</span>
+					</div>
+				</div>
+
 				<!-- Action Buttons -->
 				<div class="flex gap-3 pt-6 mt-2 border-t border-gray-100">
 					<Button
@@ -164,7 +181,7 @@ const complimentReason = ref("")
 const currencySymbol = computed(() => settingsStore.currencySymbol || "Rp")
 
 const hasAppliedDiscount = computed(() => {
-	return cartStore.additionalDiscount > 0 || cartStore.appliedCoupon
+	return cartStore.additionalDiscount > 0 || cartStore.appliedCoupon || cartStore.appliedCompliment
 })
 
 const calculatedDiscountAmount = computed(() => {
@@ -257,16 +274,33 @@ function applyCompliment() {
 	}
 }
 
-// Reset when opened
+// Reset/restore when opened
 watch(show, (val) => {
 	if (val) {
-		activeTab.value = "discount"
-		discountValue.value = 0
+		// Restore existing discount value if already applied
+		const existingCoupon = cartStore.appliedCoupon
+		if (existingCoupon && existingCoupon.code === "MANUAL") {
+			discountType.value = existingCoupon.percentage > 0 ? "Percentage" : "Amount"
+			discountValue.value = existingCoupon.percentage > 0 ? existingCoupon.percentage : existingCoupon.amount
+		} else {
+			discountType.value = "Percentage"
+			discountValue.value = 0
+		}
 
-		// Reset compliment state
-		complimentValue.value = 0
-		complimentReason.value = ""
-		complimentType.value = "Percentage"
+		// Restore existing compliment value if already applied
+		const existingCompliment = cartStore.appliedCompliment
+		if (existingCompliment) {
+			complimentType.value = existingCompliment.percentage > 0 ? "Percentage" : "Amount"
+			complimentValue.value = existingCompliment.percentage > 0 ? existingCompliment.percentage : existingCompliment.amount
+			complimentReason.value = existingCompliment.description || ""
+		} else {
+			complimentValue.value = 0
+			complimentReason.value = ""
+			complimentType.value = "Percentage"
+		}
+
+		// Default to discount tab unless only compliment is applied
+		activeTab.value = cartStore.appliedCompliment && !cartStore.appliedCoupon ? "compliment" : "discount"
 	}
 })
 </script>
