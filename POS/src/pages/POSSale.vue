@@ -359,7 +359,7 @@
 								:customer="cartStore.customer"
 								:subtotal="cartStore.subtotal"
 								:tax-amount="cartStore.totalTax"
-								:discount-amount="cartStore.totalDiscount"
+								:discount-amount="cartStore.totalDiscount + (cartStore.promoTransactionDiscount || 0)"
 								:grand-total="cartStore.grandTotal"
 								:pos-profile="shiftStore.profileName"
 								:currency="shiftStore.profileCurrency"
@@ -493,7 +493,7 @@
 			:additional-discount="cartStore.additionalDiscount"
 			:items="cartStore.invoiceItems"
 			:tax-amount="cartStore.totalTax"
-			:discount-amount="cartStore.totalDiscount"
+			:discount-amount="cartStore.totalDiscount + (cartStore.promoTransactionDiscount || 0)"
 			:target-doctype="cartStore.targetDoctype"
 			:is-submitting="cartStore.isSubmitting"
 			@payment-completed="handlePaymentCompleted"
@@ -1100,7 +1100,7 @@ const { showSuccess, showError, showWarning } = useToast();
 const log = logger.create("POSSale");
 
 // App version
-const appVersion = "2.0.20";
+const appVersion = "2.0.21";
 
 // User data composable
 const { userName, userImage } = useUserData();
