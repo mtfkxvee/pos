@@ -132,18 +132,32 @@ class CustomSalesInvoice(SalesInvoice):
 	def before_submit(self):
 		"""
 		Override debit_to with custom_receiveable from POS Profile (if set).
-		This runs after all ERPNext validation, so it takes final precedence.
+		Runs after validate() and before GL entries are generated in on_submit(),
+		so this value is what ERPNext uses for all accounting entries.
 		"""
-		super().before_submit() if hasattr(super(), "before_submit") else None
+		# Always call parent's before_submit first
+		try:
+			super().before_submit()
+		except AttributeError:
+			pass
 
 		if not cint(self.is_pos) or not self.pos_profile:
 			return
 
-		custom_receiveable = frappe.db.get_value(
-			"POS Profile", self.pos_profile, "custom_receiveable"
-		)
-		if custom_receiveable:
-			self.debit_to = custom_receiveable
+		try:
+			custom_receiveable = frappe.db.get_value(
+				"POS Profile", self.pos_profile, "custom_receiveable"
+			)
+			if custom_receiveable:
+				self.debit_to = custom_receiveable
+				frappe.logger("pos_next").debug(
+					f"[POS Next] debit_to overridden to {custom_receiveable} for {self.name}"
+				)
+		except Exception as e:
+			frappe.log_error(
+				f"POS Next: failed to set custom_receiveable on {self.name}: {e}",
+				"POS Custom Receivable"
+			)
 
 	def get_party_and_party_type_for_pos_gl_entry(self, mode_of_payment, account):
 		"""
