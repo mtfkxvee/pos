@@ -129,6 +129,22 @@ class CustomSalesInvoice(SalesInvoice):
 					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
 
+	def before_submit(self):
+		"""
+		Override debit_to with custom_receiveable from POS Profile (if set).
+		This runs after all ERPNext validation, so it takes final precedence.
+		"""
+		super().before_submit() if hasattr(super(), "before_submit") else None
+
+		if not cint(self.is_pos) or not self.pos_profile:
+			return
+
+		custom_receiveable = frappe.db.get_value(
+			"POS Profile", self.pos_profile, "custom_receiveable"
+		)
+		if custom_receiveable:
+			self.debit_to = custom_receiveable
+
 	def get_party_and_party_type_for_pos_gl_entry(self, mode_of_payment, account):
 		"""
 		Get party type and party for wallet payment GL entries.

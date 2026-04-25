@@ -1082,8 +1082,9 @@ def submit_invoice(invoice=None, data=None):
         # Override debit_to (receivable account) with custom_receiveable from POS Profile
         if pos_profile and doctype == "Sales Invoice":
             try:
-                pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
-                custom_receiveable = pos_profile_doc.get("custom_receiveable")
+                custom_receiveable = frappe.db.get_value(
+                    "POS Profile", pos_profile, "custom_receiveable"
+                )
                 if custom_receiveable:
                     invoice_doc.debit_to = custom_receiveable
             except Exception as e:
@@ -1213,8 +1214,9 @@ def submit_invoice(invoice=None, data=None):
         # Reinforce custom_receiveable after save in case ERPNext's validate overwrote it
         if pos_profile and doctype == "Sales Invoice":
             try:
-                pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
-                custom_receiveable = pos_profile_doc.get("custom_receiveable")
+                custom_receiveable = frappe.db.get_value(
+                    "POS Profile", pos_profile, "custom_receiveable"
+                )
                 if custom_receiveable and invoice_doc.debit_to != custom_receiveable:
                     frappe.db.set_value(
                         "Sales Invoice", invoice_doc.name, "debit_to", custom_receiveable
