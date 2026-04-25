@@ -1079,6 +1079,19 @@ def submit_invoice(invoice=None, data=None):
                     "POS Profile Branch"
                 )
 
+        # Override debit_to (receivable account) with custom_receiveable from POS Profile
+        if pos_profile and doctype == "Sales Invoice":
+            try:
+                pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+                custom_receiveable = pos_profile_doc.get("custom_receiveable")
+                if custom_receiveable:
+                    invoice_doc.debit_to = custom_receiveable
+            except Exception as e:
+                frappe.log_error(
+                    f"Failed to set custom receivable from POS Profile {pos_profile}: {e}",
+                    "POS Custom Receivable Error"
+                )
+
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
             for payment in invoice_doc.payments:
@@ -1196,6 +1209,22 @@ def submit_invoice(invoice=None, data=None):
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
+
+        # Reinforce custom_receiveable after save in case ERPNext's validate overwrote it
+        if pos_profile and doctype == "Sales Invoice":
+            try:
+                pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+                custom_receiveable = pos_profile_doc.get("custom_receiveable")
+                if custom_receiveable and invoice_doc.debit_to != custom_receiveable:
+                    frappe.db.set_value(
+                        "Sales Invoice", invoice_doc.name, "debit_to", custom_receiveable
+                    )
+                    invoice_doc.debit_to = custom_receiveable
+            except Exception as e:
+                frappe.log_error(
+                    f"Failed to reinforce custom receivable from POS Profile {pos_profile}: {e}",
+                    "POS Custom Receivable Error"
+                )
 
         # Submit invoice
         invoice_doc.submit()
