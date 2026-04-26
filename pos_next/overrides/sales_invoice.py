@@ -132,9 +132,10 @@ class CustomSalesInvoice(SalesInvoice):
 	def before_submit(self):
 		"""
 		Override debit_to with custom_receiveable from POS Profile (if set).
-		Only applies to credit/Pay-on-Account transactions where the total
-		payments are less than the grand total (i.e. there is outstanding).
-		Fully-paid (cash/bank) transactions are NOT affected.
+		Only applies to Pay-on-Account (credit) transactions where ERPNext
+		has calculated outstanding_amount > 0 after validate().
+		Fully-paid (cash/bank) transactions have outstanding_amount = 0
+		and are NOT affected.
 		"""
 		try:
 			super().before_submit()
@@ -144,11 +145,11 @@ class CustomSalesInvoice(SalesInvoice):
 		if not cint(self.is_pos) or not self.pos_profile:
 			return
 
-		# Only override for credit sales (outstanding amount remains)
-		total_paid = flt(sum(flt(p.amount) for p in self.get("payments", [])))
-		grand_total = flt(self.grand_total)
-		if total_paid >= grand_total:
-			# Fully paid — leave debit_to as-is (default receivable, cleared immediately by payment GL)
+		# ERPNext's validate() → set_outstanding_amount() runs before before_submit.
+		# For fully-paid POS invoices it sets outstanding_amount = 0.
+		# For Pay-on-Account it sets outstanding_amount = grand_total - paid_amount.
+		# This is the most reliable signal — avoids manual payment summing.
+		if flt(self.outstanding_amount) <= 0:
 			return
 
 		try:
