@@ -1084,20 +1084,7 @@ def submit_invoice(invoice=None, data=None):
                     "POS Profile Branch"
                 )
 
-        # Safety net: if payments were lost during update_invoice (ERPNext may silently
-        # clear payment rows without accounts during validate on some configurations),
-        # restore them from the backup sent in data.payments by the frontend.
-        if doctype == "Sales Invoice":
-            fallback_payments = data.get("payments") or []
-            if fallback_payments and not invoice_doc.get("payments"):
-                invoice_doc.set("payments", [])
-                for p in fallback_payments:
-                    if p.get("mode_of_payment") and flt(p.get("amount", 0)) > 0:
-                        invoice_doc.append("payments", {
-                            "mode_of_payment": p.get("mode_of_payment"),
-                            "amount": flt(p.get("amount")),
-                            "type": p.get("type") or "Cash",
-                        })
+        # (payments restored after save — see below)
 
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
@@ -1216,6 +1203,53 @@ def submit_invoice(invoice=None, data=None):
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
+
+        # Safety net: ERPNext's validate() during save() may clear payment rows
+        # (observed on some ERPNext v15 configurations when payments lack accounts).
+        # Write payments directly to the child table after save, bypassing validate.
+        fallback_payments = data.get("payments") or []
+        if fallback_payments and doctype == "Sales Invoice":
+            saved_count = frappe.db.count(
+                "Sales Invoice Payment", {"parent": invoice_doc.name}
+            )
+            if not saved_count:
+                total_paid = 0
+                for idx, p in enumerate(fallback_payments):
+                    mop = p.get("mode_of_payment")
+                    amount = flt(p.get("amount", 0))
+                    if not mop or amount <= 0:
+                        continue
+                    account_info = get_payment_account(mop, invoice_doc.company)
+                    account = account_info.get("account") if account_info else ""
+                    row_name = frappe.generate_hash(invoice_doc.name + str(idx), 10)
+                    frappe.db.sql("""
+                        INSERT INTO `tabSales Invoice Payment`
+                        (name, creation, modified, modified_by, owner,
+                         parent, parenttype, parentfield, idx,
+                         mode_of_payment, amount, base_amount, type, account)
+                        VALUES (%s, NOW(), NOW(), %s, %s,
+                                %s, 'Sales Invoice', 'payments', %s,
+                                %s, %s, %s, %s, %s)
+                    """, (
+                        row_name,
+                        frappe.session.user, frappe.session.user,
+                        invoice_doc.name, idx + 1,
+                        mop, amount, amount,
+                        p.get("type") or "Cash",
+                        account,
+                    ))
+                    total_paid += amount
+
+                if total_paid:
+                    outstanding = max(0, flt(invoice_doc.grand_total) - total_paid)
+                    frappe.db.set_value(
+                        "Sales Invoice", invoice_doc.name,
+                        {"paid_amount": total_paid, "outstanding_amount": outstanding},
+                        update_modified=False,
+                    )
+                    invoice_doc.paid_amount = total_paid
+                    invoice_doc.outstanding_amount = outstanding
+                    frappe.db.commit()
 
         # Submit invoice
         invoice_doc.submit()
