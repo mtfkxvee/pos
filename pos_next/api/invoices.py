@@ -479,7 +479,12 @@ def update_invoice(data):
                             mode_of_payment, company
                         )
                         if account_info:
-                            payment["account"] = account_info.get("account")
+                            account = account_info.get("account")
+                            # payment can be a dict or a Frappe document object
+                            if isinstance(payment, dict):
+                                payment["account"] = account
+                            else:
+                                payment.account = account
                     except Exception as e:
                         frappe.log_error(
                             f"Failed to get payment account for {mode_of_payment}: {e}",
