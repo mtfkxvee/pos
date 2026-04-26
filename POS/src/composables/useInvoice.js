@@ -916,6 +916,13 @@ export function useInvoice() {
 					change_amount:
 						remainingAmount.value < 0 ? Math.abs(remainingAmount.value) : 0,
 					write_off_amount: writeOffAmount || 0,
+					// Backup payments in case update_invoice lost them (e.g. ERPNext cleared
+					// payment rows without accounts during validate on some configurations)
+					payments: rawPayments.map((p) => ({
+						mode_of_payment: p.mode_of_payment,
+						amount: p.amount,
+						type: p.type,
+					})),
 				}
 
 				try {

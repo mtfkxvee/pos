@@ -1084,6 +1084,21 @@ def submit_invoice(invoice=None, data=None):
                     "POS Profile Branch"
                 )
 
+        # Safety net: if payments were lost during update_invoice (ERPNext may silently
+        # clear payment rows without accounts during validate on some configurations),
+        # restore them from the backup sent in data.payments by the frontend.
+        if doctype == "Sales Invoice":
+            fallback_payments = data.get("payments") or []
+            if fallback_payments and not invoice_doc.get("payments"):
+                invoice_doc.set("payments", [])
+                for p in fallback_payments:
+                    if p.get("mode_of_payment") and flt(p.get("amount", 0)) > 0:
+                        invoice_doc.append("payments", {
+                            "mode_of_payment": p.get("mode_of_payment"),
+                            "amount": flt(p.get("amount")),
+                            "type": p.get("type") or "Cash",
+                        })
+
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
             for payment in invoice_doc.payments:
