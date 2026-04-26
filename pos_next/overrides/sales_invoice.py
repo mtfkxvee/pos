@@ -131,24 +131,43 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def before_submit(self):
 		"""
-		Override debit_to with custom_receiveable from POS Profile (if set).
-		Only applies to Pay-on-Account (credit) transactions where ERPNext
-		has calculated outstanding_amount > 0 after validate().
-		Fully-paid (cash/bank) transactions have outstanding_amount = 0
-		and are NOT affected.
+		Runs after validate() and before on_submit() / make_pos_gl_entries().
+
+		1. If payments are empty in memory (ERPNext's validate() cleared them on
+		   some configurations), reload them from the DB — our SQL insert in
+		   submit_invoice already wrote the rows.  Without this, make_pos_gl_entries
+		   iterates an empty list and creates no payment GL entries → Unpaid.
+
+		2. Override debit_to with custom_receiveable from POS Profile, but only
+		   for Pay-on-Account (outstanding > 0) transactions.
 		"""
 		try:
 			super().before_submit()
 		except AttributeError:
 			pass
 
-		if not cint(self.is_pos) or not self.pos_profile:
+		if not cint(self.is_pos):
 			return
 
-		# ERPNext's validate() → set_outstanding_amount() runs before before_submit.
-		# For fully-paid POS invoices it sets outstanding_amount = 0.
-		# For Pay-on-Account it sets outstanding_amount = grand_total - paid_amount.
-		# This is the most reliable signal — avoids manual payment summing.
+		# --- Safety net: restore payments from DB if validate() cleared them ---
+		if not self.get("payments"):
+			db_payments = frappe.get_all(
+				"Sales Invoice Payment",
+				filters={"parent": self.name},
+				fields=["name", "mode_of_payment", "amount", "base_amount", "type", "account"],
+				order_by="idx asc",
+			)
+			if db_payments:
+				self.set("payments", db_payments)
+				# Recalculate paid_amount from restored payments
+				total_paid = sum(flt(p.get("amount", 0)) for p in db_payments)
+				self.paid_amount = total_paid
+				self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
+
+		# --- custom_receiveable override (Pay-on-Account only) ---
+		if not self.pos_profile:
+			return
+
 		if flt(self.outstanding_amount) <= 0:
 			return
 

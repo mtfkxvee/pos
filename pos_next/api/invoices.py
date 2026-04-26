@@ -1249,9 +1249,13 @@ def submit_invoice(invoice=None, data=None):
                         {"paid_amount": total_paid, "outstanding_amount": outstanding},
                         update_modified=False,
                     )
-                    invoice_doc.paid_amount = total_paid
-                    invoice_doc.outstanding_amount = outstanding
                     frappe.db.commit()
+
+                # Reload doc from DB so in-memory self.payments is populated
+                # before submit() → validate() → make_pos_gl_entries() runs.
+                # Without this, self.payments is empty in memory even though DB has rows,
+                # so no payment GL entries are created and invoice stays Unpaid.
+                invoice_doc.reload()
 
         # Submit invoice
         invoice_doc.submit()
