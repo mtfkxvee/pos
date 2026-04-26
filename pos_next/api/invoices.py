@@ -605,13 +605,15 @@ def update_invoice(data):
 
         if pos_profile:
             try:
-                pos_settings_value = frappe.db.get_value(
-                    "POS Settings",
-                    {"pos_profile": pos_profile},
-                    "disable_rounded_total"
-                )
-                if pos_settings_value is not None:
-                    disable_rounded = cint(pos_settings_value)
+                # Check if field exists before querying (may not exist on all ERPNext versions)
+                if frappe.db.has_column("POS Settings", "disable_rounded_total"):
+                    pos_settings_value = frappe.db.get_value(
+                        "POS Settings",
+                        {"pos_profile": pos_profile},
+                        "disable_rounded_total"
+                    )
+                    if pos_settings_value is not None:
+                        disable_rounded = cint(pos_settings_value)
             except Exception as e:
                 # Log error but continue with default
                 frappe.log_error(f"Error loading rounding setting: {str(e)}", "POS Invoice Creation")
