@@ -814,6 +814,7 @@ export function useInvoice() {
 				type: p.type,
 			})),
 			discount_amount: additionalDiscount.value || 0,
+			apply_discount_on: "Grand Total",
 			coupon_code: couponCode.value,
 			is_pos: 1,
 			update_stock: 1,
@@ -879,6 +880,7 @@ export function useInvoice() {
 						type: p.type,
 					})),
 					discount_amount: additionalDiscount.value || 0,
+					apply_discount_on: "Grand Total",
 					coupon_code: couponCode.value,
 					is_pos: 1,
 					update_stock: 1, // Critical: Ensures stock is updated
