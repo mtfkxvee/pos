@@ -320,12 +320,25 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
-		const result = await baseSubmitInvoice(
-			targetDoctype.value,
-			deliveryDate.value,
-			writeOffAmount.value,
-			toRaw(loyaltyData.value),
-		)
+		// Include promoTransactionDiscount in discount_amount so backend applies
+		// the full discount (promo + manual). Backend has ignore_pricing_rule=1,
+		// so transaction-level promo is not auto-applied — we must send it explicitly.
+		const savedAdditional = additionalDiscount.value
+		if (promoTransactionDiscount.value > 0) {
+			additionalDiscount.value = savedAdditional + promoTransactionDiscount.value
+		}
+
+		let result
+		try {
+			result = await baseSubmitInvoice(
+				targetDoctype.value,
+				deliveryDate.value,
+				writeOffAmount.value,
+				toRaw(loyaltyData.value),
+			)
+		} finally {
+			additionalDiscount.value = savedAdditional
+		}
 		// Reset write-off and loyalty amount after successful submission
 		if (result) {
 			writeOffAmount.value = 0
