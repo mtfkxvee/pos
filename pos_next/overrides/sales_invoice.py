@@ -129,20 +129,33 @@ class CustomSalesInvoice(SalesInvoice):
 					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
 
-	def validate(self):
+	def set_pos_fields(self, for_validate=False):
 		"""
-		Override validate to:
-		1. Restore payments after ERPNext's validate() may clear them.
-		2. Restore discount_amount after ERPNext's set_pos_fields() may reset it to 0.
+		Override set_pos_fields to preserve discount_amount.
 
-		ERPNext's set_pos_fields() (called inside super().validate()) reloads all
-		payment methods from POS Profile with amount=0, and may also reset
-		discount_amount to 0. We snapshot both before and restore after.
+		ERPNext's set_pos_fields() resets discount_amount to 0 because POS
+		discounts are normally handled per-item. Our POS sends an additional
+		transaction-level discount via discount_amount, so we must preserve it.
 		"""
-		# Snapshot discount BEFORE super().validate() potentially resets it.
 		saved_discount_amount = flt(self.discount_amount or 0)
 		saved_apply_discount_on = self.apply_discount_on or "Grand Total"
 
+		super().set_pos_fields(for_validate=for_validate)
+
+		# Restore discount if set_pos_fields() cleared it
+		if saved_discount_amount > 0 and not flt(self.discount_amount):
+			self.discount_amount = saved_discount_amount
+			self.apply_discount_on = saved_apply_discount_on
+
+	def validate(self):
+		"""
+		Override validate to restore payments after ERPNext's validate() may clear them.
+
+		On some ERPNext v15 configurations, validate() clears payment rows from
+		self.payments. Since submit() calls save() → validate() → db_update(), if
+		validate() clears self.payments, db_update() will write empty payments to DB,
+		and on_submit() → make_pos_gl_entries() will find no payments → invoice Unpaid.
+		"""
 		# Always snapshot DB payment count BEFORE super().validate() touches self.payments.
 		db_payment_count = 0
 		if self.name and not self.is_new():
@@ -173,24 +186,6 @@ class CustomSalesInvoice(SalesInvoice):
 				frappe.log_error(
 					f"POS Next: failed to restore payments in validate for {self.name}: {e}",
 					"POS Payment Restore"
-				)
-
-		# Restore discount_amount if super().validate() cleared it.
-		# set_pos_fields() resets discount_amount to 0; re-apply and recalculate.
-		if saved_discount_amount > 0 and not flt(self.discount_amount):
-			self.discount_amount = saved_discount_amount
-			self.apply_discount_on = saved_apply_discount_on
-			try:
-				self.calculate_taxes_and_totals()
-				# Recalculate outstanding with restored grand_total
-				total_paid = sum(flt(p.get("amount", 0) if isinstance(p, dict) else getattr(p, "amount", 0)) for p in (self.get("payments") or []))
-				if total_paid > 0:
-					self.paid_amount = total_paid
-					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
-			except Exception as e:
-				frappe.log_error(
-					f"POS Next: failed to recalculate after discount restore for {self.name}: {e}",
-					"POS Discount Restore"
 				)
 
 	def before_submit(self):
