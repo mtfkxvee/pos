@@ -1244,7 +1244,7 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc.remarks = frontend_remarks
 
         # Save before submit
-        _log_payment_state("3. before save()", invoice_doc)
+        _ptrace(f"[PAY-TRACE] 3. before save: pays={len(invoice_doc.get('payments') or [])} paid={invoice_doc.paid_amount}")
 
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
