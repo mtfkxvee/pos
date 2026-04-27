@@ -133,18 +133,21 @@ class CustomSalesInvoice(SalesInvoice):
 		"""
 		Override set_pos_fields to preserve discount_amount.
 
-		ERPNext's set_pos_fields() resets discount_amount to 0 because POS
-		discounts are normally handled per-item. Our POS sends an additional
-		transaction-level discount via discount_amount, so we must preserve it.
+		ERPNext's set_pos_fields() resets discount_amount to 0 or a stale value
+		from POS Profile. We preserve the value set by our POS frontend.
+
+		When _pos_next_discount_locked is True, we skip entirely to avoid the
+		recursive loop: validate() → calculate_taxes_and_totals() → set_pos_fields()
+		which would reset discount_amount again mid-recalculation.
 		"""
+		if getattr(self, "_pos_next_discount_locked", False):
+			return
+
 		saved_discount_amount = flt(self.discount_amount or 0)
 		saved_apply_discount_on = self.apply_discount_on or "Grand Total"
 
 		super().set_pos_fields(for_validate=for_validate)
 
-		# Restore discount if set_pos_fields() changed it (to 0 or any other value).
-		# ERPNext may reset discount_amount to 0, or to a stale value from POS Profile.
-		# We always trust the value that was on self before set_pos_fields() was called.
 		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
 			self.discount_amount = saved_discount_amount
 			self.apply_discount_on = saved_apply_discount_on
@@ -195,19 +198,18 @@ class CustomSalesInvoice(SalesInvoice):
 					"POS Payment Restore"
 				)
 
-		# After super().validate() completes: restore discount_amount if anything changed it.
-		# Multiple methods inside validate() (set_pos_fields, validate_pos, etc.) can alter
-		# discount_amount. Do NOT call calculate_taxes_and_totals() again here — it may
-		# trigger another set_pos_fields() call that resets the value. Instead, directly
-		# adjust grand_total by the discount difference to avoid recursive resets.
+		# After super().validate(): restore discount_amount if anything in the chain changed it,
+		# then recalculate properly with the lock to prevent recursive set_pos_fields() resets.
 		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
-			discount_diff = saved_discount_amount - flt(self.discount_amount)
 			self.discount_amount = saved_discount_amount
 			self.apply_discount_on = saved_apply_discount_on
-			# Adjust grand totals by the discount difference (avoids re-triggering set_pos_fields)
-			self.grand_total = flt(self.grand_total) - discount_diff
-			self.base_grand_total = flt(self.base_grand_total) - discount_diff
-			self.rounded_total = flt(self.rounded_total) - discount_diff if flt(self.rounded_total) else self.grand_total
+			# Lock: prevents set_pos_fields() from resetting discount_amount when
+			# calculate_taxes_and_totals() calls it internally during recalculation.
+			self._pos_next_discount_locked = True
+			try:
+				self.calculate_taxes_and_totals()
+			finally:
+				self._pos_next_discount_locked = False
 			# Recalculate outstanding based on corrected grand_total
 			total_paid = sum(
 				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
