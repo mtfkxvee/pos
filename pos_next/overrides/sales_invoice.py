@@ -129,43 +129,60 @@ class CustomSalesInvoice(SalesInvoice):
 					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
 
+	def validate(self):
+		"""
+		Override validate to restore payments after ERPNext's validate() may clear them.
+
+		On some ERPNext v15 configurations, validate() clears payment rows from
+		self.payments (e.g. when accounts are missing or set_pos_fields resets them).
+		Since save() is called inside submit() AFTER before_submit(), and save() calls
+		validate() then writes self.payments to DB, we must restore here — not in
+		before_submit — so that the correct payments end up in the DB and are available
+		for on_submit() → make_pos_gl_entries().
+		"""
+		# Before super().validate(): count DB rows so we know if payments existed
+		# but were absent from memory (happens on re-validate during submit)
+		db_payment_count = 0
+		if self.name and not self.is_new() and not self.get("payments"):
+			try:
+				db_payment_count = frappe.db.count(
+					"Sales Invoice Payment", {"parent": self.name}
+				)
+			except Exception:
+				pass
+
+		super().validate()
+
+		# After super().validate(): if payments existed in DB but got cleared, restore them
+		if db_payment_count and not self.get("payments"):
+			try:
+				db_payments = frappe.get_all(
+					"Sales Invoice Payment",
+					filters={"parent": self.name},
+					fields=["mode_of_payment", "amount", "base_amount", "type", "account"],
+					order_by="idx asc",
+				)
+				if db_payments:
+					self.set("payments", db_payments)
+					total_paid = sum(flt(p.get("amount", 0)) for p in db_payments)
+					self.paid_amount = total_paid
+					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
+			except Exception as e:
+				frappe.log_error(
+					f"POS Next: failed to restore payments in validate for {self.name}: {e}",
+					"POS Payment Restore"
+				)
+
 	def before_submit(self):
 		"""
-		Runs after validate() and before on_submit() / make_pos_gl_entries().
-
-		1. If payments are empty in memory (ERPNext's validate() cleared them on
-		   some configurations), reload them from the DB — our SQL insert in
-		   submit_invoice already wrote the rows.  Without this, make_pos_gl_entries
-		   iterates an empty list and creates no payment GL entries → Unpaid.
-
-		2. Override debit_to with custom_receiveable from POS Profile, but only
-		   for Pay-on-Account (outstanding > 0) transactions.
+		Override debit_to with custom_receiveable from POS Profile (Pay-on-Account only).
 		"""
 		try:
 			super().before_submit()
 		except AttributeError:
 			pass
 
-		if not cint(self.is_pos):
-			return
-
-		# --- Safety net: restore payments from DB if validate() cleared them ---
-		if not self.get("payments"):
-			db_payments = frappe.get_all(
-				"Sales Invoice Payment",
-				filters={"parent": self.name},
-				fields=["name", "mode_of_payment", "amount", "base_amount", "type", "account"],
-				order_by="idx asc",
-			)
-			if db_payments:
-				self.set("payments", db_payments)
-				# Recalculate paid_amount from restored payments
-				total_paid = sum(flt(p.get("amount", 0)) for p in db_payments)
-				self.paid_amount = total_paid
-				self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
-
-		# --- custom_receiveable override (Pay-on-Account only) ---
-		if not self.pos_profile:
+		if not cint(self.is_pos) or not self.pos_profile:
 			return
 
 		if flt(self.outstanding_amount) <= 0:
