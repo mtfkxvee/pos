@@ -1262,6 +1262,13 @@ def submit_invoice(invoice=None, data=None):
                 or invoice.get("apply_discount_on")
                 or "Grand Total"
             )
+            # Store intended discount in flags so CustomSalesInvoice.calculate_taxes_and_totals()
+            # can enforce it throughout the entire save()+submit() cycle, even when
+            # doc_events hooks call calculate_taxes_and_totals() after our validate() runs.
+            invoice_doc.flags.intended_discount_amount = discount_amount
+            invoice_doc.flags.intended_apply_discount_on = (
+                data.get("apply_discount_on") or "Grand Total"
+            )
 
         _pre = (
             f"BEFORE-SAVE da={invoice_doc.discount_amount!r} "

@@ -129,18 +129,49 @@ class CustomSalesInvoice(SalesInvoice):
 					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
 
+	def calculate_taxes_and_totals(self):
+		"""
+		Override to enforce intended discount_amount throughout the entire save/submit cycle.
+
+		When submit_invoice sets flags.intended_discount_amount, we apply it before
+		calling super() so the calculation uses the right value. After super(), if
+		anything inside (set_pos_fields, apply_pricing_rule_on_transaction, etc.)
+		changed discount_amount, we restore and recalculate once more with a lock
+		flag to prevent infinite recursion.
+		"""
+		if getattr(self, "_pos_next_in_recalc", False):
+			# We're inside our own restoration recalculation — call super directly.
+			super().calculate_taxes_and_totals()
+			return
+
+		intended_da = flt(self.flags.get("intended_discount_amount") or 0)
+		intended_ado = self.flags.get("intended_apply_discount_on") or "Grand Total"
+
+		if intended_da > 0:
+			# Set before super() so the calculation uses the right value from the start.
+			self.discount_amount = intended_da
+			self.apply_discount_on = intended_ado
+
+		super().calculate_taxes_and_totals()
+
+		# After super(): restore if any method inside changed discount_amount.
+		if intended_da > 0 and flt(self.discount_amount) != intended_da:
+			self.discount_amount = intended_da
+			self.apply_discount_on = intended_ado
+			self._pos_next_in_recalc = True
+			try:
+				super().calculate_taxes_and_totals()
+			finally:
+				self._pos_next_in_recalc = False
+
 	def set_pos_fields(self, for_validate=False):
 		"""
 		Override set_pos_fields to preserve discount_amount.
 
 		ERPNext's set_pos_fields() resets discount_amount to 0 or a stale value
-		from POS Profile. We preserve the value set by our POS frontend.
-
-		When _pos_next_discount_locked is True, we skip entirely to avoid the
-		recursive loop: validate() → calculate_taxes_and_totals() → set_pos_fields()
-		which would reset discount_amount again mid-recalculation.
+		from POS Profile / pricing rules. We preserve the value set by our POS frontend.
 		"""
-		if getattr(self, "_pos_next_discount_locked", False):
+		if getattr(self, "_pos_next_in_recalc", False):
 			return
 
 		saved_discount_amount = flt(self.discount_amount or 0)
@@ -198,19 +229,13 @@ class CustomSalesInvoice(SalesInvoice):
 					"POS Payment Restore"
 				)
 
-		# After super().validate(): restore discount_amount if anything in the chain changed it,
-		# then recalculate properly with the lock to prevent recursive set_pos_fields() resets.
+		# After super().validate(): if discount was changed, restore and recalculate.
+		# calculate_taxes_and_totals() override will enforce intended discount via flags
+		# and prevent recursion via _pos_next_in_recalc.
 		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
 			self.discount_amount = saved_discount_amount
 			self.apply_discount_on = saved_apply_discount_on
-			# Lock: prevents set_pos_fields() from resetting discount_amount when
-			# calculate_taxes_and_totals() calls it internally during recalculation.
-			self._pos_next_discount_locked = True
-			try:
-				self.calculate_taxes_and_totals()
-			finally:
-				self._pos_next_discount_locked = False
-			# Recalculate outstanding based on corrected grand_total
+			self.calculate_taxes_and_totals()
 			total_paid = sum(
 				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
 				for p in (self.get("payments") or [])
