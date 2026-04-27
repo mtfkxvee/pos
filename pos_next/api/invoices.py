@@ -1247,11 +1247,40 @@ def submit_invoice(invoice=None, data=None):
         if frontend_remarks:
             invoice_doc.remarks = frontend_remarks
 
+        # Re-apply discount_amount/apply_discount_on before save.
+        # ERPNext's validate() → set_pos_fields() can zero-out discount_amount.
+        # data (step 2 payload from frontend) carries the authoritative discount values.
+        discount_amount = flt(data.get("discount_amount") or invoice.get("discount_amount") or 0)
+        if discount_amount > 0:
+            invoice_doc.discount_amount = discount_amount
+            invoice_doc.apply_discount_on = (
+                data.get("apply_discount_on")
+                or invoice.get("apply_discount_on")
+                or "Grand Total"
+            )
+
+        frappe.log_error(
+            f"[DISC-TRACE] submit_invoice before save: "
+            f"discount_amount={invoice_doc.discount_amount!r}, "
+            f"apply_discount_on={invoice_doc.apply_discount_on!r}, "
+            f"data.discount_amount={data.get('discount_amount')!r}, "
+            f"invoice.discount_amount={invoice.get('discount_amount')!r}",
+            "Discount Trace"
+        )
+
         # Save before submit
 
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
+
+        frappe.log_error(
+            f"[DISC-TRACE] submit_invoice after save (before submit): "
+            f"discount_amount={invoice_doc.discount_amount!r}, "
+            f"grand_total={invoice_doc.grand_total!r}, "
+            f"outstanding_amount={invoice_doc.outstanding_amount!r}",
+            "Discount Trace"
+        )
 
         invoice_doc.submit()
         invoice_submitted = True

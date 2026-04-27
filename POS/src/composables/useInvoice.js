@@ -936,7 +936,17 @@ export function useInvoice() {
 						amount: p.amount,
 						type: p.type,
 					})),
+					// Pass discount explicitly so submit_invoice can re-apply it
+					// during the second save() before submit, in case ERPNext's
+					// validate() resets discount_amount via set_pos_fields()
+					discount_amount: additionalDiscount.value || 0,
+					apply_discount_on: "Grand Total",
 				}
+
+				console.log("[DISC-TRACE] useInvoice submitData (step 2):", {
+					discount_amount: submitData.discount_amount,
+					apply_discount_on: submitData.apply_discount_on,
+				})
 
 				try {
 					const result = await submitInvoiceResource.submit({
