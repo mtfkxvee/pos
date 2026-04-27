@@ -151,13 +151,18 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def validate(self):
 		"""
-		Override validate to restore payments after ERPNext's validate() may clear them.
+		Override validate to:
+		1. Restore payments after ERPNext's validate() may clear them.
+		2. Restore discount_amount after ERPNext's validate() chain may change it.
 
-		On some ERPNext v15 configurations, validate() clears payment rows from
-		self.payments. Since submit() calls save() → validate() → db_update(), if
-		validate() clears self.payments, db_update() will write empty payments to DB,
-		and on_submit() → make_pos_gl_entries() will find no payments → invoice Unpaid.
+		set_pos_fields() plus other methods inside super().validate() can alter
+		discount_amount. We snapshot before the entire super().validate() call
+		and restore + recalculate at the end if it was changed.
 		"""
+		# Snapshot discount BEFORE super().validate() runs anything.
+		saved_discount_amount = flt(self.discount_amount or 0)
+		saved_apply_discount_on = self.apply_discount_on or "Grand Total"
+
 		# Always snapshot DB payment count BEFORE super().validate() touches self.payments.
 		db_payment_count = 0
 		if self.name and not self.is_new():
@@ -188,6 +193,27 @@ class CustomSalesInvoice(SalesInvoice):
 				frappe.log_error(
 					f"POS Next: failed to restore payments in validate for {self.name}: {e}",
 					"POS Payment Restore"
+				)
+
+		# After super().validate() completes: restore discount_amount if anything changed it.
+		# Multiple methods inside validate() (set_pos_fields, validate_pos, etc.) can alter
+		# discount_amount. Re-apply and recalculate so grand_total is correct.
+		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
+			self.discount_amount = saved_discount_amount
+			self.apply_discount_on = saved_apply_discount_on
+			try:
+				self.calculate_taxes_and_totals()
+				total_paid = sum(
+					flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
+					for p in (self.get("payments") or [])
+				)
+				if total_paid > 0:
+					self.paid_amount = total_paid
+					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
+			except Exception as e:
+				frappe.log_error(
+					f"POS Next: discount recalculate failed for {self.name}: {e}",
+					"POS Discount Restore"
 				)
 
 	def before_submit(self):
