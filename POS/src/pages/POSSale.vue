@@ -2007,11 +2007,7 @@ async function handlePaymentCompleted(paymentData) {
 		}
 
 		// Store sales team data if provided
-		if (paymentData.sales_team && Array.isArray(paymentData.sales_team)) {
-			cartStore.salesTeam = paymentData.sales_team;
-		} else {
-			cartStore.salesTeam = [];
-		}
+		cartStore.setSalesTeam(paymentData.sales_team || []);
 
 		// Set delivery date for Sales Orders
 		if (paymentData.delivery_date) {
@@ -2035,7 +2031,7 @@ async function handlePaymentCompleted(paymentData) {
 
 		// Store remarks for invoice
 		if (paymentData.remarks) {
-			cartStore.remarks = paymentData.remarks;
+			cartStore.setRemarks(paymentData.remarks);
 		}
 
 		// Delete draft if it exists (since we're submitting/saving invoice)

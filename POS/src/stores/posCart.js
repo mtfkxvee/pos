@@ -298,6 +298,14 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		writeOffAmount.value = amount || 0
 	}
 
+	function setSalesTeam(team) {
+		salesTeam.value = Array.isArray(team) ? team : []
+	}
+
+	function setRemarks(text) {
+		remarks.value = text || ""
+	}
+
 	function setLoyaltyData(data) {
 		loyaltyData.value = {
 			redeem_loyalty_points: data.redeem_loyalty_points || 0,
@@ -2053,6 +2061,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		// Remarks
 		remarks,
+		setRemarks,
+		setSalesTeam,
 
 		// Payment methods
 		addPayment,

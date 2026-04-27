@@ -429,14 +429,12 @@ def update_invoice(data):
         doctype = data.get("doctype", "Sales Invoice")
 
         # DISC-TRACE: log what discount fields arrive from frontend
-        frappe.log_error(
-            f"[DISC-TRACE] update_invoice received: "
-            f"discount_amount={data.get('discount_amount')!r}, "
-            f"apply_discount_on={data.get('apply_discount_on')!r}, "
-            f"customer={data.get('customer')!r}, "
-            f"doctype={doctype!r}",
-            "Discount Trace"
+        _recv = (
+            f"da={data.get('discount_amount')!r} "
+            f"ado={data.get('apply_discount_on')!r} "
+            f"cust={str(data.get('customer',''))[:30]!r}"
         )
+        frappe.log_error(_recv[:140], "Discount Trace")
 
         # Ensure the document type is set
         data.setdefault("doctype", doctype)
@@ -633,6 +631,13 @@ def update_invoice(data):
         # Populate missing fields (company, currency, accounts, etc.)
         invoice_doc.set_missing_values()
 
+        # Re-enforce discount AFTER set_missing_values() which may reset it.
+        # set_missing_values() can clear discount_amount / apply_discount_on.
+        _discount_amount = flt(data.get("discount_amount") or 0)
+        if _discount_amount > 0:
+            invoice_doc.discount_amount = _discount_amount
+            invoice_doc.apply_discount_on = data.get("apply_discount_on") or "Grand Total"
+
         # Calculate totals and apply discounts (with rounding disabled)
         invoice_doc.calculate_taxes_and_totals()
         if invoice_doc.grand_total is None:
@@ -641,15 +646,14 @@ def update_invoice(data):
             invoice_doc.base_grand_total = 0.0
 
         # DISC-TRACE: log invoice state after calculate_taxes_and_totals
-        frappe.log_error(
-            f"[DISC-TRACE] after calculate_taxes_and_totals: "
-            f"discount_amount={invoice_doc.discount_amount!r}, "
-            f"apply_discount_on={invoice_doc.apply_discount_on!r}, "
-            f"net_total={invoice_doc.net_total!r}, "
-            f"grand_total={invoice_doc.grand_total!r}, "
-            f"total_taxes_and_charges={invoice_doc.total_taxes_and_charges!r}",
-            "Discount Trace"
+        _msg = (
+            f"da={invoice_doc.discount_amount!r} "
+            f"ado={invoice_doc.apply_discount_on!r} "
+            f"nt={invoice_doc.net_total!r} "
+            f"gt={invoice_doc.grand_total!r} "
+            f"tax={invoice_doc.total_taxes_and_charges!r}"
         )
+        frappe.log_error(_msg[:140], "Discount Trace")
 
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:
@@ -1259,14 +1263,12 @@ def submit_invoice(invoice=None, data=None):
                 or "Grand Total"
             )
 
-        frappe.log_error(
-            f"[DISC-TRACE] submit_invoice before save: "
-            f"discount_amount={invoice_doc.discount_amount!r}, "
-            f"apply_discount_on={invoice_doc.apply_discount_on!r}, "
-            f"data.discount_amount={data.get('discount_amount')!r}, "
-            f"invoice.discount_amount={invoice.get('discount_amount')!r}",
-            "Discount Trace"
+        _pre = (
+            f"BEFORE-SAVE da={invoice_doc.discount_amount!r} "
+            f"ado={invoice_doc.apply_discount_on!r} "
+            f"data_da={data.get('discount_amount')!r}"
         )
+        frappe.log_error(_pre[:140], "Discount Trace")
 
         # Save before submit
 
@@ -1274,13 +1276,12 @@ def submit_invoice(invoice=None, data=None):
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        frappe.log_error(
-            f"[DISC-TRACE] submit_invoice after save (before submit): "
-            f"discount_amount={invoice_doc.discount_amount!r}, "
-            f"grand_total={invoice_doc.grand_total!r}, "
-            f"outstanding_amount={invoice_doc.outstanding_amount!r}",
-            "Discount Trace"
+        _post = (
+            f"AFTER-SAVE da={invoice_doc.discount_amount!r} "
+            f"gt={invoice_doc.grand_total!r} "
+            f"oa={invoice_doc.outstanding_amount!r}"
         )
+        frappe.log_error(_post[:140], "Discount Trace")
 
         invoice_doc.submit()
         invoice_submitted = True
