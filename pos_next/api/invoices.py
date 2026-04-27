@@ -1018,13 +1018,6 @@ def submit_invoice(invoice=None, data=None):
     # Track whether invoice was successfully submitted
     invoice_submitted = False
 
-    def _ptrace(msg):
-        """Safe payment trace logger — title capped at 140 chars."""
-        try:
-            frappe.log_error(msg[:140], "Payment Debug Trace")
-        except Exception:
-            pass
-
     try:
         invoice_name = invoice.get("name")
         # Custom offline name (e.g. XPYREG130309430001) — not an OFFLINE- temp name
@@ -1034,9 +1027,6 @@ def submit_invoice(invoice=None, data=None):
             else None
         )
 
-        inv_pays = [(p.get("mode_of_payment"), p.get("amount")) for p in (invoice.get("payments") or [])]
-        _ptrace(f"[PAY-TRACE] 1. from frontend: {inv_pays}")
-
         # Get or create invoice
         if not invoice_name or not frappe.db.exists(doctype, invoice_name):
             created = update_invoice(json.dumps(invoice))
@@ -1045,8 +1035,6 @@ def submit_invoice(invoice=None, data=None):
             auto_name = created.get("name")
             if not auto_name:
                 frappe.throw(_("Failed to get invoice name from draft"))
-
-            _ptrace(f"[PAY-TRACE] 2a. created pays count={len(created.get('payments') or [])}")
 
             # Rename auto-generated draft to our custom offline name
             if custom_offline_name and auto_name != custom_offline_name:
@@ -1066,11 +1054,9 @@ def submit_invoice(invoice=None, data=None):
                 invoice_name = auto_name
 
             invoice_doc = frappe.get_doc(doctype, invoice_name)
-            _ptrace(f"[PAY-TRACE] 2b. new doc pays count={len(invoice_doc.get('payments') or [])}")
         else:
             invoice_doc = frappe.get_doc(doctype, invoice_name)
             invoice_doc.update(invoice)
-            _ptrace(f"[PAY-TRACE] 2c. existing doc pays count={len(invoice_doc.get('payments') or [])}")
 
         # Ensure update_stock is set for Sales Invoice
         if doctype == "Sales Invoice":
@@ -1115,8 +1101,6 @@ def submit_invoice(invoice=None, data=None):
                 if mop and amt > 0:
                     fb_map[mop] = fb_map.get(mop, 0) + amt
 
-            _ptrace(f"[PAY-TRACE] PRE-SAVE fb_map={list(fb_map.items())}")
-
             if fb_map:
                 invoice_doc.set("payments", [])
                 for mop, amt in fb_map.items():
@@ -1128,7 +1112,6 @@ def submit_invoice(invoice=None, data=None):
                         "type": "Cash",
                         "account": account_info.get("account") if account_info else "",
                     })
-                _ptrace(f"[PAY-TRACE] PRE-SAVE built: {[(p.mode_of_payment, p.amount) for p in invoice_doc.payments]}")
 
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
@@ -1244,19 +1227,12 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc.remarks = frontend_remarks
 
         # Save before submit
-        _ptrace(f"[PAY-TRACE] 3. before save: pays={len(invoice_doc.get('payments') or [])} paid={invoice_doc.paid_amount}")
 
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        db_count_after_save = frappe.db.count("Sales Invoice Payment", {"parent": invoice_doc.name})
-        _ptrace(f"[PAY-TRACE] 4. after save: db_rows={db_count_after_save} paid={invoice_doc.paid_amount} outstanding={invoice_doc.outstanding_amount}"
-        )
-
-        _ptrace(f"[PAY-TRACE] 8. before submit: mem_pays={len(invoice_doc.get('payments') or [])} paid={invoice_doc.paid_amount} outstanding={invoice_doc.outstanding_amount}")
         invoice_doc.submit()
-        _ptrace(f"[PAY-TRACE] 9. after submit: paid={invoice_doc.paid_amount} outstanding={invoice_doc.outstanding_amount}")
         invoice_submitted = True
 
         # Complete the offline sync record
