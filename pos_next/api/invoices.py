@@ -1106,12 +1106,40 @@ def submit_invoice(invoice=None, data=None):
                     "POS Profile Branch"
                 )
 
-        # (payments restored after save — see below)
+        # Fix payment amounts BEFORE save: update_invoice returns the saved doc
+        # where ERPNext's validate() may have zeroed payment amounts (e.g. via
+        # set_pos_fields). The correct amounts are in data.payments (from frontend cart).
+        # Match by mode_of_payment and overwrite amount so validate()/paid_amount is correct.
+        fallback_payments_pre = data.get("payments") or []
+        if fallback_payments_pre and doctype == "Sales Invoice":
+            fb_map = {}
+            for p in fallback_payments_pre:
+                mop = p.get("mode_of_payment")
+                amt = flt(p.get("amount", 0))
+                if mop and amt > 0:
+                    fb_map[mop] = fb_map.get(mop, 0) + amt
+
+            if fb_map:
+                # Remove existing payments and rebuild from fallback
+                invoice_doc.set("payments", [])
+                for mop, amt in fb_map.items():
+                    account_info = get_payment_account(mop, invoice_doc.company)
+                    invoice_doc.append("payments", {
+                        "mode_of_payment": mop,
+                        "amount": amt,
+                        "base_amount": amt,
+                        "type": "Cash",
+                        "account": account_info.get("account") if account_info else "",
+                    })
+                frappe.log_error(
+                    f"[PAY-TRACE] PRE-SAVE fix applied: payments={[(p.mode_of_payment, p.amount) for p in invoice_doc.payments]}",
+                    "Payment Debug Trace"
+                )
 
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
             for payment in invoice_doc.payments:
-                if payment.mode_of_payment:
+                if payment.mode_of_payment and not payment.account:
                     account_info = get_payment_account(
                         payment.mode_of_payment, invoice_doc.company
                     )
