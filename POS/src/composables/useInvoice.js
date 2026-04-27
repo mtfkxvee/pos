@@ -745,6 +745,11 @@ export function useInvoice() {
 		payments.value.splice(index, 1)
 	}
 
+	function clearPayments() {
+		payments.value = []
+		_cachedTotalPaid.value = 0
+	}
+
 	function updatePayment(index, amount) {
 		if (payments.value[index]) {
 			// Store old value before update for incremental cache adjustment
@@ -1170,6 +1175,7 @@ export function useInvoice() {
 		removeDiscount,
 		addPayment,
 		removePayment,
+		clearPayments,
 		updatePayment,
 		validateStock,
 		saveDraft,

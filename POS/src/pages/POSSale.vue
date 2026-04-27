@@ -1995,10 +1995,10 @@ async function handlePaymentCompleted(paymentData) {
 			return;
 		}
 
-		cartStore.payments = [];
+		cartStore.clearPayments();
 		if (paymentData.payments && Array.isArray(paymentData.payments)) {
 			paymentData.payments.forEach((p) => {
-				cartStore.payments.push({
+				cartStore.addPayment({
 					mode_of_payment: p.mode_of_payment,
 					amount: p.amount,
 					type: p.type,

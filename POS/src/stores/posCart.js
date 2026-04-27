@@ -111,6 +111,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		rebuildIncrementalCache,
 		formatItemsForSubmission,
 		updateInvoiceResource,
+		addPayment,
+		removePayment,
+		clearPayments,
+		updatePayment,
 	} = useInvoice()
 
 	const offersStore = usePOSOffersStore()
@@ -2027,6 +2031,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		// Remarks
 		remarks,
+
+		// Payment methods
+		addPayment,
+		removePayment,
+		clearPayments,
+		updatePayment,
 
 		// Utilities
 		cancelPendingOfferProcessing: () => {
