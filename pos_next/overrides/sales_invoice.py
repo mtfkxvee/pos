@@ -142,8 +142,10 @@ class CustomSalesInvoice(SalesInvoice):
 
 		super().set_pos_fields(for_validate=for_validate)
 
-		# Restore discount if set_pos_fields() cleared it
-		if saved_discount_amount > 0 and not flt(self.discount_amount):
+		# Restore discount if set_pos_fields() changed it (to 0 or any other value).
+		# ERPNext may reset discount_amount to 0, or to a stale value from POS Profile.
+		# We always trust the value that was on self before set_pos_fields() was called.
+		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
 			self.discount_amount = saved_discount_amount
 			self.apply_discount_on = saved_apply_discount_on
 
