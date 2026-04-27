@@ -197,24 +197,23 @@ class CustomSalesInvoice(SalesInvoice):
 
 		# After super().validate() completes: restore discount_amount if anything changed it.
 		# Multiple methods inside validate() (set_pos_fields, validate_pos, etc.) can alter
-		# discount_amount. Re-apply and recalculate so grand_total is correct.
+		# discount_amount. Do NOT call calculate_taxes_and_totals() again here — it may
+		# trigger another set_pos_fields() call that resets the value. Instead, directly
+		# adjust grand_total by the discount difference to avoid recursive resets.
 		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
+			discount_diff = saved_discount_amount - flt(self.discount_amount)
 			self.discount_amount = saved_discount_amount
 			self.apply_discount_on = saved_apply_discount_on
-			try:
-				self.calculate_taxes_and_totals()
-				total_paid = sum(
-					flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
-					for p in (self.get("payments") or [])
-				)
-				if total_paid > 0:
-					self.paid_amount = total_paid
-					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
-			except Exception as e:
-				frappe.log_error(
-					f"POS Next: discount recalculate failed for {self.name}: {e}",
-					"POS Discount Restore"
-				)
+			# Adjust grand totals by the discount difference (avoids re-triggering set_pos_fields)
+			self.grand_total = flt(self.grand_total) - discount_diff
+			self.base_grand_total = flt(self.base_grand_total) - discount_diff
+			self.rounded_total = flt(self.rounded_total) - discount_diff if flt(self.rounded_total) else self.grand_total
+			# Recalculate outstanding based on corrected grand_total
+			total_paid = sum(
+				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
+				for p in (self.get("payments") or [])
+			)
+			self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
 
 	def before_submit(self):
 		"""
