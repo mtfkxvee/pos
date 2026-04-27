@@ -1243,13 +1243,24 @@ def submit_invoice(invoice=None, data=None):
         )
 
         if fallback_payments and doctype == "Sales Invoice":
-            saved_count = frappe.db.count(
-                "Sales Invoice Payment", {"parent": invoice_doc.name}
-            )
+            fallback_total = sum(flt(p.get("amount", 0)) for p in fallback_payments if p.get("mode_of_payment"))
+            db_total = flt(frappe.db.sql(
+                "SELECT COALESCE(SUM(amount),0) FROM `tabSales Invoice Payment` WHERE parent=%s",
+                invoice_doc.name
+            )[0][0])
             frappe.log_error(
-                f"[PAY-TRACE] 6. saved_count in DB = {saved_count}, will insert = {saved_count == 0}",
+                f"[PAY-TRACE] 6. db_total={db_total} fallback_total={fallback_total}, will replace = {fallback_total > 0 and db_total < fallback_total}",
                 "Payment Debug Trace"
             )
+            if fallback_total > 0 and db_total < fallback_total:
+                # Delete wrong/zero-amount payments and re-insert correct ones
+                frappe.db.sql(
+                    "DELETE FROM `tabSales Invoice Payment` WHERE parent=%s",
+                    invoice_doc.name
+                )
+                saved_count = 0
+            else:
+                saved_count = 1  # skip insert
             if not saved_count:
                 total_paid = 0
                 for idx, p in enumerate(fallback_payments):
