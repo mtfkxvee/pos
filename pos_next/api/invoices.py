@@ -1018,19 +1018,12 @@ def submit_invoice(invoice=None, data=None):
     # Track whether invoice was successfully submitted
     invoice_submitted = False
 
-    def _log_payment_state(label, doc_or_dict):
-        """Helper: log payment state at each critical step."""
-        if isinstance(doc_or_dict, dict):
-            payments = doc_or_dict.get("payments") or []
-        else:
-            payments = doc_or_dict.get("payments") or []
-        summary = [(p.get("mode_of_payment") if isinstance(p, dict) else p.mode_of_payment,
-                    p.get("amount") if isinstance(p, dict) else p.amount)
-                   for p in payments]
-        frappe.log_error(
-            f"[PAY-TRACE] {label} | payments={summary} | count={len(summary)}",
-            "Payment Debug Trace"
-        )
+    def _ptrace(msg):
+        """Safe payment trace logger — title capped at 140 chars."""
+        try:
+            frappe.log_error(msg[:140], "Payment Debug Trace")
+        except Exception:
+            pass
 
     try:
         invoice_name = invoice.get("name")
@@ -1041,7 +1034,8 @@ def submit_invoice(invoice=None, data=None):
             else None
         )
 
-        _log_payment_state("1. invoice from frontend", invoice)
+        inv_pays = [(p.get("mode_of_payment"), p.get("amount")) for p in (invoice.get("payments") or [])]
+        _ptrace(f"[PAY-TRACE] 1. from frontend: {inv_pays}")
 
         # Get or create invoice
         if not invoice_name or not frappe.db.exists(doctype, invoice_name):
@@ -1052,7 +1046,7 @@ def submit_invoice(invoice=None, data=None):
             if not auto_name:
                 frappe.throw(_("Failed to get invoice name from draft"))
 
-            _log_payment_state("2a. after update_invoice (created dict)", created)
+            _ptrace(f"[PAY-TRACE] 2a. created pays count={len(created.get('payments') or [])}")
 
             # Rename auto-generated draft to our custom offline name
             if custom_offline_name and auto_name != custom_offline_name:
@@ -1072,11 +1066,11 @@ def submit_invoice(invoice=None, data=None):
                 invoice_name = auto_name
 
             invoice_doc = frappe.get_doc(doctype, invoice_name)
-            _log_payment_state("2b. after get_doc (new invoice)", invoice_doc)
+            _ptrace(f"[PAY-TRACE] 2b. new doc pays count={len(invoice_doc.get('payments') or [])}")
         else:
             invoice_doc = frappe.get_doc(doctype, invoice_name)
             invoice_doc.update(invoice)
-            _log_payment_state("2c. after get_doc+update (existing invoice)", invoice_doc)
+            _ptrace(f"[PAY-TRACE] 2c. existing doc pays count={len(invoice_doc.get('payments') or [])}")
 
         # Ensure update_stock is set for Sales Invoice
         if doctype == "Sales Invoice":
@@ -1106,21 +1100,24 @@ def submit_invoice(invoice=None, data=None):
                     "POS Profile Branch"
                 )
 
-        # Fix payment amounts BEFORE save: update_invoice returns the saved doc
-        # where ERPNext's validate() may have zeroed payment amounts (e.g. via
-        # set_pos_fields). The correct amounts are in data.payments (from frontend cart).
-        # Match by mode_of_payment and overwrite amount so validate()/paid_amount is correct.
-        fallback_payments_pre = data.get("payments") or []
-        if fallback_payments_pre and doctype == "Sales Invoice":
+        # Fix payment amounts BEFORE save.
+        # ERPNext's set_pos_fields() loads ALL payment methods from POS Profile with amount=0.
+        # The correct amounts live in data.payments (sent by frontend as backup).
+        # Build a map of {mode_of_payment: amount} from data.payments, then rebuild
+        # invoice_doc.payments so validate() inside save() computes the right paid_amount.
+        if doctype == "Sales Invoice":
+            # data.payments is the authoritative source (cart state from frontend)
+            fb_src = data.get("payments") or invoice.get("payments") or []
             fb_map = {}
-            for p in fallback_payments_pre:
-                mop = p.get("mode_of_payment")
-                amt = flt(p.get("amount", 0))
+            for p in fb_src:
+                mop = p.get("mode_of_payment") if isinstance(p, dict) else getattr(p, "mode_of_payment", None)
+                amt = flt(p.get("amount", 0) if isinstance(p, dict) else getattr(p, "amount", 0))
                 if mop and amt > 0:
                     fb_map[mop] = fb_map.get(mop, 0) + amt
 
+            _ptrace(f"[PAY-TRACE] PRE-SAVE fb_map={list(fb_map.items())}")
+
             if fb_map:
-                # Remove existing payments and rebuild from fallback
                 invoice_doc.set("payments", [])
                 for mop, amt in fb_map.items():
                     account_info = get_payment_account(mop, invoice_doc.company)
@@ -1131,10 +1128,7 @@ def submit_invoice(invoice=None, data=None):
                         "type": "Cash",
                         "account": account_info.get("account") if account_info else "",
                     })
-                frappe.log_error(
-                    f"[PAY-TRACE] PRE-SAVE fix applied: payments={[(p.mode_of_payment, p.amount) for p in invoice_doc.payments]}",
-                    "Payment Debug Trace"
-                )
+                _ptrace(f"[PAY-TRACE] PRE-SAVE built: {[(p.mode_of_payment, p.amount) for p in invoice_doc.payments]}")
 
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
@@ -1256,93 +1250,13 @@ def submit_invoice(invoice=None, data=None):
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        _log_payment_state("4. after save()", invoice_doc)
         db_count_after_save = frappe.db.count("Sales Invoice Payment", {"parent": invoice_doc.name})
-        frappe.log_error(
-            f"[PAY-TRACE] 4b. DB payment rows after save = {db_count_after_save} | paid_amount={invoice_doc.paid_amount} | outstanding={invoice_doc.outstanding_amount}",
-            "Payment Debug Trace"
+        _ptrace(f"[PAY-TRACE] 4. after save: db_rows={db_count_after_save} paid={invoice_doc.paid_amount} outstanding={invoice_doc.outstanding_amount}"
         )
 
-        # Safety net: ERPNext's validate() during save() may clear payment rows
-        fallback_payments = data.get("payments") or []
-        frappe.log_error(
-            f"[PAY-TRACE] 5. fallback_payments from data = {[(p.get('mode_of_payment'), p.get('amount')) for p in fallback_payments]}",
-            "Payment Debug Trace"
-        )
-
-        if fallback_payments and doctype == "Sales Invoice":
-            fallback_total = sum(flt(p.get("amount", 0)) for p in fallback_payments if p.get("mode_of_payment"))
-            db_total = flt(frappe.db.sql(
-                "SELECT COALESCE(SUM(amount),0) FROM `tabSales Invoice Payment` WHERE parent=%s",
-                invoice_doc.name
-            )[0][0])
-            frappe.log_error(
-                f"[PAY-TRACE] 6. db_total={db_total} fallback_total={fallback_total}, will replace = {fallback_total > 0 and db_total < fallback_total}",
-                "Payment Debug Trace"
-            )
-            if fallback_total > 0 and db_total < fallback_total:
-                # Delete wrong/zero-amount payments and re-insert correct ones
-                frappe.db.sql(
-                    "DELETE FROM `tabSales Invoice Payment` WHERE parent=%s",
-                    invoice_doc.name
-                )
-                saved_count = 0
-            else:
-                saved_count = 1  # skip insert
-            if not saved_count:
-                total_paid = 0
-                for idx, p in enumerate(fallback_payments):
-                    mop = p.get("mode_of_payment")
-                    amount = flt(p.get("amount", 0))
-                    if not mop or amount <= 0:
-                        continue
-                    account_info = get_payment_account(mop, invoice_doc.company)
-                    account = account_info.get("account") if account_info else ""
-                    frappe.log_error(
-                        f"[PAY-TRACE] 6a. Inserting payment: mop={mop} amount={amount} account={account}",
-                        "Payment Debug Trace"
-                    )
-                    row_name = frappe.generate_hash(invoice_doc.name + str(idx), 10)
-                    frappe.db.sql("""
-                        INSERT INTO `tabSales Invoice Payment`
-                        (name, creation, modified, modified_by, owner,
-                         parent, parenttype, parentfield, idx,
-                         mode_of_payment, amount, base_amount, type, account)
-                        VALUES (%s, NOW(), NOW(), %s, %s,
-                                %s, 'Sales Invoice', 'payments', %s,
-                                %s, %s, %s, %s, %s)
-                    """, (
-                        row_name,
-                        frappe.session.user, frappe.session.user,
-                        invoice_doc.name, idx + 1,
-                        mop, amount, amount,
-                        p.get("type") or "Cash",
-                        account,
-                    ))
-                    total_paid += amount
-
-                if total_paid:
-                    outstanding = max(0, flt(invoice_doc.grand_total) - total_paid)
-                    frappe.db.set_value(
-                        "Sales Invoice", invoice_doc.name,
-                        {"paid_amount": total_paid, "outstanding_amount": outstanding},
-                        update_modified=False,
-                    )
-                    frappe.db.commit()
-
-                invoice_doc.reload()
-                _log_payment_state("7. after reload()", invoice_doc)
-
-        # Submit invoice
-        frappe.log_error(
-            f"[PAY-TRACE] 8. before submit() | payments in memory={len(invoice_doc.get('payments') or [])} | paid_amount={invoice_doc.paid_amount} | outstanding={invoice_doc.outstanding_amount}",
-            "Payment Debug Trace"
-        )
+        _ptrace(f"[PAY-TRACE] 8. before submit: mem_pays={len(invoice_doc.get('payments') or [])} paid={invoice_doc.paid_amount} outstanding={invoice_doc.outstanding_amount}")
         invoice_doc.submit()
-        frappe.log_error(
-            f"[PAY-TRACE] 9. after submit() | paid_amount={invoice_doc.paid_amount} | outstanding={invoice_doc.outstanding_amount}",
-            "Payment Debug Trace"
-        )
+        _ptrace(f"[PAY-TRACE] 9. after submit: paid={invoice_doc.paid_amount} outstanding={invoice_doc.outstanding_amount}")
         invoice_submitted = True
 
         # Complete the offline sync record
