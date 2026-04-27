@@ -134,16 +134,19 @@ class CustomSalesInvoice(SalesInvoice):
 		Override validate to restore payments after ERPNext's validate() may clear them.
 
 		On some ERPNext v15 configurations, validate() clears payment rows from
-		self.payments (e.g. when accounts are missing or set_pos_fields resets them).
-		Since save() is called inside submit() AFTER before_submit(), and save() calls
-		validate() then writes self.payments to DB, we must restore here — not in
-		before_submit — so that the correct payments end up in the DB and are available
-		for on_submit() → make_pos_gl_entries().
+		self.payments. Since submit() calls save() → validate() → db_update(), if
+		validate() clears self.payments, db_update() will write empty payments to DB,
+		and on_submit() → make_pos_gl_entries() will find no payments → invoice Unpaid.
+
+		Fix: always snapshot DB payment count BEFORE super().validate(), then restore
+		after if validate() cleared them. We always check DB (not memory) so this
+		works even when self.payments was populated by reload() before submit().
 		"""
-		# Before super().validate(): count DB rows so we know if payments existed
-		# but were absent from memory (happens on re-validate during submit)
+		# Always snapshot DB payment count BEFORE super().validate() touches self.payments.
+		# Do NOT condition on self.get("payments") — they may exist in memory but get
+		# cleared by super().validate(), and we need db_payment_count > 0 to restore.
 		db_payment_count = 0
-		if self.name and not self.is_new() and not self.get("payments"):
+		if self.name and not self.is_new():
 			try:
 				db_payment_count = frappe.db.count(
 					"Sales Invoice Payment", {"parent": self.name}
@@ -153,7 +156,7 @@ class CustomSalesInvoice(SalesInvoice):
 
 		super().validate()
 
-		# After super().validate(): if payments existed in DB but got cleared, restore them
+		# After super().validate(): if DB had payments but memory is now empty, restore
 		if db_payment_count and not self.get("payments"):
 			try:
 				db_payments = frappe.get_all(
