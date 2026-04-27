@@ -324,9 +324,18 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// the full discount (promo + manual). Backend has ignore_pricing_rule=1,
 		// so transaction-level promo is not auto-applied — we must send it explicitly.
 		const savedAdditional = additionalDiscount.value
-		if (promoTransactionDiscount.value > 0) {
-			additionalDiscount.value = savedAdditional + promoTransactionDiscount.value
+		const promoPart = promoTransactionDiscount.value || 0
+		if (promoPart > 0) {
+			additionalDiscount.value = savedAdditional + promoPart
 		}
+
+		console.log("[DISC-TRACE] submitInvoice discount merge:", {
+			additionalDiscount_before: savedAdditional,
+			promoTransactionDiscount: promoPart,
+			additionalDiscount_sent: additionalDiscount.value,
+			grandTotal: grandTotal.value,
+			adjustedGrandTotal: adjustedGrandTotal.value,
+		})
 
 		let result
 		try {

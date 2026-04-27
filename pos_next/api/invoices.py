@@ -428,6 +428,16 @@ def update_invoice(data):
         pos_profile = data.get("pos_profile")
         doctype = data.get("doctype", "Sales Invoice")
 
+        # DISC-TRACE: log what discount fields arrive from frontend
+        frappe.log_error(
+            f"[DISC-TRACE] update_invoice received: "
+            f"discount_amount={data.get('discount_amount')!r}, "
+            f"apply_discount_on={data.get('apply_discount_on')!r}, "
+            f"customer={data.get('customer')!r}, "
+            f"doctype={doctype!r}",
+            "Discount Trace"
+        )
+
         # Ensure the document type is set
         data.setdefault("doctype", doctype)
 
@@ -629,6 +639,17 @@ def update_invoice(data):
             invoice_doc.grand_total = 0.0
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
+
+        # DISC-TRACE: log invoice state after calculate_taxes_and_totals
+        frappe.log_error(
+            f"[DISC-TRACE] after calculate_taxes_and_totals: "
+            f"discount_amount={invoice_doc.discount_amount!r}, "
+            f"apply_discount_on={invoice_doc.apply_discount_on!r}, "
+            f"net_total={invoice_doc.net_total!r}, "
+            f"grand_total={invoice_doc.grand_total!r}, "
+            f"total_taxes_and_charges={invoice_doc.total_taxes_and_charges!r}",
+            "Discount Trace"
+        )
 
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:

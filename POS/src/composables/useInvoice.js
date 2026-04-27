@@ -888,6 +888,12 @@ export function useInvoice() {
 					remarks: remarks.value || undefined,
 				}
 
+				console.log("[DISC-TRACE] useInvoice.submitInvoice invoiceData:", {
+					discount_amount: invoiceData.discount_amount,
+					apply_discount_on: invoiceData.apply_discount_on,
+					additionalDiscount_ref: additionalDiscount.value,
+				})
+
 				if (targetDoctype === "Sales Order" && deliveryDate) {
 					invoiceData.delivery_date = deliveryDate
 				}
