@@ -129,74 +129,19 @@ class CustomSalesInvoice(SalesInvoice):
 					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
 
-	def calculate_taxes_and_totals(self):
-		"""
-		Override to enforce intended discount_amount throughout the entire save/submit cycle.
-
-		When submit_invoice sets flags.intended_discount_amount, we apply it before
-		calling super() so the calculation uses the right value. After super(), if
-		anything inside (set_pos_fields, apply_pricing_rule_on_transaction, etc.)
-		changed discount_amount, we restore and recalculate once more with a lock
-		flag to prevent infinite recursion.
-		"""
-		if getattr(self, "_pos_next_in_recalc", False):
-			# We're inside our own restoration recalculation — call super directly.
-			super().calculate_taxes_and_totals()
-			return
-
-		intended_da = flt(self.flags.get("intended_discount_amount") or 0)
-		intended_ado = self.flags.get("intended_apply_discount_on") or "Grand Total"
-
-		if intended_da > 0:
-			# Set before super() so the calculation uses the right value from the start.
-			self.discount_amount = intended_da
-			self.apply_discount_on = intended_ado
-
-		super().calculate_taxes_and_totals()
-
-		# After super(): restore if any method inside changed discount_amount.
-		if intended_da > 0 and flt(self.discount_amount) != intended_da:
-			self.discount_amount = intended_da
-			self.apply_discount_on = intended_ado
-			self._pos_next_in_recalc = True
-			try:
-				super().calculate_taxes_and_totals()
-			finally:
-				self._pos_next_in_recalc = False
-
-	def set_pos_fields(self, for_validate=False):
-		"""
-		Override set_pos_fields to preserve discount_amount.
-
-		ERPNext's set_pos_fields() resets discount_amount to 0 or a stale value
-		from POS Profile / pricing rules. We preserve the value set by our POS frontend.
-		"""
-		if getattr(self, "_pos_next_in_recalc", False):
-			return
-
-		saved_discount_amount = flt(self.discount_amount or 0)
-		saved_apply_discount_on = self.apply_discount_on or "Grand Total"
-
-		super().set_pos_fields(for_validate=for_validate)
-
-		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
-			self.discount_amount = saved_discount_amount
-			self.apply_discount_on = saved_apply_discount_on
-
 	def validate(self):
 		"""
-		Override validate to:
-		1. Restore payments after ERPNext's validate() may clear them.
-		2. Restore discount_amount after ERPNext's validate() chain may change it.
+		Override validate to restore payments after ERPNext's validate() may clear them.
 
-		set_pos_fields() plus other methods inside super().validate() can alter
-		discount_amount. We snapshot before the entire super().validate() call
-		and restore + recalculate at the end if it was changed.
+		On some ERPNext v15 configurations, validate() clears payment rows from
+		self.payments. Since submit() calls save() → validate() → db_update(), if
+		validate() clears self.payments, db_update() will write empty payments to DB,
+		and on_submit() → make_pos_gl_entries() will find no payments → invoice Unpaid.
+
+		Fix: always snapshot DB payment count BEFORE super().validate(), then restore
+		after if validate() cleared them. We always check DB (not memory) so this
+		works even when self.payments was populated by reload() before submit().
 		"""
-		# Snapshot discount BEFORE super().validate() runs anything.
-		saved_discount_amount = flt(self.discount_amount or 0)
-		saved_apply_discount_on = self.apply_discount_on or "Grand Total"
-
 		# Always snapshot DB payment count BEFORE super().validate() touches self.payments.
 		db_payment_count = 0
 		if self.name and not self.is_new():
@@ -228,19 +173,6 @@ class CustomSalesInvoice(SalesInvoice):
 					f"POS Next: failed to restore payments in validate for {self.name}: {e}",
 					"POS Payment Restore"
 				)
-
-		# After super().validate(): if discount was changed, restore and recalculate.
-		# calculate_taxes_and_totals() override will enforce intended discount via flags
-		# and prevent recursion via _pos_next_in_recalc.
-		if saved_discount_amount > 0 and flt(self.discount_amount) != saved_discount_amount:
-			self.discount_amount = saved_discount_amount
-			self.apply_discount_on = saved_apply_discount_on
-			self.calculate_taxes_and_totals()
-			total_paid = sum(
-				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
-				for p in (self.get("payments") or [])
-			)
-			self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
 
 	def before_submit(self):
 		"""

@@ -771,6 +771,49 @@ def _reuse_sync_record(sync_record_name):
     return {"already_synced": False, "sync_record_name": sync_record_name}
 
 
+def _apply_discount_to_items(invoice_doc, discount_amount):
+    """
+    Distribute a transaction-level discount proportionally across all non-free items.
+
+    Instead of using invoice.discount_amount (which ERPNext's set_pos_fields()
+    resets during validate/save), we bake the discount into item-level
+    discount_amount so it survives all POS-specific resets.
+
+    The discount is distributed proportionally by item amount so that each item
+    bears a fair share, and the total reduction equals discount_amount exactly.
+    """
+    items = [i for i in (invoice_doc.get("items") or []) if not i.get("is_free_item")]
+    if not items:
+        return
+
+    total_amount = sum(flt(i.amount or (flt(i.rate or 0) * flt(i.qty or i.quantity or 1))) for i in items)
+    if not total_amount:
+        return
+
+    discount_amount = flt(discount_amount)
+    distributed = 0.0
+
+    for idx, item in enumerate(items):
+        item_amount = flt(item.amount or (flt(item.rate or 0) * flt(item.qty or item.quantity or 1)))
+        if idx == len(items) - 1:
+            # Last item gets the remainder to avoid rounding drift
+            item_share = flt(discount_amount - distributed, 2)
+        else:
+            item_share = flt(item_amount / total_amount * discount_amount, 2)
+
+        existing = flt(item.discount_amount or 0)
+        item.discount_amount = flt(existing + item_share, 2)
+        distributed += item_share
+
+        # Recalculate rate from price_list_rate - per-unit discount
+        qty = flt(item.qty or item.quantity or 1)
+        price_list_rate = flt(item.price_list_rate or item.rate or 0)
+        if qty and price_list_rate:
+            per_unit_discount = flt(item.discount_amount / qty, 6) if qty else 0
+            item.rate = flt(price_list_rate - per_unit_discount, 6)
+            item.amount = flt(item.rate * qty, 2)
+
+
 def _ensure_offline_uniqueness(offline_id, pos_profile=None, customer=None):
     """
     Ensure offline invoice uniqueness with race condition protection.
@@ -1251,31 +1294,15 @@ def submit_invoice(invoice=None, data=None):
         if frontend_remarks:
             invoice_doc.remarks = frontend_remarks
 
-        # Re-apply discount_amount/apply_discount_on before save.
-        # ERPNext's validate() → set_pos_fields() can zero-out discount_amount.
-        # data (step 2 payload from frontend) carries the authoritative discount values.
+        # Apply additional discount by distributing it proportionally across items.
+        # This avoids fighting ERPNext's set_pos_fields() / validate() which resets
+        # invoice-level discount_amount. Item-level discounts survive all POS resets.
         discount_amount = flt(data.get("discount_amount") or invoice.get("discount_amount") or 0)
         if discount_amount > 0:
-            invoice_doc.discount_amount = discount_amount
-            invoice_doc.apply_discount_on = (
-                data.get("apply_discount_on")
-                or invoice.get("apply_discount_on")
-                or "Grand Total"
-            )
-            # Store intended discount in flags so CustomSalesInvoice.calculate_taxes_and_totals()
-            # can enforce it throughout the entire save()+submit() cycle, even when
-            # doc_events hooks call calculate_taxes_and_totals() after our validate() runs.
-            invoice_doc.flags.intended_discount_amount = discount_amount
-            invoice_doc.flags.intended_apply_discount_on = (
-                data.get("apply_discount_on") or "Grand Total"
-            )
-
-        _pre = (
-            f"BEFORE-SAVE da={invoice_doc.discount_amount!r} "
-            f"ado={invoice_doc.apply_discount_on!r} "
-            f"data_da={data.get('discount_amount')!r}"
-        )
-        frappe.log_error(_pre[:140], "Discount Trace")
+            _apply_discount_to_items(invoice_doc, discount_amount)
+            # Clear invoice-level discount so ERPNext doesn't double-apply
+            invoice_doc.discount_amount = 0
+            invoice_doc.apply_discount_on = "Grand Total"
 
         # Save before submit
 
