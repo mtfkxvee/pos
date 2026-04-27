@@ -1018,6 +1018,20 @@ def submit_invoice(invoice=None, data=None):
     # Track whether invoice was successfully submitted
     invoice_submitted = False
 
+    def _log_payment_state(label, doc_or_dict):
+        """Helper: log payment state at each critical step."""
+        if isinstance(doc_or_dict, dict):
+            payments = doc_or_dict.get("payments") or []
+        else:
+            payments = doc_or_dict.get("payments") or []
+        summary = [(p.get("mode_of_payment") if isinstance(p, dict) else p.mode_of_payment,
+                    p.get("amount") if isinstance(p, dict) else p.amount)
+                   for p in payments]
+        frappe.log_error(
+            f"[PAY-TRACE] {label} | payments={summary} | count={len(summary)}",
+            "Payment Debug Trace"
+        )
+
     try:
         invoice_name = invoice.get("name")
         # Custom offline name (e.g. XPYREG130309430001) — not an OFFLINE- temp name
@@ -1027,6 +1041,8 @@ def submit_invoice(invoice=None, data=None):
             else None
         )
 
+        _log_payment_state("1. invoice from frontend", invoice)
+
         # Get or create invoice
         if not invoice_name or not frappe.db.exists(doctype, invoice_name):
             created = update_invoice(json.dumps(invoice))
@@ -1035,6 +1051,8 @@ def submit_invoice(invoice=None, data=None):
             auto_name = created.get("name")
             if not auto_name:
                 frappe.throw(_("Failed to get invoice name from draft"))
+
+            _log_payment_state("2a. after update_invoice (created dict)", created)
 
             # Rename auto-generated draft to our custom offline name
             if custom_offline_name and auto_name != custom_offline_name:
@@ -1054,9 +1072,11 @@ def submit_invoice(invoice=None, data=None):
                 invoice_name = auto_name
 
             invoice_doc = frappe.get_doc(doctype, invoice_name)
+            _log_payment_state("2b. after get_doc (new invoice)", invoice_doc)
         else:
             invoice_doc = frappe.get_doc(doctype, invoice_name)
             invoice_doc.update(invoice)
+            _log_payment_state("2c. after get_doc+update (existing invoice)", invoice_doc)
 
         # Ensure update_stock is set for Sales Invoice
         if doctype == "Sales Invoice":
@@ -1202,17 +1222,33 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc.remarks = frontend_remarks
 
         # Save before submit
+        _log_payment_state("3. before save()", invoice_doc)
+
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
+        _log_payment_state("4. after save()", invoice_doc)
+        db_count_after_save = frappe.db.count("Sales Invoice Payment", {"parent": invoice_doc.name})
+        frappe.log_error(
+            f"[PAY-TRACE] 4b. DB payment rows after save = {db_count_after_save} | paid_amount={invoice_doc.paid_amount} | outstanding={invoice_doc.outstanding_amount}",
+            "Payment Debug Trace"
+        )
+
         # Safety net: ERPNext's validate() during save() may clear payment rows
-        # (observed on some ERPNext v15 configurations when payments lack accounts).
-        # Write payments directly to the child table after save, bypassing validate.
         fallback_payments = data.get("payments") or []
+        frappe.log_error(
+            f"[PAY-TRACE] 5. fallback_payments from data = {[(p.get('mode_of_payment'), p.get('amount')) for p in fallback_payments]}",
+            "Payment Debug Trace"
+        )
+
         if fallback_payments and doctype == "Sales Invoice":
             saved_count = frappe.db.count(
                 "Sales Invoice Payment", {"parent": invoice_doc.name}
+            )
+            frappe.log_error(
+                f"[PAY-TRACE] 6. saved_count in DB = {saved_count}, will insert = {saved_count == 0}",
+                "Payment Debug Trace"
             )
             if not saved_count:
                 total_paid = 0
@@ -1223,6 +1259,10 @@ def submit_invoice(invoice=None, data=None):
                         continue
                     account_info = get_payment_account(mop, invoice_doc.company)
                     account = account_info.get("account") if account_info else ""
+                    frappe.log_error(
+                        f"[PAY-TRACE] 6a. Inserting payment: mop={mop} amount={amount} account={account}",
+                        "Payment Debug Trace"
+                    )
                     row_name = frappe.generate_hash(invoice_doc.name + str(idx), 10)
                     frappe.db.sql("""
                         INSERT INTO `tabSales Invoice Payment`
@@ -1251,14 +1291,19 @@ def submit_invoice(invoice=None, data=None):
                     )
                     frappe.db.commit()
 
-                # Reload doc from DB so in-memory self.payments is populated
-                # before submit() → validate() → make_pos_gl_entries() runs.
-                # Without this, self.payments is empty in memory even though DB has rows,
-                # so no payment GL entries are created and invoice stays Unpaid.
                 invoice_doc.reload()
+                _log_payment_state("7. after reload()", invoice_doc)
 
         # Submit invoice
+        frappe.log_error(
+            f"[PAY-TRACE] 8. before submit() | payments in memory={len(invoice_doc.get('payments') or [])} | paid_amount={invoice_doc.paid_amount} | outstanding={invoice_doc.outstanding_amount}",
+            "Payment Debug Trace"
+        )
         invoice_doc.submit()
+        frappe.log_error(
+            f"[PAY-TRACE] 9. after submit() | paid_amount={invoice_doc.paid_amount} | outstanding={invoice_doc.outstanding_amount}",
+            "Payment Debug Trace"
+        )
         invoice_submitted = True
 
         # Complete the offline sync record

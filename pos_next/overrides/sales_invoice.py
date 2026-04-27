@@ -143,8 +143,6 @@ class CustomSalesInvoice(SalesInvoice):
 		works even when self.payments was populated by reload() before submit().
 		"""
 		# Always snapshot DB payment count BEFORE super().validate() touches self.payments.
-		# Do NOT condition on self.get("payments") — they may exist in memory but get
-		# cleared by super().validate(), and we need db_payment_count > 0 to restore.
 		db_payment_count = 0
 		if self.name and not self.is_new():
 			try:
@@ -154,7 +152,19 @@ class CustomSalesInvoice(SalesInvoice):
 			except Exception:
 				pass
 
+		mem_before = len(self.get("payments") or [])
+		frappe.log_error(
+			f"[PAY-TRACE] validate() START | name={self.name} | mem_payments={mem_before} | db_payments={db_payment_count}",
+			"Payment Debug Trace"
+		)
+
 		super().validate()
+
+		mem_after = len(self.get("payments") or [])
+		frappe.log_error(
+			f"[PAY-TRACE] validate() AFTER super() | name={self.name} | mem_before={mem_before} | mem_after={mem_after} | db_count={db_payment_count}",
+			"Payment Debug Trace"
+		)
 
 		# After super().validate(): if DB had payments but memory is now empty, restore
 		if db_payment_count and not self.get("payments"):
