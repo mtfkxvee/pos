@@ -632,14 +632,24 @@ def update_invoice(data):
         invoice_doc.set_missing_values()
 
         # Re-enforce discount AFTER set_missing_values() which may reset it.
-        # set_missing_values() can clear discount_amount / apply_discount_on.
         _discount_amount = flt(data.get("discount_amount") or 0)
         if _discount_amount > 0:
             invoice_doc.discount_amount = _discount_amount
             invoice_doc.apply_discount_on = data.get("apply_discount_on") or "Grand Total"
+            # Zero the percentage so calculate_taxes_and_totals() doesn't override
+            # discount_amount with 1% × net_total from the pricing rule
+            invoice_doc.additional_discount_percentage = 0
 
         # Calculate totals and apply discounts (with rounding disabled)
         invoice_doc.calculate_taxes_and_totals()
+
+        # If calculate_taxes_and_totals() restored percentage and overrode discount,
+        # directly correct grand_total without re-running calculate (avoids loop)
+        if _discount_amount > 0 and flt(invoice_doc.discount_amount) != _discount_amount:
+            invoice_doc.discount_amount = _discount_amount
+            invoice_doc.additional_discount_percentage = 0
+            invoice_doc.grand_total = flt(invoice_doc.net_total) - _discount_amount
+            invoice_doc.base_grand_total = invoice_doc.grand_total
         if invoice_doc.grand_total is None:
             invoice_doc.grand_total = 0.0
         if invoice_doc.base_grand_total is None:
@@ -1316,54 +1326,22 @@ def submit_invoice(invoice=None, data=None):
         if frontend_remarks:
             invoice_doc.remarks = frontend_remarks
 
-        # Apply additional discount by distributing it proportionally across items.
-        #
-        # Problem: ERPNext's set_pos_fields() already applies a promo/transaction-level
-        # discount at invoice level (e.g. 550 from pricing rule). This is visible as
-        # sum(item.amount) - invoice.grand_total > 0 BEFORE we do anything.
-        # If we blindly distribute the full data.discount_amount (promo+manual) to items,
-        # ERPNext double-counts the promo → gt too low.
-        #
-        # Fix: compute erp_existing_discount (what ERPNext already applies at invoice
-        # level), then only distribute the REMAINING manual discount to items.
-        # ERPNext continues to manage the promo at invoice level — we don't touch it.
+        # Set discount at invoice level (promo + manual combined).
+        # Zero additional_discount_percentage so ERPNext doesn't recalculate it
+        # as 1% × net_total (which would override our fixed amount).
+        # The CustomSalesInvoice.validate() override preserves this via flags.
         discount_amount = flt(data.get("discount_amount") or invoice.get("discount_amount") or 0)
-
-        # Snapshot item state before our changes
-        _snap_before = [
-            (i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0))
-            for i in invoice_doc.get("items", [])
-        ]
-        current_item_total = sum(flt(i.amount or 0) for i in invoice_doc.get("items", []) if not i.get("is_free_item"))
-        erp_existing_discount = max(0.0, flt(current_item_total - flt(invoice_doc.grand_total), 2))
-
-        frappe.log_error(
-            f"DISC-CALC: total_da={discount_amount} item_total={current_item_total} "
-            f"erp_discount={erp_existing_discount} gt_before={invoice_doc.grand_total!r} "
-            f"inv_da={invoice_doc.discount_amount!r} add_pct={invoice_doc.additional_discount_percentage!r}"
-            [:250], "Discount Trace"
-        )
-        frappe.log_error(f"BEFORE-DISC items={_snap_before}"[:300], "Discount Trace")
-
         if discount_amount > 0:
-            # Distribute FULL discount (promo+manual) to items.
-            # Then zero invoice-level discount completely so ERPNext cannot add its
-            # own promo on top (which it applies from POS Profile via set_pos_fields /
-            # calculate_taxes_and_totals, even bypassing the doc field in v15.103+).
-            # The flag tells our CustomSalesInvoice overrides to keep inv_da=0.
-            _apply_discount_to_items(invoice_doc, discount_amount)
-            invoice_doc.discount_amount = 0
+            invoice_doc.discount_amount = discount_amount
             invoice_doc.additional_discount_percentage = 0
-            invoice_doc.flags.pos_next_item_discount_applied = True
+            invoice_doc.apply_discount_on = (
+                data.get("apply_discount_on") or invoice.get("apply_discount_on") or "Grand Total"
+            )
+            invoice_doc.flags.pos_next_discount_amount = discount_amount
 
-        # Snapshot after our changes
-        _snap_after = [
-            (i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0))
-            for i in invoice_doc.get("items", [])
-        ]
         frappe.log_error(
-            f"AFTER-DISC (pre-save): inv_da={invoice_doc.discount_amount!r} "
-            f"items={_snap_after}"[:300], "Discount Trace"
+            f"PRE-SAVE da={invoice_doc.discount_amount!r} pct={invoice_doc.additional_discount_percentage!r} "
+            f"gt={invoice_doc.grand_total!r}"[:140], "Discount Trace"
         )
 
         # Save before submit
@@ -1371,13 +1349,9 @@ def submit_invoice(invoice=None, data=None):
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        _snap_saved = [
-            (i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0))
-            for i in invoice_doc.get("items", [])
-        ]
         frappe.log_error(
-            f"AFTER-SAVE: inv_da={invoice_doc.discount_amount!r} gt={invoice_doc.grand_total!r} "
-            f"oa={invoice_doc.outstanding_amount!r} items={_snap_saved}"[:400], "Discount Trace"
+            f"POST-SAVE da={invoice_doc.discount_amount!r} pct={invoice_doc.additional_discount_percentage!r} "
+            f"gt={invoice_doc.grand_total!r} oa={invoice_doc.outstanding_amount!r}"[:140], "Discount Trace"
         )
 
         invoice_doc.submit()

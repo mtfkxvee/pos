@@ -3,8 +3,7 @@
 
 """
 Sales Invoice Override
-Handles wallet payments that require party information for Receivable accounts.
-
+Handles wallet payments and additional discount preservation.
 """
 
 import frappe
@@ -15,24 +14,12 @@ from erpnext.accounts.utils import get_account_currency
 def _get_post_change_gl_entries_setting():
 	"""
 	Get post_change_gl_entries setting compatible with ERPNext v15 and v16.
-
-	- ERPNext v15: Field is in 'Accounts Settings'
-	- ERPNext v16: Field moved to ERPNext's 'POS Settings' (singleton)
-
-	Since pos_next has its own 'POS Settings' doctype (non-singleton) that overrides
-	ERPNext's, we read directly from the Singles table for v16 compatibility.
-
-	Returns:
-		int: 1 if post_change_gl_entries is enabled, 0 otherwise (default: 0)
 	"""
-	# Check if field exists in Accounts Settings schema (v15)
 	meta = frappe.get_meta("Accounts Settings")
 	if meta.has_field("post_change_gl_entries"):
 		value = frappe.db.get_single_value("Accounts Settings", "post_change_gl_entries")
 		return cint(value) if value is not None else 0
 
-	# For v16, read directly from Singles table using Query Builder to avoid ORM issues
-	# ERPNext's POS Settings is a singleton, data stored in Singles table
 	Singles = frappe.qb.DocType("Singles")
 	result = (
 		frappe.qb.from_(Singles)
@@ -44,22 +31,90 @@ def _get_post_change_gl_entries_setting():
 	)
 	return cint(result[0][0]) if result else 0
 
-class CustomSalesInvoice(SalesInvoice):
-	"""
-	Custom Sales Invoice class that handles wallet payments correctly.
 
-	When a wallet payment is made using a Receivable account, ERPNext requires
-	party information in the GL entry. This override adds party_type and party
-	for wallet payment methods marked with is_wallet_payment.
-	"""
+class CustomSalesInvoice(SalesInvoice):
+
+	def set_pos_fields(self, for_validate=False):
+		"""
+		Override to preserve the fixed discount_amount set by submit_invoice.
+
+		ERPNext's set_pos_fields() may restore additional_discount_percentage from
+		POS Profile (e.g. 1% from DISKON MEMBER pricing rule), causing calculate_
+		taxes_and_totals() to override our fixed discount_amount with 1% × net_total.
+
+		If flags.pos_next_discount_amount is set, we zero the percentage and restore
+		the fixed amount after every set_pos_fields() call.
+		"""
+		super().set_pos_fields(for_validate=for_validate)
+
+		intended = self.flags.get("pos_next_discount_amount")
+		if intended is not None:
+			self.additional_discount_percentage = 0
+			self.discount_amount = flt(intended)
+
+	def validate(self):
+		"""
+		Override validate to:
+		1. Restore payments if ERPNext's validate() cleared them.
+		2. Preserve the fixed discount_amount after super().validate() recalculates it
+		   from additional_discount_percentage (pricing rule 1%). Directly corrects
+		   grand_total without calling calculate_taxes_and_totals() again (avoids loop).
+		"""
+		intended_da = self.flags.get("pos_next_discount_amount")
+
+		# Snapshot DB payment count before super() touches payments
+		db_payment_count = 0
+		if self.name and not self.is_new():
+			try:
+				db_payment_count = frappe.db.count(
+					"Sales Invoice Payment", {"parent": self.name}
+				)
+			except Exception:
+				pass
+
+		super().validate()
+
+		# Restore payments if cleared by super().validate()
+		if db_payment_count and not self.get("payments"):
+			try:
+				db_payments = frappe.get_all(
+					"Sales Invoice Payment",
+					filters={"parent": self.name},
+					fields=["mode_of_payment", "amount", "base_amount", "type", "account"],
+					order_by="idx asc",
+				)
+				if db_payments:
+					self.set("payments", db_payments)
+					total_paid = sum(flt(p.get("amount", 0)) for p in db_payments)
+					self.paid_amount = total_paid
+					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
+			except Exception as e:
+				frappe.log_error(
+					f"POS Next: failed to restore payments for {self.name}: {e}",
+					"POS Payment Restore"
+				)
+
+		# Restore fixed discount if pricing rule recalculated it from percentage
+		if intended_da is not None and (
+			flt(self.discount_amount) != flt(intended_da)
+			or flt(self.additional_discount_percentage) != 0
+		):
+			self.discount_amount = flt(intended_da)
+			self.additional_discount_percentage = 0
+			# Directly fix grand_total — do NOT call calculate_taxes_and_totals()
+			# which would trigger set_pos_fields() again and loop back here.
+			self.grand_total = flt(self.net_total) - flt(intended_da)
+			self.base_grand_total = self.grand_total
+			# Recalculate outstanding from corrected grand_total
+			total_paid = sum(
+				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
+				for p in (self.get("payments") or [])
+			)
+			self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
 
 	def make_pos_gl_entries(self, gl_entries):
 		"""
 		Override to add party information for wallet payment accounts.
-
-		The standard ERPNext implementation doesn't set party_type/party for
-		payment mode accounts, which causes validation errors for Receivable
-		accounts (like wallet accounts).
 		"""
 		if cint(self.is_pos):
 			skip_change_gl_entries = not _get_post_change_gl_entries_setting()
@@ -69,8 +124,6 @@ class CustomSalesInvoice(SalesInvoice):
 					payment_mode.base_amount -= flt(self.change_amount)
 
 				if payment_mode.amount:
-					# POS, make payment entries
-					# Credit entry to debit_to (customer receivable)
 					gl_entries.append(
 						self.get_gl_dict(
 							{
@@ -93,10 +146,7 @@ class CustomSalesInvoice(SalesInvoice):
 						)
 					)
 
-					# Debit entry to payment mode account
 					payment_mode_account_currency = get_account_currency(payment_mode.account)
-
-					# Get party info for wallet payments
 					party_type, party = self.get_party_and_party_type_for_pos_gl_entry(
 						payment_mode.mode_of_payment, payment_mode.account
 					)
@@ -121,98 +171,9 @@ class CustomSalesInvoice(SalesInvoice):
 
 			if not skip_change_gl_entries:
 				if hasattr(self, "get_gle_for_change_amount"):
-					# ERPNext v16+: Method renamed and returns a list of GL entries
-					# that needs to be extended to the main gl_entries list
 					gl_entries.extend(self.get_gle_for_change_amount())
 				else:
-					# ERPNext v15: Method takes gl_entries as parameter
-					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
-
-	def set_pos_fields(self, for_validate=False):
-		"""
-		Override to zero out invoice-level discount when all discounts were baked
-		into item rates by submit_invoice (_apply_discount_to_items).
-
-		Without this, ERPNext's set_pos_fields() reads additional_discount_percentage
-		from POS Profile and applies it on top of our already-discounted item rates.
-		"""
-		super().set_pos_fields(for_validate=for_validate)
-
-		if self.flags.get("pos_next_item_discount_applied"):
-			self.discount_amount = 0
-			self.additional_discount_percentage = 0
-
-	def calculate_taxes_and_totals(self):
-		"""
-		Override to prevent ERPNext from re-applying invoice-level discount when
-		all discounts were baked into item rates by submit_invoice.
-
-		ERPNext 15.103+ may read additional_discount_percentage directly from
-		POS Profile inside TaxesAndTotals.set_discount_amount(), bypassing the doc
-		field. This override zeros the result after super() if the flag is set.
-		Uses _pos_next_in_calc guard to prevent infinite recursion.
-		"""
-		if getattr(self, "_pos_next_in_calc", False):
-			super().calculate_taxes_and_totals()
-			return
-
-		super().calculate_taxes_and_totals()
-
-		if self.flags.get("pos_next_item_discount_applied"):
-			if flt(self.discount_amount) != 0 or flt(self.additional_discount_percentage) != 0:
-				self.discount_amount = 0
-				self.additional_discount_percentage = 0
-				self._pos_next_in_calc = True
-				try:
-					super().calculate_taxes_and_totals()
-				finally:
-					self._pos_next_in_calc = False
-
-	def validate(self):
-		"""
-		Override validate to restore payments after ERPNext's validate() may clear them.
-
-		On some ERPNext v15 configurations, validate() clears payment rows from
-		self.payments. Since submit() calls save() → validate() → db_update(), if
-		validate() clears self.payments, db_update() will write empty payments to DB,
-		and on_submit() → make_pos_gl_entries() will find no payments → invoice Unpaid.
-
-		Fix: always snapshot DB payment count BEFORE super().validate(), then restore
-		after if validate() cleared them. We always check DB (not memory) so this
-		works even when self.payments was populated by reload() before submit().
-		"""
-		# Always snapshot DB payment count BEFORE super().validate() touches self.payments.
-		db_payment_count = 0
-		if self.name and not self.is_new():
-			try:
-				db_payment_count = frappe.db.count(
-					"Sales Invoice Payment", {"parent": self.name}
-				)
-			except Exception:
-				pass
-
-		super().validate()
-
-		# After super().validate(): if DB had payments but memory is now empty, restore
-		if db_payment_count and not self.get("payments"):
-			try:
-				db_payments = frappe.get_all(
-					"Sales Invoice Payment",
-					filters={"parent": self.name},
-					fields=["mode_of_payment", "amount", "base_amount", "type", "account"],
-					order_by="idx asc",
-				)
-				if db_payments:
-					self.set("payments", db_payments)
-					total_paid = sum(flt(p.get("amount", 0)) for p in db_payments)
-					self.paid_amount = total_paid
-					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
-			except Exception as e:
-				frappe.log_error(
-					f"POS Next: failed to restore payments in validate for {self.name}: {e}",
-					"POS Payment Restore"
-				)
 
 	def before_submit(self):
 		"""
@@ -244,10 +205,6 @@ class CustomSalesInvoice(SalesInvoice):
 	def get_party_and_party_type_for_pos_gl_entry(self, mode_of_payment, account):
 		"""
 		Get party type and party for wallet payment GL entries.
-
-		For wallet payments (Mode of Payment with is_wallet_payment=1),
-		returns Customer as party_type and the invoice customer as party.
-		For regular payments, returns empty strings.
 		"""
 		is_wallet_mode_of_payment = frappe.db.get_value(
 			"Mode of Payment", mode_of_payment, "is_wallet_payment"
