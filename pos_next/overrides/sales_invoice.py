@@ -129,6 +129,23 @@ class CustomSalesInvoice(SalesInvoice):
 					# and appends change amount entries directly to it
 					self.make_gle_for_change_amount(gl_entries)
 
+	def set_pos_fields(self, for_validate=False):
+		"""
+		Override to preserve the fixed promo discount set by submit_invoice.
+
+		When submit_invoice converts additional_discount_percentage to a fixed
+		discount_amount (to prevent rounding errors when item rates change),
+		it stores the value in flags.pos_next_fixed_erp_discount. Every time
+		set_pos_fields() is called (e.g. from validate), we restore this fixed
+		value so ERPNext doesn't recompute it as a percentage of the new net_total.
+		"""
+		super().set_pos_fields(for_validate=for_validate)
+
+		fixed_discount = self.flags.get("pos_next_fixed_erp_discount")
+		if fixed_discount is not None:
+			self.discount_amount = flt(fixed_discount)
+			self.additional_discount_percentage = 0
+
 	def validate(self):
 		"""
 		Override validate to restore payments after ERPNext's validate() may clear them.
