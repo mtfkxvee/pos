@@ -1317,27 +1317,49 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc.remarks = frontend_remarks
 
         # Apply additional discount by distributing it proportionally across items.
+        #
+        # Problem: ERPNext's set_pos_fields() already applies a promo/transaction-level
+        # discount at invoice level (e.g. 550 from pricing rule). This is visible as
+        # sum(item.amount) - invoice.grand_total > 0 BEFORE we do anything.
+        # If we blindly distribute the full data.discount_amount (promo+manual) to items,
+        # ERPNext double-counts the promo → gt too low.
+        #
+        # Fix: compute erp_existing_discount (what ERPNext already applies at invoice
+        # level), then only distribute the REMAINING manual discount to items.
+        # ERPNext continues to manage the promo at invoice level — we don't touch it.
         discount_amount = flt(data.get("discount_amount") or invoice.get("discount_amount") or 0)
 
-        # Log state BEFORE applying discount
-        _items_snap = [(i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0)) for i in invoice_doc.get("items", [])]
+        # Snapshot item state before our changes
+        _snap_before = [
+            (i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0))
+            for i in invoice_doc.get("items", [])
+        ]
+        current_item_total = sum(flt(i.amount or 0) for i in invoice_doc.get("items", []) if not i.get("is_free_item"))
+        erp_existing_discount = max(0.0, flt(current_item_total - flt(invoice_doc.grand_total), 2))
+        manual_discount = max(0.0, flt(discount_amount - erp_existing_discount, 2))
+
         frappe.log_error(
-            f"BEFORE-DISC: da={discount_amount} nt={invoice_doc.net_total!r} gt={invoice_doc.grand_total!r} "
-            f"items={[(c,r,a,p,d) for c,r,a,p,d in _items_snap]}"[:500],
-            "Discount Trace"
+            f"DISC-CALC: total_da={discount_amount} item_total={current_item_total} "
+            f"erp_discount={erp_existing_discount} manual_to_dist={manual_discount} "
+            f"gt_before={invoice_doc.grand_total!r}"
+            [:200], "Discount Trace"
+        )
+        frappe.log_error(
+            f"BEFORE-DISC items={_snap_before}"[:300], "Discount Trace"
         )
 
-        if discount_amount > 0:
-            _apply_discount_to_items(invoice_doc, discount_amount)
-            invoice_doc.discount_amount = 0
-            invoice_doc.apply_discount_on = "Grand Total"
+        if manual_discount > 0:
+            _apply_discount_to_items(invoice_doc, manual_discount)
+        # Do NOT zero invoice_doc.discount_amount — let ERPNext keep its promo discount
 
-        # Log state AFTER applying discount (before save)
-        _items_snap2 = [(i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0)) for i in invoice_doc.get("items", [])]
+        # Snapshot after our changes
+        _snap_after = [
+            (i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0))
+            for i in invoice_doc.get("items", [])
+        ]
         frappe.log_error(
             f"AFTER-DISC (pre-save): inv_da={invoice_doc.discount_amount!r} "
-            f"items={[(c,r,a,p,d) for c,r,a,p,d in _items_snap2]}"[:500],
-            "Discount Trace"
+            f"items={_snap_after}"[:300], "Discount Trace"
         )
 
         # Save before submit
@@ -1345,13 +1367,13 @@ def submit_invoice(invoice=None, data=None):
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        # Log state AFTER save (ERPNext may have overridden our item values)
-        _items_snap3 = [(i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0)) for i in invoice_doc.get("items", [])]
+        _snap_saved = [
+            (i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0))
+            for i in invoice_doc.get("items", [])
+        ]
         frappe.log_error(
             f"AFTER-SAVE: inv_da={invoice_doc.discount_amount!r} gt={invoice_doc.grand_total!r} "
-            f"oa={invoice_doc.outstanding_amount!r} "
-            f"items={[(c,r,a,p,d) for c,r,a,p,d in _items_snap3]}"[:500],
-            "Discount Trace"
+            f"oa={invoice_doc.outstanding_amount!r} items={_snap_saved}"[:400], "Discount Trace"
         )
 
         invoice_doc.submit()
