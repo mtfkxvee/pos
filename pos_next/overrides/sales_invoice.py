@@ -114,38 +114,56 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def get_gl_entries(self, warehouse_account=None):
 		"""
-		Override to add discount GL entry when additional_discount_account field
-		does not exist in this ERPNext version.
+		Override to add discount GL entry (DR Potongan Penjualan) when needed.
 
-		When discount_amount > 0 and no additional_discount_account is wired,
-		ERPNext creates: DR debit_to = grand_total, CR Revenue = net_total
-		leaving a gap of discount_amount → "Debit and Credit not equal".
+		When discount_amount > 0, ERPNext debits debit_to by grand_total but
+		credits revenue by net_total → gap of discount_amount → GL imbalance.
 
-		Fix: if flags.pos_next_diskon_akun is set, append:
-		  DR Potongan Penjualan: discount_amount  to balance the GL.
+		Fix: after calling super(), compute actual debit/credit balance.
+		If a gap exists and diskon_akun is configured in POS Profile,
+		append a DR entry to close the gap exactly.
+
+		Reads diskon_akun directly from DB (no flags dependency) and tries
+		both 'diskon_akun' and 'custom_diskon_akun' fieldnames.
 		"""
 		gl_entries = super().get_gl_entries(warehouse_account)
 
-		diskon_akun = self.flags.get("pos_next_diskon_akun")
-		discount = flt(self.discount_amount or 0)
+		if not cint(self.is_pos) or not flt(self.discount_amount) or not self.pos_profile:
+			return gl_entries
 
-		if diskon_akun and discount > 0 and cint(self.is_pos):
-			# Only add if ERPNext didn't already create an entry for this account
-			existing_accounts = {e.get("account") for e in gl_entries if isinstance(e, dict)}
-			if diskon_akun not in existing_accounts:
-				gl_entries.append(
-					self.get_gl_dict(
-						{
-							"account": diskon_akun,
-							"debit": discount,
-							"debit_in_account_currency": discount,
-							"against": self.customer,
-							"cost_center": self.cost_center,
-							"remarks": f"Discount on {self.name}",
-						},
-						item=self,
-					)
+		# Resolve diskon_akun — try both naming conventions
+		diskon_akun = None
+		for fieldname in ("diskon_akun", "custom_diskon_akun"):
+			try:
+				val = frappe.db.get_value("POS Profile", self.pos_profile, fieldname)
+				if val:
+					diskon_akun = val
+					break
+			except Exception:
+				pass
+
+		if not diskon_akun:
+			return gl_entries
+
+		# Compute actual GL imbalance (credit - debit)
+		total_debit = sum(flt(e.get("debit") or 0) for e in gl_entries)
+		total_credit = sum(flt(e.get("credit") or 0) for e in gl_entries)
+		diff = flt(total_credit - total_debit, 2)
+
+		# If credit exceeds debit, add DR to diskon_akun to balance
+		if diff > 0.01:
+			gl_entries.append(
+				self.get_gl_dict(
+					{
+						"account": diskon_akun,
+						"debit": diff,
+						"debit_in_account_currency": diff,
+						"against": self.customer,
+						"cost_center": self.cost_center,
+					},
+					item=self,
 				)
+			)
 
 		return gl_entries
 
