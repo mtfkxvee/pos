@@ -775,43 +775,65 @@ def _apply_discount_to_items(invoice_doc, discount_amount):
     """
     Distribute a transaction-level discount proportionally across all non-free items.
 
-    Instead of using invoice.discount_amount (which ERPNext's set_pos_fields()
-    resets during validate/save), we bake the discount into item-level
-    discount_amount so it survives all POS-specific resets.
+    Bakes the discount into item.rate / item.discount_amount (per-unit) so it
+    survives ERPNext's set_pos_fields() and calculate_taxes_and_totals() resets.
 
-    The discount is distributed proportionally by item amount so that each item
-    bears a fair share, and the total reduction equals discount_amount exactly.
+    Key: set discount_percentage=0 so calculate_item_values() uses discount_amount
+    (not percentage) to compute item.rate, preventing ERPNext from overriding.
     """
     items = [i for i in (invoice_doc.get("items") or []) if not i.get("is_free_item")]
     if not items:
-        return
-
-    total_amount = sum(flt(i.amount or (flt(i.rate or 0) * flt(i.qty or i.quantity or 1))) for i in items)
-    if not total_amount:
+        frappe.log_error("DISC-ITEM: no non-free items found", "Discount Trace")
         return
 
     discount_amount = flt(discount_amount)
+    total_current_amount = sum(flt(i.amount or 0) for i in items)
+    if not total_current_amount:
+        frappe.log_error(f"DISC-ITEM: total_amount=0, skip", "Discount Trace")
+        return
+
+    log_lines = [f"DISC-ITEM: distributing {discount_amount} across {len(items)} items (total={total_current_amount})"]
     distributed = 0.0
 
     for idx, item in enumerate(items):
-        item_amount = flt(item.amount or (flt(item.rate or 0) * flt(item.qty or item.quantity or 1)))
-        if idx == len(items) - 1:
-            # Last item gets the remainder to avoid rounding drift
-            item_share = flt(discount_amount - distributed, 2)
-        else:
-            item_share = flt(item_amount / total_amount * discount_amount, 2)
-
-        existing = flt(item.discount_amount or 0)
-        item.discount_amount = flt(existing + item_share, 2)
-        distributed += item_share
-
-        # Recalculate rate from price_list_rate - per-unit discount
         qty = flt(item.qty or item.quantity or 1)
-        price_list_rate = flt(item.price_list_rate or item.rate or 0)
-        if qty and price_list_rate:
-            per_unit_discount = flt(item.discount_amount / qty, 6) if qty else 0
-            item.rate = flt(price_list_rate - per_unit_discount, 6)
-            item.amount = flt(item.rate * qty, 2)
+        price_list_rate = flt(item.price_list_rate or 0)
+        current_rate = flt(item.rate or 0)
+        current_amount = flt(item.amount or 0)
+        old_disc_pct = flt(item.discount_percentage or 0)
+        old_disc_amt = flt(item.discount_amount or 0)  # per-unit in ERPNext
+
+        # Proportional share based on current item amount
+        if idx == len(items) - 1:
+            item_share = flt(discount_amount - distributed, 2)  # remainder avoids drift
+        else:
+            item_share = flt(current_amount / total_current_amount * discount_amount, 2)
+
+        # Per-unit additional discount from this item's share
+        per_unit_reduction = flt(item_share / qty, 6) if qty else 0
+        new_rate = flt(current_rate - per_unit_reduction, 6)
+
+        # Total per-unit discount from price_list_rate to new_rate
+        # ERPNext uses this when discount_percentage=0: rate = price_list_rate - discount_amount
+        total_per_unit_discount = flt(price_list_rate - new_rate, 6) if price_list_rate else 0
+
+        log_lines.append(
+            f"  item[{idx}] {item.item_code}: qty={qty} plr={price_list_rate} "
+            f"cur_rate={current_rate} old_pct={old_disc_pct} old_da={old_disc_amt} "
+            f"share={item_share} new_rate={new_rate} new_da={total_per_unit_discount}"
+        )
+
+        # Zero discount_percentage so ERPNext uses discount_amount (not pct) for rate calc
+        item.discount_percentage = 0
+        # Set per-unit discount_amount (ERPNext formula: rate = price_list_rate - discount_amount)
+        item.discount_amount = total_per_unit_discount if price_list_rate else 0
+        item.rate = new_rate
+        item.amount = flt(new_rate * qty, 2)
+
+        distributed = flt(distributed + item_share, 2)
+
+    log_lines.append(f"  total_distributed={distributed}")
+    frappe.log_error("\n".join(log_lines)[:1000], "Discount Trace")
 
 
 def _ensure_offline_uniqueness(offline_id, pos_profile=None, customer=None):
@@ -1295,27 +1317,42 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc.remarks = frontend_remarks
 
         # Apply additional discount by distributing it proportionally across items.
-        # This avoids fighting ERPNext's set_pos_fields() / validate() which resets
-        # invoice-level discount_amount. Item-level discounts survive all POS resets.
         discount_amount = flt(data.get("discount_amount") or invoice.get("discount_amount") or 0)
+
+        # Log state BEFORE applying discount
+        _items_snap = [(i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0)) for i in invoice_doc.get("items", [])]
+        frappe.log_error(
+            f"BEFORE-DISC: da={discount_amount} nt={invoice_doc.net_total!r} gt={invoice_doc.grand_total!r} "
+            f"items={[(c,r,a,p,d) for c,r,a,p,d in _items_snap]}"[:500],
+            "Discount Trace"
+        )
+
         if discount_amount > 0:
             _apply_discount_to_items(invoice_doc, discount_amount)
-            # Clear invoice-level discount so ERPNext doesn't double-apply
             invoice_doc.discount_amount = 0
             invoice_doc.apply_discount_on = "Grand Total"
 
-        # Save before submit
+        # Log state AFTER applying discount (before save)
+        _items_snap2 = [(i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0)) for i in invoice_doc.get("items", [])]
+        frappe.log_error(
+            f"AFTER-DISC (pre-save): inv_da={invoice_doc.discount_amount!r} "
+            f"items={[(c,r,a,p,d) for c,r,a,p,d in _items_snap2]}"[:500],
+            "Discount Trace"
+        )
 
+        # Save before submit
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        _post = (
-            f"AFTER-SAVE da={invoice_doc.discount_amount!r} "
-            f"gt={invoice_doc.grand_total!r} "
-            f"oa={invoice_doc.outstanding_amount!r}"
+        # Log state AFTER save (ERPNext may have overridden our item values)
+        _items_snap3 = [(i.item_code, flt(i.rate), flt(i.amount), flt(i.discount_percentage or 0), flt(i.discount_amount or 0)) for i in invoice_doc.get("items", [])]
+        frappe.log_error(
+            f"AFTER-SAVE: inv_da={invoice_doc.discount_amount!r} gt={invoice_doc.grand_total!r} "
+            f"oa={invoice_doc.outstanding_amount!r} "
+            f"items={[(c,r,a,p,d) for c,r,a,p,d in _items_snap3]}"[:500],
+            "Discount Trace"
         )
-        frappe.log_error(_post[:140], "Discount Trace")
 
         invoice_doc.submit()
         invoice_submitted = True
