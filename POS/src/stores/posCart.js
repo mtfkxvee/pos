@@ -334,24 +334,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		//   item.rate = price_list_rate - promo  (promo applied at item level)
 		//   grand_total = net_total - discount   (if discount includes promo → double)
 		// Only the manual part goes as invoice-level additional discount.
-		console.log("[DISC-TRACE] submitInvoice:", {
-			additionalDiscount: additionalDiscount.value,
-			promoTransactionDiscount: promoTransactionDiscount.value,
-			grandTotal: grandTotal.value,
-			adjustedGrandTotal: adjustedGrandTotal.value,
-		})
-
-		let result
-		try {
-			result = await baseSubmitInvoice(
-				targetDoctype.value,
-				deliveryDate.value,
-				writeOffAmount.value,
-				toRaw(loyaltyData.value),
-			)
-		} finally {
-			additionalDiscount.value = savedAdditional
-		}
+		const result = await baseSubmitInvoice(
+			targetDoctype.value,
+			deliveryDate.value,
+			writeOffAmount.value,
+			toRaw(loyaltyData.value),
+		)
 		// Reset write-off and loyalty amount after successful submission
 		if (result) {
 			writeOffAmount.value = 0
