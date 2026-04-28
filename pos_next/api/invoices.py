@@ -428,14 +428,6 @@ def update_invoice(data):
         pos_profile = data.get("pos_profile")
         doctype = data.get("doctype", "Sales Invoice")
 
-        # DISC-TRACE: log what discount fields arrive from frontend
-        _recv = (
-            f"da={data.get('discount_amount')!r} "
-            f"ado={data.get('apply_discount_on')!r} "
-            f"cust={str(data.get('customer',''))[:30]!r}"
-        )
-        frappe.log_error(_recv[:140], "Discount Trace")
-
         # Ensure the document type is set
         data.setdefault("doctype", doctype)
 
@@ -654,16 +646,6 @@ def update_invoice(data):
             invoice_doc.grand_total = 0.0
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
-
-        # DISC-TRACE: log invoice state after calculate_taxes_and_totals
-        _msg = (
-            f"da={invoice_doc.discount_amount!r} "
-            f"ado={invoice_doc.apply_discount_on!r} "
-            f"nt={invoice_doc.net_total!r} "
-            f"gt={invoice_doc.grand_total!r} "
-            f"tax={invoice_doc.total_taxes_and_charges!r}"
-        )
-        frappe.log_error(_msg[:140], "Discount Trace")
 
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:
@@ -1356,20 +1338,11 @@ def submit_invoice(invoice=None, data=None):
                 except Exception as e:
                     frappe.log_error(f"POS: diskon_akun lookup failed: {e}"[:140], "Discount Trace")
 
-        frappe.log_error(
-            f"PRE-SAVE da={invoice_doc.discount_amount!r} pct={invoice_doc.additional_discount_percentage!r} "
-            f"gt={invoice_doc.grand_total!r}"[:140], "Discount Trace"
-        )
-
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
         invoice_doc.save()
 
-        frappe.log_error(
-            f"POST-SAVE da={invoice_doc.discount_amount!r} pct={invoice_doc.additional_discount_percentage!r} "
-            f"gt={invoice_doc.grand_total!r} oa={invoice_doc.outstanding_amount!r}"[:140], "Discount Trace"
-        )
 
         invoice_doc.submit()
         invoice_submitted = True

@@ -888,12 +888,7 @@ export function useInvoice() {
 					remarks: remarks.value || undefined,
 				}
 
-				console.log("[DISC-TRACE] useInvoice.submitInvoice invoiceData:", {
-					discount_amount: invoiceData.discount_amount,
-					apply_discount_on: invoiceData.apply_discount_on,
-					additionalDiscount_ref: additionalDiscount.value,
-				})
-
+	
 				if (targetDoctype === "Sales Order" && deliveryDate) {
 					invoiceData.delivery_date = deliveryDate
 				}
@@ -943,11 +938,7 @@ export function useInvoice() {
 					apply_discount_on: "Grand Total",
 				}
 
-				console.log("[DISC-TRACE] useInvoice submitData (step 2):", {
-					discount_amount: submitData.discount_amount,
-					apply_discount_on: submitData.apply_discount_on,
-				})
-
+	
 				try {
 					const result = await submitInvoiceResource.submit({
 						invoice: invoiceDoc,
