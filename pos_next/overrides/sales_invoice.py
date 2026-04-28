@@ -131,20 +131,43 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def set_pos_fields(self, for_validate=False):
 		"""
-		Override to preserve the fixed promo discount set by submit_invoice.
+		Override to zero out invoice-level discount when all discounts were baked
+		into item rates by submit_invoice (_apply_discount_to_items).
 
-		When submit_invoice converts additional_discount_percentage to a fixed
-		discount_amount (to prevent rounding errors when item rates change),
-		it stores the value in flags.pos_next_fixed_erp_discount. Every time
-		set_pos_fields() is called (e.g. from validate), we restore this fixed
-		value so ERPNext doesn't recompute it as a percentage of the new net_total.
+		Without this, ERPNext's set_pos_fields() reads additional_discount_percentage
+		from POS Profile and applies it on top of our already-discounted item rates.
 		"""
 		super().set_pos_fields(for_validate=for_validate)
 
-		fixed_discount = self.flags.get("pos_next_fixed_erp_discount")
-		if fixed_discount is not None:
-			self.discount_amount = flt(fixed_discount)
+		if self.flags.get("pos_next_item_discount_applied"):
+			self.discount_amount = 0
 			self.additional_discount_percentage = 0
+
+	def calculate_taxes_and_totals(self):
+		"""
+		Override to prevent ERPNext from re-applying invoice-level discount when
+		all discounts were baked into item rates by submit_invoice.
+
+		ERPNext 15.103+ may read additional_discount_percentage directly from
+		POS Profile inside TaxesAndTotals.set_discount_amount(), bypassing the doc
+		field. This override zeros the result after super() if the flag is set.
+		Uses _pos_next_in_calc guard to prevent infinite recursion.
+		"""
+		if getattr(self, "_pos_next_in_calc", False):
+			super().calculate_taxes_and_totals()
+			return
+
+		super().calculate_taxes_and_totals()
+
+		if self.flags.get("pos_next_item_discount_applied"):
+			if flt(self.discount_amount) != 0 or flt(self.additional_discount_percentage) != 0:
+				self.discount_amount = 0
+				self.additional_discount_percentage = 0
+				self._pos_next_in_calc = True
+				try:
+					super().calculate_taxes_and_totals()
+				finally:
+					self._pos_next_in_calc = False
 
 	def validate(self):
 		"""

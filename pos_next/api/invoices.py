@@ -1335,38 +1335,26 @@ def submit_invoice(invoice=None, data=None):
             for i in invoice_doc.get("items", [])
         ]
         current_item_total = sum(flt(i.amount or 0) for i in invoice_doc.get("items", []) if not i.get("is_free_item"))
-
-        # Convert percentage-based promo to fixed amount BEFORE item rates change.
-        # If stored as additional_discount_percentage (e.g. 1%), ERPNext recalculates
-        # it against the new net_total after our item manipulation → rounding error.
-        # Fix: compute fixed amount now (using original item_total) and zero the %.
-        if flt(invoice_doc.additional_discount_percentage or 0) > 0:
-            pct = flt(invoice_doc.additional_discount_percentage)
-            fixed_from_pct = flt(current_item_total * pct / 100, 2)
-            invoice_doc.discount_amount = fixed_from_pct
-            invoice_doc.additional_discount_percentage = 0
-
         erp_existing_discount = max(0.0, flt(current_item_total - flt(invoice_doc.grand_total), 2))
-        manual_discount = max(0.0, flt(discount_amount - erp_existing_discount, 2))
-
-        # Store fixed promo discount in flags so set_pos_fields() override keeps it fixed
-        # (preventing ERPNext from restoring additional_discount_percentage from POS Profile)
-        invoice_doc.flags.pos_next_fixed_erp_discount = erp_existing_discount
 
         frappe.log_error(
             f"DISC-CALC: total_da={discount_amount} item_total={current_item_total} "
-            f"erp_discount={erp_existing_discount} manual_to_dist={manual_discount} "
-            f"gt_before={invoice_doc.grand_total!r} "
-            f"pct_converted={flt(invoice_doc.additional_discount_percentage or 0)}"
+            f"erp_discount={erp_existing_discount} gt_before={invoice_doc.grand_total!r} "
+            f"inv_da={invoice_doc.discount_amount!r} add_pct={invoice_doc.additional_discount_percentage!r}"
             [:250], "Discount Trace"
         )
-        frappe.log_error(
-            f"BEFORE-DISC items={_snap_before}"[:300], "Discount Trace"
-        )
+        frappe.log_error(f"BEFORE-DISC items={_snap_before}"[:300], "Discount Trace")
 
-        if manual_discount > 0:
-            _apply_discount_to_items(invoice_doc, manual_discount)
-        # Do NOT zero invoice_doc.discount_amount — let ERPNext keep its promo discount
+        if discount_amount > 0:
+            # Distribute FULL discount (promo+manual) to items.
+            # Then zero invoice-level discount completely so ERPNext cannot add its
+            # own promo on top (which it applies from POS Profile via set_pos_fields /
+            # calculate_taxes_and_totals, even bypassing the doc field in v15.103+).
+            # The flag tells our CustomSalesInvoice overrides to keep inv_da=0.
+            _apply_discount_to_items(invoice_doc, discount_amount)
+            invoice_doc.discount_amount = 0
+            invoice_doc.additional_discount_percentage = 0
+            invoice_doc.flags.pos_next_item_discount_applied = True
 
         # Snapshot after our changes
         _snap_after = [
