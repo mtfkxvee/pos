@@ -112,6 +112,43 @@ class CustomSalesInvoice(SalesInvoice):
 			)
 			self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
 
+	def get_gl_entries(self, warehouse_account=None):
+		"""
+		Override to add discount GL entry when additional_discount_account field
+		does not exist in this ERPNext version.
+
+		When discount_amount > 0 and no additional_discount_account is wired,
+		ERPNext creates: DR debit_to = grand_total, CR Revenue = net_total
+		leaving a gap of discount_amount → "Debit and Credit not equal".
+
+		Fix: if flags.pos_next_diskon_akun is set, append:
+		  DR Potongan Penjualan: discount_amount  to balance the GL.
+		"""
+		gl_entries = super().get_gl_entries(warehouse_account)
+
+		diskon_akun = self.flags.get("pos_next_diskon_akun")
+		discount = flt(self.discount_amount or 0)
+
+		if diskon_akun and discount > 0 and cint(self.is_pos):
+			# Only add if ERPNext didn't already create an entry for this account
+			existing_accounts = {e.get("account") for e in gl_entries if isinstance(e, dict)}
+			if diskon_akun not in existing_accounts:
+				gl_entries.append(
+					self.get_gl_dict(
+						{
+							"account": diskon_akun,
+							"debit": discount,
+							"debit_in_account_currency": discount,
+							"against": self.customer,
+							"cost_center": self.cost_center,
+							"remarks": f"Discount on {self.name}",
+						},
+						item=self,
+					)
+				)
+
+		return gl_entries
+
 	def make_pos_gl_entries(self, gl_entries):
 		"""
 		Override to add party information for wallet payment accounts.

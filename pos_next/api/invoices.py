@@ -1339,6 +1339,23 @@ def submit_invoice(invoice=None, data=None):
             )
             invoice_doc.flags.pos_next_discount_amount = discount_amount
 
+            # Wire diskon_akun from POS Profile to balance the discount GL entry.
+            # Without this, discount_amount reduces grand_total but revenue GL entries
+            # still use net_total → GL imbalance of exactly -discount_amount.
+            # ERPNext uses additional_discount_account (if field exists) to create
+            # DR Potongan Penjualan: discount_amount which closes the gap.
+            if pos_profile:
+                try:
+                    diskon_akun = frappe.db.get_value("POS Profile", pos_profile, "diskon_akun")
+                    if diskon_akun:
+                        meta = frappe.get_meta("Sales Invoice")
+                        if meta.has_field("additional_discount_account"):
+                            invoice_doc.additional_discount_account = diskon_akun
+                        # Store for GL override fallback in CustomSalesInvoice
+                        invoice_doc.flags.pos_next_diskon_akun = diskon_akun
+                except Exception as e:
+                    frappe.log_error(f"POS: diskon_akun lookup failed: {e}"[:140], "Discount Trace")
+
         frappe.log_error(
             f"PRE-SAVE da={invoice_doc.discount_amount!r} pct={invoice_doc.additional_discount_percentage!r} "
             f"gt={invoice_doc.grand_total!r}"[:140], "Discount Trace"
