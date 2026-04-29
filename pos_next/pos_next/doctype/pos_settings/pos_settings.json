@@ -489,6 +489,13 @@
             "label": "Allow Negative Stock"
         },
         {
+            "default": "0",
+            "description": "Automatically allow zero valuation rate for items with price 0, bypassing the valuation rate error on submit.",
+            "fieldname": "allow_zero_valuation",
+            "fieldtype": "Check",
+            "label": "Allow Zero Valuation"
+        },
+        {
             "fieldname": "barcode_tab",
             "fieldtype": "Tab Break",
             "label": "Barcode"

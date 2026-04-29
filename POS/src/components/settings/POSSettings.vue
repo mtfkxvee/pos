@@ -153,6 +153,11 @@
 												:label="__('Allow Negative Stock')"
 												:description="__('Enable selling items even when stock reaches zero or below. Integrates with Back Office stock settings.')"
 											/>
+											<CheckboxField
+												v-model="settings.allow_zero_valuation"
+												:label="__('Allow Zero Valuation')"
+												:description="__('Automatically allow zero valuation rate for items with price 0, bypassing the valuation rate error on submit.')"
+											/>
 											<div class="mt-3 p-3 bg-blue-100 rounded-md">
 												<div class="flex items-start gap-2">
 													<svg class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -437,6 +442,7 @@ const settings = ref({
 	allow_partial_payment: 0,
 	silent_print: 0,
 	allow_negative_stock: 0,
+	allow_zero_valuation: 0,
 	tax_inclusive: 0,
 })
 

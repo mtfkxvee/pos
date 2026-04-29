@@ -594,6 +594,21 @@ def update_invoice(data):
             invoice_doc.is_pos = 1
             invoice_doc.update_stock = 1
 
+        # Auto-allow zero valuation rate for zero-price items if setting is enabled
+        if doctype == "Sales Invoice" and pos_profile:
+            try:
+                allow_zero_val = cint(
+                    frappe.db.get_value(
+                        "POS Settings", {"pos_profile": pos_profile}, "allow_zero_valuation"
+                    ) or 0
+                )
+                if allow_zero_val:
+                    for item in invoice_doc.get("items", []):
+                        if flt(item.rate or 0) == 0 or flt(item.price_list_rate or 0) == 0:
+                            item.allow_zero_valuation_rate = 1
+            except Exception:
+                pass
+
         # ========================================================================
         # ROUNDING CONFIGURATION
         # ========================================================================
