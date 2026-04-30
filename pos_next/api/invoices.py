@@ -1336,22 +1336,23 @@ def submit_invoice(invoice=None, data=None):
             )
             invoice_doc.flags.pos_next_discount_amount = discount_amount
 
-            # Wire diskon_akun from POS Profile to balance the discount GL entry.
-            # Without this, discount_amount reduces grand_total but revenue GL entries
-            # still use net_total → GL imbalance of exactly -discount_amount.
-            # ERPNext uses additional_discount_account (if field exists) to create
-            # DR Potongan Penjualan: discount_amount which closes the gap.
+            # Wire discount account from POS Profile to balance the discount GL entry.
+            # The field is a custom field; try common naming conventions silently.
             if pos_profile:
-                try:
-                    diskon_akun = frappe.db.get_value("POS Profile", pos_profile, "diskon_akun")
-                    if diskon_akun:
-                        meta = frappe.get_meta("Sales Invoice")
-                        if meta.has_field("additional_discount_account"):
-                            invoice_doc.additional_discount_account = diskon_akun
-                        # Store for GL override fallback in CustomSalesInvoice
-                        invoice_doc.flags.pos_next_diskon_akun = diskon_akun
-                except Exception as e:
-                    frappe.log_error(f"POS: diskon_akun lookup failed: {e}"[:140], "Discount Trace")
+                _diskon_akun = None
+                for _fn in ("custom_diskon_akun", "diskon_akun", "discount_account"):
+                    try:
+                        _val = frappe.db.get_value("POS Profile", pos_profile, _fn)
+                        if _val:
+                            _diskon_akun = _val
+                            break
+                    except Exception:
+                        pass
+                if _diskon_akun:
+                    meta = frappe.get_meta("Sales Invoice")
+                    if meta.has_field("additional_discount_account"):
+                        invoice_doc.additional_discount_account = _diskon_akun
+                    invoice_doc.flags.pos_next_diskon_akun = _diskon_akun
 
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
