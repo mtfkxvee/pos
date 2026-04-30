@@ -730,8 +730,10 @@ def update_invoice(data):
 
 
 @frappe.whitelist()
-def get_pos_draft_invoices(pos_profile):
+def get_pos_draft_invoices(pos_profile=None):
     """Fetch Draft Sales Invoices for a specific POS Profile including items."""
+    if not pos_profile:
+        return []
     invoices = frappe.get_all(
         "Sales Invoice",
         filters={"docstatus": 0, "is_pos": 1, "pos_profile": pos_profile},
