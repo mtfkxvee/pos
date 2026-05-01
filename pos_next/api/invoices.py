@@ -1339,10 +1339,12 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc.flags.pos_next_discount_amount = discount_amount
 
             # Wire discount account from POS Profile to balance the discount GL entry.
-            # The field is a custom field; try common naming conventions silently.
+            # Use has_column() first to avoid MySQL 1054 errors on non-existent fields.
             if pos_profile:
                 _diskon_akun = None
                 for _fn in ("custom_diskon_akun", "diskon_akun", "discount_account"):
+                    if not frappe.db.has_column("POS Profile", _fn):
+                        continue
                     try:
                         _val = frappe.db.get_value("POS Profile", pos_profile, _fn)
                         if _val:

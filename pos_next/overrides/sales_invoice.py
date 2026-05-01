@@ -131,9 +131,13 @@ class CustomSalesInvoice(SalesInvoice):
 		if not cint(self.is_pos) or not flt(self.discount_amount) or not self.pos_profile:
 			return gl_entries
 
-		# Resolve diskon_akun — try both naming conventions
+		# Resolve discount account field from POS Profile.
+		# Check column existence first to avoid MySQL 1054 errors that Frappe
+		# may log even when caught at application level.
 		diskon_akun = None
-		for fieldname in ("diskon_akun", "custom_diskon_akun"):
+		for fieldname in ("custom_diskon_akun", "diskon_akun", "discount_account"):
+			if not frappe.db.has_column("POS Settings", fieldname) and not frappe.db.has_column("POS Profile", fieldname):
+				continue
 			try:
 				val = frappe.db.get_value("POS Profile", self.pos_profile, fieldname)
 				if val:
