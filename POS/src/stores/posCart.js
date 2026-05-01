@@ -1010,7 +1010,40 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				(offer) => !appliedOfferCodes.has(offer.name),
 			)
 
-			if (newOffers.length === 0) {
+			const existingCodes = appliedOffers.value.map((entry) => entry.code)
+
+			// If no new offers AND no existing offers, nothing to do
+			if (newOffers.length === 0 && existingCodes.length === 0) {
+				return
+			}
+
+			// If no new offers but existing ones are applied, still call the API to
+			// recalculate discount amounts for the current cart (e.g. 1% of new total
+			// after adding items). Without this, transaction discounts stay stale.
+			if (newOffers.length === 0 && existingCodes.length > 0) {
+				const invoiceData = buildOfferEvaluationPayload(currentProfile)
+				if (signal?.aborted) return
+				const recalcResponse = await applyOffersResource.submit({
+					invoice_data: invoiceData,
+					selected_offers: existingCodes,
+				})
+				if (signal?.aborted) return
+				const {
+					items: recalcItems,
+					freeItems: recalcFreeItems,
+					appliedRules: recalcRules,
+					transactionDiscountAmount: recalcTda,
+				} = parseOfferResponse(recalcResponse)
+				applyDiscountsFromServer(recalcItems)
+				processFreeItems(recalcFreeItems)
+				filterActiveOffers(recalcRules)
+				if (recalcTda > 0) {
+					promoTransactionDiscount.value = recalcTda
+					rebuildIncrementalCache()
+				} else if (recalcRules.length === 0) {
+					promoTransactionDiscount.value = 0
+					rebuildIncrementalCache()
+				}
 				return
 			}
 
@@ -1018,7 +1051,6 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			if (signal?.aborted) return
 
 			// Apply all new eligible offers in a single batch
-			const existingCodes = appliedOffers.value.map((entry) => entry.code)
 			const newOfferCodes = newOffers.map((offer) => offer.name)
 			const allCodes = [...existingCodes, ...newOfferCodes]
 
