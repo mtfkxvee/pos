@@ -427,21 +427,27 @@ def get_offers(pos_profile: str) -> List[Dict]:
 def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 	"""Fetch offers from promotional schemes"""
 
-	# Fetch pricing rules linked to promotional schemes
+	# Fetch pricing rules linked to promotional schemes.
+	# Also JOIN the Promotional Scheme to enforce its own valid_from/valid_upto —
+	# ERPNext auto-creates Pricing Rules with NULL dates when a Scheme has dates,
+	# so the rule's own date filter is not enough.
 	pricing_rules = frappe.db.sql("""
 		SELECT
-			name, title, apply_on, selling, promotional_scheme,
-			promotional_scheme_id, coupon_code_based,
-			price_or_product_discount, priority, valid_from, valid_upto
-		FROM `tabPricing Rule`
+			pr.name, pr.title, pr.apply_on, pr.selling, pr.promotional_scheme,
+			pr.promotional_scheme_id, pr.coupon_code_based,
+			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto
+		FROM `tabPricing Rule` pr
+		LEFT JOIN `tabPromotional Scheme` ps ON ps.name = pr.promotional_scheme
 		WHERE
-			disable = 0
-			AND selling = 1
-			AND promotional_scheme IS NOT NULL
-			AND company = %(company)s
-			AND (valid_from IS NULL OR valid_from <= %(date)s)
-			AND (valid_upto IS NULL OR valid_upto >= %(date)s)
-		ORDER BY priority DESC, name
+			pr.disable = 0
+			AND pr.selling = 1
+			AND pr.promotional_scheme IS NOT NULL
+			AND pr.company = %(company)s
+			AND (pr.valid_from IS NULL OR pr.valid_from <= %(date)s)
+			AND (pr.valid_upto IS NULL OR pr.valid_upto >= %(date)s)
+			AND (ps.valid_from IS NULL OR ps.valid_from <= %(date)s)
+			AND (ps.valid_upto IS NULL OR ps.valid_upto >= %(date)s)
+		ORDER BY pr.priority DESC, pr.name
 	""", {"company": company, "date": date}, as_dict=1)
 
 	if not pricing_rules:

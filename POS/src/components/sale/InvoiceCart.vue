@@ -727,9 +727,9 @@
 										</svg>
 										{{ __("+{0} FREE", [item.free_qty]) }}
 									</span>
-									<!-- Discount Badge -->
+									<!-- Discount / Pricing Rule Badge -->
 									<div
-										v-if="item.discount_amount && item.discount_amount > 0 && !item.is_free_item"
+										v-if="!item.is_free_item && (item.discount_amount > 0 || item.discount_percentage > 0 || (item.pricing_rules && item.pricing_rules.length > 0))"
 										class="inline-flex items-center px-1.5 py-0.5 bg-gradient-to-r from-red-50 to-orange-50 text-red-700 rounded-full text-[9px] font-bold border border-red-200 flex-shrink-0"
 									>
 										<svg
@@ -743,11 +743,15 @@
 												clip-rule="evenodd"
 											/>
 										</svg>
-										{{
-											__("{0}%", [
-												Number(item.discount_percentage).toFixed(0),
-											])
-										}}
+										<template v-if="item.discount_percentage > 0">
+											{{ __("{0}%", [Number(item.discount_percentage).toFixed(0)]) }}
+										</template>
+										<template v-else-if="item.discount_amount > 0">
+											-{{ formatCurrency(item.discount_amount) }}
+										</template>
+										<template v-else>
+											{{ __("PROMO") }}
+										</template>
 									</div>
 								</div>
 								<button v-if="!item.is_free_item" type="button" @click.stop="$emit('remove-item', item.item_code, item.uom)"
