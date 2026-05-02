@@ -2,6 +2,7 @@ import { useInvoice } from "@/composables/useInvoice"
 import { usePOSOffersStore } from "@/stores/posOffers"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { parseError } from "@/utils/errorHandler"
+import { roundCurrency } from "@/utils/currency"
 import {
 	checkStockAvailability,
 	formatStockError,
@@ -328,18 +329,29 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
-		// Send only the manual additional discount (from DiscountComplimentDialog).
-		// promoTransactionDiscount is already baked into item.rate by apply_offers,
-		// so sending it again as invoice-level discount_amount causes double-counting:
-		//   item.rate = price_list_rate - promo  (promo applied at item level)
-		//   grand_total = net_total - discount   (if discount includes promo → double)
-		// Only the manual part goes as invoice-level additional discount.
-		const result = await baseSubmitInvoice(
-			targetDoctype.value,
-			deliveryDate.value,
-			writeOffAmount.value,
-			toRaw(loyaltyData.value),
+		// Temporarily include promoTransactionDiscount in additionalDiscount so
+		// baseSubmitInvoice sends the full invoice-level discount to the backend.
+		// Item-level discounts (e.g. 3.000 pricing rule) are now correctly baked
+		// into item.rate by applyDiscountsFromServer, so they don't need to be
+		// in discount_amount.  Only promoTransactionDiscount (transaction-level,
+		// e.g. DISKON MEMBER 1%) is NOT in item.rate and must travel as
+		// additional discount_amount.
+		const origAdditional = additionalDiscount.value
+		additionalDiscount.value = roundCurrency(
+			origAdditional + (promoTransactionDiscount.value || 0)
 		)
+		let result
+		try {
+			result = await baseSubmitInvoice(
+				targetDoctype.value,
+				deliveryDate.value,
+				writeOffAmount.value,
+				toRaw(loyaltyData.value),
+			)
+		} finally {
+			// Always restore — even on error — so cart state is consistent
+			additionalDiscount.value = origAdditional
+		}
 		// Reset write-off and loyalty amount after successful submission
 		if (result) {
 			writeOffAmount.value = 0
@@ -477,6 +489,17 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				item.discount_amount = discountAmt
 				item.pricing_rules = serverItem.pricing_rules
 				hasDiscounts = discountPct > 0 || discountAmt > 0
+
+				// Update item.rate to the DISCOUNTED rate so ERPNext computes
+				// net_total correctly from rate × qty (not from price_list_rate).
+				// Without this, item.rate stays at full price and the item-level
+				// discount is lost in the submitted invoice.
+				const plr = item.price_list_rate || item.rate
+				if (discountPct > 0) {
+					item.rate = roundCurrency(plr * (1 - discountPct / 100))
+				} else if (discountAmt > 0) {
+					item.rate = roundCurrency(Math.max(0, plr - discountAmt))
+				}
 			}
 			// Otherwise preserve existing manual discount
 

@@ -569,9 +569,20 @@ def update_invoice(data):
             if flt(item.price_list_rate) < item_rate:
                 item.price_list_rate = item_rate
 
-            # IMPORTANT: Keep the rate from frontend (do NOT set to 0)
-            # ERPNext will recalculate if needed, but preserving frontend rate
-            # prevents rounding issues and ensures UI matches invoice
+            # Recalculate item.rate from price_list_rate + discount so ERPNext
+            # uses the correct net rate in calculate_taxes_and_totals().
+            # ERPNext's calculate_item_values() only auto-sets rate when rate=0;
+            # if rate is still the full list price, net_amount = full price and
+            # the item-level discount is silently lost in net_total.
+            discount_amt_item = flt(item.get("discount_amount") or 0)
+            plr = flt(item.price_list_rate)
+            if discount_pct > 0 and plr > 0:
+                expected_rate = flt(plr * (1 - discount_pct / 100), 2)
+                # Only correct if current rate is still at full price
+                if flt(item.rate) > expected_rate + 0.01:
+                    item.rate = expected_rate
+            elif discount_amt_item > 0 and not discount_pct and plr > 0:
+                item.rate = flt(max(0, plr - discount_amt_item), 2)
 
             # Convert pricing_rules from list to comma-separated string
             # ERPNext expects pricing_rules as a string, not a list
