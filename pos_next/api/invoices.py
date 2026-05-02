@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import json
 import frappe
 from frappe import _
-from frappe.utils import flt, cint, nowdate, nowtime, get_datetime, cstr
+from frappe.utils import flt, cint, nowdate, nowtime, get_datetime, cstr, getdate
 from erpnext.stock.doctype.batch.batch import get_batch_qty, get_batch_no
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 
@@ -2721,6 +2721,12 @@ def apply_offers(invoice_data, selected_offers=None):
         # We include BOTH types for POS, but exclude coupon_code_based rules
         # (those require explicit coupon entry and are handled separately).
         #
+        today = getdate(nowdate())
+
+        # Fetch parent Promotional Scheme dates in one batch so we can filter
+        # rules whose scheme hasn't started yet (or has expired).
+        # ERPNext auto-creates Pricing Rules with NULL valid_from/valid_upto when
+        # a Promotional Scheme has dates, so the rule's own dates are not reliable.
         rule_map = {}
         if raw_rule_names:
             rule_records = frappe.get_all(
@@ -2732,12 +2738,45 @@ def apply_offers(invoice_data, selected_offers=None):
                     "coupon_code_based",
                     "promotional_scheme_id",
                     "price_or_product_discount",
+                    "valid_from",
+                    "valid_upto",
                 ],
             )
+
+            # Collect unique scheme names to fetch their dates in one query
+            scheme_names = list({
+                r.promotional_scheme for r in rule_records if r.promotional_scheme
+            })
+            scheme_dates = {}
+            if scheme_names:
+                scheme_records = frappe.get_all(
+                    "Promotional Scheme",
+                    filters={"name": ["in", scheme_names]},
+                    fields=["name", "valid_from", "valid_upto"],
+                )
+                scheme_dates = {s.name: s for s in scheme_records}
+
             for record in rule_records:
                 # Skip coupon-based rules (require explicit coupon code entry)
                 if record.coupon_code_based:
                     continue
+
+                # Enforce scheme-level date restrictions.
+                # Pricing Rules auto-created from a scheme inherit NULL dates,
+                # so we must check the parent scheme's dates explicitly.
+                if record.promotional_scheme:
+                    scheme = scheme_dates.get(record.promotional_scheme)
+                    if scheme:
+                        if scheme.valid_from and getdate(scheme.valid_from) > today:
+                            continue  # scheme not yet started
+                        if scheme.valid_upto and getdate(scheme.valid_upto) < today:
+                            continue  # scheme already expired
+                else:
+                    # Standalone rule: check rule's own dates
+                    if record.valid_from and getdate(record.valid_from) > today:
+                        continue
+                    if record.valid_upto and getdate(record.valid_upto) < today:
+                        continue
 
                 # Include both promotional scheme rules and standalone pricing rules
                 rule_map[record.name] = record
