@@ -1376,6 +1376,34 @@ def submit_invoice(invoice=None, data=None):
         invoice_doc.submit()
         invoice_submitted = True
 
+        # ── Grand Total Integrity Check ──────────────────────────────────────
+        # Compare the grand_total the UI displayed (sent by frontend) with the
+        # grand_total ERPNext actually saved after submit.  A mismatch means the
+        # cashier collected the wrong amount from the customer.
+        ui_grand_total = flt(invoice.get("grand_total") or 0)
+        sys_grand_total = flt(invoice_doc.grand_total or 0)
+        ui_discount = flt(invoice.get("discount_amount") or data.get("discount_amount") or 0)
+        sys_discount = flt(invoice_doc.discount_amount or 0)
+
+        if ui_grand_total and abs(ui_grand_total - sys_grand_total) > 1:
+            frappe.log_error(
+                title="POS Grand Total Mismatch",
+                message=(
+                    f"Invoice     : {invoice_doc.name}\n"
+                    f"Customer    : {invoice_doc.customer}\n"
+                    f"POS Profile : {invoice_doc.pos_profile}\n\n"
+                    f"UI showed   : {ui_grand_total:,.0f}   ← what cashier saw\n"
+                    f"System has  : {sys_grand_total:,.0f}   ← what was recorded\n"
+                    f"Difference  : {sys_grand_total - ui_grand_total:+,.0f}\n\n"
+                    f"UI discount_amount   : {ui_discount:,.0f}\n"
+                    f"System discount_amount: {sys_discount:,.0f}\n"
+                    f"Net total   : {flt(invoice_doc.net_total):,.0f}\n"
+                    f"Paid amount : {flt(getattr(invoice_doc, 'paid_amount', 0)):,.0f}\n"
+                    f"Outstanding : {flt(getattr(invoice_doc, 'outstanding_amount', 0)):,.0f}\n"
+                    f"Additional discount %: {flt(invoice_doc.additional_discount_percentage)}\n"
+                )
+            )
+
         # Complete the offline sync record
         if sync_record_name:
             _complete_offline_sync(sync_record_name, invoice_doc.name)
