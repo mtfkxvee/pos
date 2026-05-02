@@ -36,16 +36,20 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def set_pos_fields(self, for_validate=False):
 		"""
-		Override to preserve the fixed discount_amount set by submit_invoice.
-
-		ERPNext's set_pos_fields() may restore additional_discount_percentage from
-		POS Profile (e.g. 1% from DISKON MEMBER pricing rule), causing calculate_
-		taxes_and_totals() to override our fixed discount_amount with 1% × net_total.
-
-		If flags.pos_next_discount_amount is set, we zero the percentage and restore
-		the fixed amount after every set_pos_fields() call.
+		Override to:
+		1. Re-enforce ignore_pricing_rule=1 after ERPNext's set_pos_fields() resets it
+		   from POS Profile (usually 0). Without this, ERPNext fires apply_pricing_rule
+		   on every validate cycle, clearing item-level discounts and re-applying
+		   transaction-level rules — causing rate reversion and discount doubling.
+		2. Preserve the fixed discount_amount set by submit_invoice.
 		"""
 		super().set_pos_fields(for_validate=for_validate)
+
+		# Re-enforce ignore_pricing_rule AFTER super() which reads it from POS Profile.
+		# Flag pos_next_ignore_pricing_rule is set by update_invoice / submit_invoice
+		# to signal that we are controlling all pricing manually via apply_offers.
+		if self.flags.get("pos_next_ignore_pricing_rule"):
+			self.ignore_pricing_rule = 1
 
 		intended = self.flags.get("pos_next_discount_amount")
 		if intended is not None:

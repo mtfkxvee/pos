@@ -536,9 +536,13 @@ def update_invoice(data):
                 except Exception as e:
                     frappe.log_error(f"Failed to create customer {customer_name}: {e}")
 
-        # Disable automatic pricing rules (we handle discounts manually from POS)
+        # Disable automatic pricing rules (we handle discounts manually from POS).
+        # Also set pos_next_ignore_pricing_rule flag so our set_pos_fields() override
+        # re-enforces ignore_pricing_rule=1 after every ERPNext validate cycle
+        # (ERPNext's set_pos_fields() always resets it from POS Profile).
         invoice_doc.ignore_pricing_rule = 1
         invoice_doc.flags.ignore_pricing_rule = True
+        invoice_doc.flags.pos_next_ignore_pricing_rule = True
 
         # ========================================================================
         # DISCOUNT CALCULATION - CRITICAL LOGIC
@@ -1445,14 +1449,13 @@ def submit_invoice(invoice=None, data=None):
             )
         )
 
-        # Prevent ERPNext's apply_pricing_rule_on_transaction() from running again
-        # during save/validate below.  That function adds to discount_amount
-        # cumulatively (+=), so if discount_amount is already set (e.g. 12,000)
-        # and DISKON MEMBER also fires, the total becomes 24,000 (double).
-        # We control all discounts explicitly via flags.pos_next_discount_amount;
-        # ERPNext must not alter them during the submit cycle.
+        # Prevent ERPNext's pricing rule engine from firing during save/submit.
+        # set_pos_fields() (called on every validate) resets ignore_pricing_rule
+        # from POS Profile (usually 0). Our set_pos_fields() override re-enforces
+        # it to 1 when pos_next_ignore_pricing_rule flag is set.
         invoice_doc.ignore_pricing_rule = 1
         invoice_doc.flags.ignore_pricing_rule = True
+        invoice_doc.flags.pos_next_ignore_pricing_rule = True
 
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
