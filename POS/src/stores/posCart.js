@@ -917,6 +917,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				if (validOfferCodes.length === 0) {
 					// All offers invalid - clear everything
 					appliedOffers.value = []
+					promoTransactionDiscount.value = 0
 					processFreeItems([])
 
 					// Reset all item rates to original (remove discounts)
