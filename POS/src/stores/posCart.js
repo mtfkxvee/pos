@@ -943,11 +943,20 @@ export const usePOSCartStore = defineStore("posCart", () => {
 						items: responseItems,
 						freeItems,
 						appliedRules,
+						transactionDiscountAmount: reapplyTda,
 					} = parseOfferResponse(response)
 
 					applyDiscountsFromServer(responseItems)
 					processFreeItems(freeItems)
 					filterActiveOffers(appliedRules)
+
+					// Sync promoTransactionDiscount with the new response.
+					// filterActiveOffers() only zeroes it when ALL rules are gone;
+					// if some item-level rules remain valid but the transaction-level
+					// rule (e.g. DISKON MEMBER min_amt) was just removed, the old
+					// promoTransactionDiscount would stick — causing stale discount display.
+					promoTransactionDiscount.value = reapplyTda > 0 ? reapplyTda : 0
+					rebuildIncrementalCache()
 
 					// Update appliedOffers to only include valid ones
 					appliedOffers.value = appliedOffers.value.filter((entry) =>
