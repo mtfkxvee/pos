@@ -1377,12 +1377,15 @@ def submit_invoice(invoice=None, data=None):
         invoice_submitted = True
 
         # ── Grand Total Integrity Check ──────────────────────────────────────
-        # Compare the grand_total the UI displayed (sent by frontend) with the
-        # grand_total ERPNext actually saved after submit.  A mismatch means the
-        # cashier collected the wrong amount from the customer.
-        ui_grand_total = flt(invoice.get("grand_total") or 0)
+        # Compare the grand_total the UI displayed (sent by frontend as
+        # data.ui_grand_total) with the grand_total ERPNext actually recorded
+        # after submit.  A mismatch means the cashier collected the wrong amount.
+        # NOTE: invoice.grand_total comes from update_invoice (already ERPNext-
+        # computed) so it cannot serve as the "UI" reference — use ui_grand_total
+        # from submitData instead.
+        ui_grand_total = flt(data.get("ui_grand_total") or 0)
         sys_grand_total = flt(invoice_doc.grand_total or 0)
-        ui_discount = flt(invoice.get("discount_amount") or data.get("discount_amount") or 0)
+        ui_discount = flt(data.get("discount_amount") or 0)
         sys_discount = flt(invoice_doc.discount_amount or 0)
 
         if ui_grand_total and abs(ui_grand_total - sys_grand_total) > 1:

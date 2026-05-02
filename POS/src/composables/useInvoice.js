@@ -936,6 +936,9 @@ export function useInvoice() {
 					// validate() resets discount_amount via set_pos_fields()
 					discount_amount: additionalDiscount.value || 0,
 					apply_discount_on: "Grand Total",
+					// Grand total as displayed to the cashier — used server-side to
+					// detect any mismatch between UI and what ERPNext actually records
+					ui_grand_total: grandTotal.value || 0,
 				}
 
 	
