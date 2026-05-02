@@ -1463,6 +1463,22 @@ def submit_invoice(invoice=None, data=None):
         invoice_doc.save()
 
 
+        # ── TRACE: after explicit save(), before submit() ─────────────────────
+        frappe.log_error(
+            title="POS TRACE - after save before submit",
+            message=(
+                f"invoice name         : {invoice_doc.name}\n"
+                f"ignore_pricing_rule  : {invoice_doc.ignore_pricing_rule}\n"
+                f"discount_amount      : {flt(invoice_doc.discount_amount):,.0f}\n"
+                f"net_total            : {flt(invoice_doc.net_total):,.0f}\n"
+                f"grand_total          : {flt(invoice_doc.grand_total):,.0f}\n"
+                + "\n".join(
+                    f"  {i.item_code}: rate={flt(i.rate):,.0f}  disc_amt={flt(i.discount_amount or 0):,.0f}  disc%={flt(i.discount_percentage or 0):.2f}%"
+                    for i in invoice_doc.get("items", [])
+                )
+            )
+        )
+
         invoice_doc.submit()
         invoice_submitted = True
 

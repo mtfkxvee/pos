@@ -36,20 +36,49 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def set_pos_fields(self, for_validate=False):
 		"""
-		Override to:
-		1. Re-enforce ignore_pricing_rule=1 after ERPNext's set_pos_fields() resets it
-		   from POS Profile (usually 0). Without this, ERPNext fires apply_pricing_rule
-		   on every validate cycle, clearing item-level discounts and re-applying
-		   transaction-level rules — causing rate reversion and discount doubling.
-		2. Preserve the fixed discount_amount set by submit_invoice.
+		Override to preserve item rates and discount_amount across every validate
+		cycle triggered by save() and submit().
+
+		ERPNext's set_pos_fields() resets ignore_pricing_rule from POS Profile (=0)
+		and may re-evaluate item pricing rules — clearing discounts and reverting
+		item.rate to price_list_rate when a rule is future-dated or inactive.
+
+		Strategy:
+		- Snapshot item rates BEFORE super() runs
+		- Restore them AFTER (handles both flag-present and flag-absent/reload cases)
+		- Re-enforce ignore_pricing_rule=1 using BOTH the saved pre-super value
+		  AND the flag, so it works even when submit() reloads the document from DB
+		  (flags lost but ignore_pricing_rule=1 is already in DB from prior save)
 		"""
+		# ── snapshot item rates before super() might reset them ───────────────
+		use_pnp = (
+			self.flags.get("pos_next_ignore_pricing_rule")
+			or cint(self.ignore_pricing_rule)
+		)
+		item_snapshots = {}
+		if use_pnp:
+			for item in self.get("items", []):
+				item_snapshots[id(item)] = {
+					"rate": flt(item.rate),
+					"price_list_rate": flt(item.price_list_rate or item.rate),
+					"discount_percentage": flt(item.discount_percentage),
+					"discount_amount": flt(item.discount_amount),
+					"pricing_rules": item.get("pricing_rules") or "",
+				}
+
 		super().set_pos_fields(for_validate=for_validate)
 
-		# Re-enforce ignore_pricing_rule AFTER super() which reads it from POS Profile.
-		# Flag pos_next_ignore_pricing_rule is set by update_invoice / submit_invoice
-		# to signal that we are controlling all pricing manually via apply_offers.
-		if self.flags.get("pos_next_ignore_pricing_rule"):
+		# ── restore after super() ─────────────────────────────────────────────
+		if use_pnp:
 			self.ignore_pricing_rule = 1
+			for item in self.get("items", []):
+				snap = item_snapshots.get(id(item))
+				if snap:
+					item.rate = snap["rate"]
+					item.price_list_rate = snap["price_list_rate"]
+					item.discount_percentage = snap["discount_percentage"]
+					item.discount_amount = snap["discount_amount"]
+					item.pricing_rules = snap["pricing_rules"]
 
 		intended = self.flags.get("pos_next_discount_amount")
 		if intended is not None:
