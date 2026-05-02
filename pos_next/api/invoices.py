@@ -1358,6 +1358,15 @@ def submit_invoice(invoice=None, data=None):
                         invoice_doc.additional_discount_account = _diskon_akun
                     invoice_doc.flags.pos_next_diskon_akun = _diskon_akun
 
+        # Prevent ERPNext's apply_pricing_rule_on_transaction() from running again
+        # during save/validate below.  That function adds to discount_amount
+        # cumulatively (+=), so if discount_amount is already set (e.g. 12,000)
+        # and DISKON MEMBER also fires, the total becomes 24,000 (double).
+        # We control all discounts explicitly via flags.pos_next_discount_amount;
+        # ERPNext must not alter them during the submit cycle.
+        invoice_doc.ignore_pricing_rule = 1
+        invoice_doc.flags.ignore_pricing_rule = True
+
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
