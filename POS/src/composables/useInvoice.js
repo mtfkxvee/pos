@@ -616,9 +616,13 @@ export function useInvoice() {
 			)
 		} else if (item.discount_amount > 0) {
 			discountAmount = roundCurrency(item.discount_amount)
-			// Sync percentage when amount is provided directly
-			item.discount_percentage =
-				baseAmount > 0 ? (discountAmount / baseAmount) * 100 : 0
+			// Do NOT sync discount_percentage from discount_amount.
+			// The rule is amount-based (e.g. Rp 3.000 off Rp 33.000 = 9.0909...%).
+			// If we store that irrational % and ERPNext back-calculates:
+			//   33.000 × (9.09/100) = 2.999,70 → rate = 30.000,30 (off by 0.30).
+			// Keeping discount_percentage = 0 forces ERPNext to use the exact path:
+			//   rate = price_list_rate - discount_amount = 33.000 - 3.000 = 30.000.
+			item.discount_percentage = 0
 		}
 		item.discount_amount = discountAmount
 
