@@ -47,7 +47,7 @@
 								</button>
 							</div>
 							<p class="text-xs text-gray-500 text-right">
-								{{ __('Calculated Discount') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedDiscountAmount) }}</span>
+								{{ __('Calculated Discount') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedDiscountAmount, settingsStore.currency) }}</span>
 							</p>
 						</div>
 					</div>
@@ -75,7 +75,7 @@
 								</button>
 							</div>
 							<p class="text-xs text-gray-500 text-right">
-								{{ __('Calculated Compliment') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedComplimentAmount) }}</span>
+								{{ __('Calculated Compliment') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedComplimentAmount, settingsStore.currency) }}</span>
 							</p>
 						</div>
 
