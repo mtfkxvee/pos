@@ -119,6 +119,19 @@ class CustomSalesInvoice(SalesInvoice):
 					item.discount_amount = snap["discount_amount"]
 					item.pricing_rules = snap["pricing_rules"]
 
+			# Also restore invoice-level discount before recalculating totals,
+			# so calculate_taxes_and_totals() uses the correct discount_amount.
+			if intended_da is not None:
+				self.discount_amount = flt(intended_da)
+				self.additional_discount_percentage = 0
+
+			# Recompute net_total / grand_total from restored item rates.
+			# super().validate() computed net_total using the wrong (reverted) rates;
+			# after our restore, item.amount is still stale — recalculate to fix it.
+			# calculate_taxes_and_totals() is safe here: it is purely mathematical
+			# and does not call validate() or apply pricing rules.
+			self.calculate_taxes_and_totals()
+
 		# Restore payments if cleared by super().validate()
 		if db_payment_count and not self.get("payments"):
 			try:
