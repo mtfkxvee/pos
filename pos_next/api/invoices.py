@@ -550,6 +550,19 @@ def update_invoice(data):
         # Formula: rate = price_list_rate * (1 - discount_percentage/100)
         # Reverse: price_list_rate = rate / (1 - discount_percentage/100)
         # ========================================================================
+        # ── TRACE: snapshot item state BEFORE our processing ──────────────────
+        _item_trace_before = [
+            {
+                "item_code": i.get("item_code"),
+                "rate_in": flt(i.rate or 0),
+                "plr_in": flt(i.get("price_list_rate") or 0),
+                "disc_pct_in": flt(i.discount_percentage or 0),
+                "disc_amt_in": flt(i.get("discount_amount") or 0),
+                "pricing_rules_in": i.get("pricing_rules") or "",
+            }
+            for i in invoice_doc.get("items", [])
+        ]
+
         for item in invoice_doc.get("items", []):
             item_rate = flt(item.rate or 0)
             discount_pct = flt(item.discount_percentage or 0)
@@ -599,6 +612,32 @@ def update_invoice(data):
                     except (json.JSONDecodeError, TypeError):
                         # Keep original value - malformed JSON will be handled by standardize_pricing_rules
                         item.pricing_rules = ""
+
+        # ── TRACE: snapshot item state AFTER our processing ───────────────────
+        _item_trace_after = [
+            {
+                "item_code": i.get("item_code"),
+                "rate_out": flt(i.rate or 0),
+                "plr_out": flt(i.get("price_list_rate") or 0),
+                "disc_pct_out": flt(i.discount_percentage or 0),
+                "disc_amt_out": flt(i.get("discount_amount") or 0),
+            }
+            for i in invoice_doc.get("items", [])
+        ]
+        _trace_lines = ["=== update_invoice item TRACE ==="]
+        for b, a in zip(_item_trace_before, _item_trace_after):
+            _trace_lines.append(
+                f"  {b['item_code']}:"
+                f"  rate {b['rate_in']:,.0f} → {a['rate_out']:,.0f}"
+                f"  | plr {b['plr_in']:,.0f} → {a['plr_out']:,.0f}"
+                f"  | disc% {b['disc_pct_in']:.2f}% → {a['disc_pct_out']:.2f}%"
+                f"  | disc_amt {b['disc_amt_in']:,.0f} → {a['disc_amt_out']:,.0f}"
+                f"  | rules: {b['pricing_rules_in'] or 'none'}"
+            )
+        frappe.log_error(
+            title="POS TRACE - update_invoice items",
+            message="\n".join(_trace_lines)
+        )
 
         # Set invoice flags BEFORE calculations
         if doctype == "Sales Invoice":
@@ -660,6 +699,23 @@ def update_invoice(data):
 
         # Calculate totals and apply discounts (with rounding disabled)
         invoice_doc.calculate_taxes_and_totals()
+
+        # ── TRACE: after calculate_taxes_and_totals ────────────────────────────
+        frappe.log_error(
+            title="POS TRACE - after calculate_taxes_and_totals (update_invoice)",
+            message=(
+                f"discount_amount sent  : {_discount_amount:,.0f}\n"
+                f"invoice.discount_amount: {flt(invoice_doc.discount_amount):,.0f}\n"
+                f"additional_disc_pct   : {flt(invoice_doc.additional_discount_percentage):.4f}%\n"
+                f"apply_discount_on     : {invoice_doc.apply_discount_on}\n"
+                f"net_total             : {flt(invoice_doc.net_total):,.0f}\n"
+                f"grand_total           : {flt(invoice_doc.grand_total):,.0f}\n"
+                + "\n".join(
+                    f"  {i.item_code}: rate={flt(i.rate):,.0f}  net_amt={flt(i.net_amount or i.amount or 0):,.0f}  disc_amt={flt(i.discount_amount or 0):,.0f}"
+                    for i in invoice_doc.get("items", [])
+                )
+            )
+        )
 
         # If calculate_taxes_and_totals() restored percentage and overrode discount,
         # directly correct grand_total without re-running calculate (avoids loop)
@@ -1369,6 +1425,26 @@ def submit_invoice(invoice=None, data=None):
                         invoice_doc.additional_discount_account = _diskon_akun
                     invoice_doc.flags.pos_next_diskon_akun = _diskon_akun
 
+        # ── TRACE: state BEFORE save in submit_invoice ────────────────────────
+        frappe.log_error(
+            title="POS TRACE - before save (submit_invoice)",
+            message=(
+                f"invoice name          : {invoice_doc.name}\n"
+                f"discount_amount       : {flt(invoice_doc.discount_amount):,.0f}\n"
+                f"additional_disc_pct   : {flt(invoice_doc.additional_discount_percentage):.4f}%\n"
+                f"apply_discount_on     : {invoice_doc.apply_discount_on}\n"
+                f"net_total             : {flt(invoice_doc.net_total):,.0f}\n"
+                f"grand_total           : {flt(invoice_doc.grand_total):,.0f}\n"
+                f"ignore_pricing_rule   : {invoice_doc.ignore_pricing_rule}\n"
+                f"flags.pos_next_da     : {invoice_doc.flags.get('pos_next_discount_amount')}\n"
+                f"ui_grand_total (data) : {flt(data.get('ui_grand_total') or 0):,.0f}\n"
+                + "\n".join(
+                    f"  {i.item_code}: rate={flt(i.rate):,.0f}  plr={flt(i.price_list_rate or 0):,.0f}  disc%={flt(i.discount_percentage or 0):.2f}%  disc_amt={flt(i.discount_amount or 0):,.0f}  pricing_rules={i.pricing_rules or 'none'}"
+                    for i in invoice_doc.get("items", [])
+                )
+            )
+        )
+
         # Prevent ERPNext's apply_pricing_rule_on_transaction() from running again
         # during save/validate below.  That function adds to discount_amount
         # cumulatively (+=), so if discount_amount is already set (e.g. 12,000)
@@ -1386,6 +1462,25 @@ def submit_invoice(invoice=None, data=None):
 
         invoice_doc.submit()
         invoice_submitted = True
+
+        # ── TRACE: state AFTER submit ──────────────────────────────────────────
+        frappe.log_error(
+            title="POS TRACE - after submit",
+            message=(
+                f"invoice name          : {invoice_doc.name}\n"
+                f"discount_amount       : {flt(invoice_doc.discount_amount):,.0f}\n"
+                f"additional_disc_pct   : {flt(invoice_doc.additional_discount_percentage):.4f}%\n"
+                f"net_total             : {flt(invoice_doc.net_total):,.0f}\n"
+                f"grand_total (SYSTEM)  : {flt(invoice_doc.grand_total):,.0f}\n"
+                f"ui_grand_total        : {flt(data.get('ui_grand_total') or 0):,.0f}\n"
+                f"paid_amount           : {flt(getattr(invoice_doc, 'paid_amount', 0)):,.0f}\n"
+                f"outstanding_amount    : {flt(getattr(invoice_doc, 'outstanding_amount', 0)):,.0f}\n"
+                + "\n".join(
+                    f"  {i.item_code}: rate={flt(i.rate):,.0f}  net_amt={flt(i.net_amount or i.amount or 0):,.0f}  disc_amt={flt(i.discount_amount or 0):,.0f}"
+                    for i in invoice_doc.get("items", [])
+                )
+            )
+        )
 
         # ── Grand Total Integrity Check ──────────────────────────────────────
         # Compare the grand_total the UI displayed (sent by frontend as
