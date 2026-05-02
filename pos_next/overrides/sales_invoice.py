@@ -50,35 +50,14 @@ class CustomSalesInvoice(SalesInvoice):
 		  AND the flag, so it works even when submit() reloads the document from DB
 		  (flags lost but ignore_pricing_rule=1 is already in DB from prior save)
 		"""
-		# ── snapshot item rates before super() might reset them ───────────────
-		use_pnp = (
-			self.flags.get("pos_next_ignore_pricing_rule")
-			or cint(self.ignore_pricing_rule)
-		)
-		item_snapshots = {}
-		if use_pnp:
-			for item in self.get("items", []):
-				item_snapshots[id(item)] = {
-					"rate": flt(item.rate),
-					"price_list_rate": flt(item.price_list_rate or item.rate),
-					"discount_percentage": flt(item.discount_percentage),
-					"discount_amount": flt(item.discount_amount),
-					"pricing_rules": item.get("pricing_rules") or "",
-				}
-
 		super().set_pos_fields(for_validate=for_validate)
 
-		# ── restore after super() ─────────────────────────────────────────────
-		if use_pnp:
+		# Re-enforce ignore_pricing_rule — super() resets it from POS Profile (=0).
+		if (
+			self.flags.get("pos_next_ignore_pricing_rule")
+			or cint(self.ignore_pricing_rule)
+		):
 			self.ignore_pricing_rule = 1
-			for item in self.get("items", []):
-				snap = item_snapshots.get(id(item))
-				if snap:
-					item.rate = snap["rate"]
-					item.price_list_rate = snap["price_list_rate"]
-					item.discount_percentage = snap["discount_percentage"]
-					item.discount_amount = snap["discount_amount"]
-					item.pricing_rules = snap["pricing_rules"]
 
 		intended = self.flags.get("pos_next_discount_amount")
 		if intended is not None:
@@ -88,12 +67,32 @@ class CustomSalesInvoice(SalesInvoice):
 	def validate(self):
 		"""
 		Override validate to:
-		1. Restore payments if ERPNext's validate() cleared them.
-		2. Preserve the fixed discount_amount after super().validate() recalculates it
-		   from additional_discount_percentage (pricing rule 1%). Directly corrects
-		   grand_total without calling calculate_taxes_and_totals() again (avoids loop).
+		1. Snapshot item rates before super().validate() so ERPNext cannot revert them.
+		2. Restore payments if ERPNext's validate() cleared them.
+		3. Preserve the fixed discount_amount after super().validate() recalculates it.
 		"""
 		intended_da = self.flags.get("pos_next_discount_amount")
+
+		# Snapshot item rates BEFORE super().validate().
+		# ERPNext's set_pos_fields() (called inside super()) resets ignore_pricing_rule
+		# from POS Profile and re-evaluates item rules, reverting item.rate to
+		# price_list_rate for future-dated rules.  We snapshot using item.name (stable
+		# DB key) so we can restore even when ERPNext replaces the item objects.
+		use_pnp = (
+			self.flags.get("pos_next_ignore_pricing_rule")
+			or cint(self.ignore_pricing_rule)
+		)
+		item_snapshots = {}
+		if use_pnp:
+			for item in self.get("items", []):
+				key = item.name or f"{item.item_code}_{item.idx}"
+				item_snapshots[key] = {
+					"rate": flt(item.rate),
+					"price_list_rate": flt(item.price_list_rate or item.rate),
+					"discount_percentage": flt(item.discount_percentage),
+					"discount_amount": flt(item.discount_amount),
+					"pricing_rules": item.get("pricing_rules") or "",
+				}
 
 		# Snapshot DB payment count before super() touches payments
 		db_payment_count = 0
@@ -106,6 +105,19 @@ class CustomSalesInvoice(SalesInvoice):
 				pass
 
 		super().validate()
+
+		# Restore item rates after super().validate() — uses item.name as stable key
+		if use_pnp and item_snapshots:
+			self.ignore_pricing_rule = 1
+			for item in self.get("items", []):
+				key = item.name or f"{item.item_code}_{item.idx}"
+				snap = item_snapshots.get(key)
+				if snap:
+					item.rate = snap["rate"]
+					item.price_list_rate = snap["price_list_rate"]
+					item.discount_percentage = snap["discount_percentage"]
+					item.discount_amount = snap["discount_amount"]
+					item.pricing_rules = snap["pricing_rules"]
 
 		# Restore payments if cleared by super().validate()
 		if db_payment_count and not self.get("payments"):
