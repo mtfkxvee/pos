@@ -47,7 +47,7 @@
 								</button>
 							</div>
 							<p class="text-xs text-gray-500 text-right">
-								{{ __('Calculated Discount') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedDiscountAmount, settingsStore.currency) }}</span>
+								{{ __('Calculated Discount') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedDiscountAmount, shiftStore.profileCurrency) }}</span>
 							</p>
 						</div>
 					</div>
@@ -75,7 +75,7 @@
 								</button>
 							</div>
 							<p class="text-xs text-gray-500 text-right">
-								{{ __('Calculated Compliment') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedComplimentAmount, settingsStore.currency) }}</span>
+								{{ __('Calculated Compliment') }}: <span class="font-bold text-gray-900">{{ formatCurrency(calculatedComplimentAmount, shiftStore.profileCurrency) }}</span>
 							</p>
 						</div>
 
@@ -148,6 +148,7 @@ import { ref, computed, watch } from "vue"
 import { Dialog, Button } from "frappe-ui"
 import { usePOSCartStore } from "@/stores/posCart"
 import { usePOSSettingsStore } from "@/stores/posSettings"
+import { usePOSShiftStore } from "@/stores/posShift"
 import { formatCurrency, roundCurrency } from "@/utils/currency"
 
 const props = defineProps(["modelValue", "subtotal"])
@@ -155,6 +156,7 @@ const emit = defineEmits(["update:modelValue", "apply"])
 
 const cartStore = usePOSCartStore()
 const settingsStore = usePOSSettingsStore()
+const shiftStore = usePOSShiftStore()
 
 const show = computed({
 	get: () => props.modelValue,
