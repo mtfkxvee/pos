@@ -1189,6 +1189,24 @@ def submit_invoice(invoice=None, data=None):
         if invoice_doc.get("is_return") and invoice_doc.get("return_against"):
             invoice_doc.update_outstanding_for_self = 0
 
+        # For POS returns: redirect revenue GL entries to custom_retur account.
+        # Without this, ERPNext debits the regular income/sales account with a
+        # negative amount.  Using custom_retur lets the COA show sales and returns
+        # as separate positive/negative lines for cleaner reporting.
+        if invoice_doc.get("is_return") and pos_profile:
+            try:
+                retur_account = frappe.db.get_value(
+                    "POS Profile", pos_profile, "custom_retur"
+                )
+                if retur_account:
+                    for item in invoice_doc.get("items", []):
+                        item.income_account = retur_account
+            except Exception as e:
+                frappe.log_error(
+                    f"POS Return: failed to set custom_retur account: {e}",
+                    "POS Return Account"
+                )
+
         # Copy accounting dimensions from POS Profile if not already set
         if pos_profile and not invoice_doc.get("branch"):
             try:
