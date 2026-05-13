@@ -72,6 +72,7 @@ export default defineConfig({
 		}),
 		VitePWA({
 			registerType: "autoUpdate",
+			scope: "/",
 			injectRegister: null,
 			includeAssets: ["favicon.png", "icon.svg", "icon-maskable.svg"],
 			manifest: {
