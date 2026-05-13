@@ -236,10 +236,17 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			if (data) {
 				Object.assign(settings.value, data)
 				isLoaded.value = true
+				// Persist for offline startup
+				try {
+					localStorage.setItem(
+						`pos_settings_${data.pos_profile || settings.value.pos_profile}`,
+						JSON.stringify(data),
+					)
+				} catch {}
 			}
 			isLoading.value = false
 		},
-		onError(error) {
+		onError() {
 			isLoading.value = false
 		},
 	})
@@ -261,6 +268,13 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 				Object.assign(settings.value, preloadedSettings)
 				isLoaded.value = true
 				isLoading.value = false
+				// Persist for offline startup
+				try {
+					localStorage.setItem(
+						`pos_settings_${posProfile}`,
+						JSON.stringify(settings.value),
+					)
+				} catch {}
 				return true
 			}
 		} catch {
@@ -272,6 +286,17 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 			await settingsResource.submit({ pos_profile: posProfile })
 			return true
 		} catch {
+			// Try localStorage cache (populated when last online)
+			try {
+				const cached = localStorage.getItem(`pos_settings_${posProfile}`)
+				if (cached) {
+					const data = JSON.parse(cached)
+					Object.assign(settings.value, data)
+					isLoaded.value = true
+					isLoading.value = false
+					return true
+				}
+			} catch {}
 			return false
 		}
 	}

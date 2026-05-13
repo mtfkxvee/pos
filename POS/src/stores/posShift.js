@@ -94,7 +94,15 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 	}
 
 	async function checkShift() {
-		await checkOpeningShift.fetch()
+		try {
+			await checkOpeningShift.fetch()
+		} catch {
+			// onError in useShift.js already loaded localStorage cache into shiftState.
+			// If we now have a cached shift, proceed offline — don't rethrow.
+			if (!hasOpenShift.value) {
+				throw new Error("Tidak ada data shift (offline dan tidak ada cache)")
+			}
+		}
 		return hasOpenShift.value
 	}
 
