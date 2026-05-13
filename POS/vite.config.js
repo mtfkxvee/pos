@@ -113,6 +113,7 @@ export default defineConfig({
 				],
 			},
 			workbox: {
+				inlineWorkboxRuntime: true,
 				globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
 				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 3 MB
 				navigateFallback: "/assets/pos_next/pos/index.html",
