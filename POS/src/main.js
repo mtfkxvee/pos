@@ -54,7 +54,7 @@ if ("serviceWorker" in navigator) {
 		"load",
 		() => {
 			navigator.serviceWorker
-				.register("/api/method/pos_next.api.pwa.get_sw", { scope: "/" })
+				.register("/assets/pos_next/pos/sw.js", { scope: "/" })
 				.then((reg) => {
 					log.info("Service Worker registered successfully", reg)
 					// Auto update logic
