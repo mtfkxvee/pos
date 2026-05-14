@@ -86,11 +86,19 @@ class CustomSalesInvoice(SalesInvoice):
 		if use_pnp:
 			for item in self.get("items", []):
 				key = item.name or f"{item.item_code}_{item.idx}"
+				plr = flt(item.price_list_rate or item.rate)
+				da = flt(item.discount_amount)
+				# When item has an explicit discount_amount, snapshot price_list_rate as
+				# the rate. ERPNext computes net = rate × qty - discount_amount, so if
+				# rate is already the net rate (price_list_rate - discount/qty), the
+				# discount gets applied twice on each validate cycle (cascading deduction).
+				# Using price_list_rate as the snapshot rate keeps the calculation stable.
+				snapshot_rate = plr if da > 0 else flt(item.rate)
 				item_snapshots[key] = {
-					"rate": flt(item.rate),
-					"price_list_rate": flt(item.price_list_rate or item.rate),
+					"rate": snapshot_rate,
+					"price_list_rate": plr,
 					"discount_percentage": flt(item.discount_percentage),
-					"discount_amount": flt(item.discount_amount),
+					"discount_amount": da,
 					"pricing_rules": item.get("pricing_rules") or "",
 				}
 
