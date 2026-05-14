@@ -172,26 +172,22 @@ class CustomSalesInvoice(SalesInvoice):
 
 	def get_gl_entries(self, warehouse_account=None):
 		"""
-		Override to add discount GL entry (DR Potongan Penjualan) when needed.
-
-		When discount_amount > 0, ERPNext debits debit_to by grand_total but
-		credits revenue by net_total → gap of discount_amount → GL imbalance.
-
-		Fix: after calling super(), compute actual debit/credit balance.
-		If a gap exists and diskon_akun is configured in POS Profile,
-		append a DR entry to close the gap exactly.
-
-		Reads diskon_akun directly from DB (no flags dependency) and tries
-		both 'diskon_akun' and 'custom_diskon_akun' fieldnames.
+		Override to add discount GL entries when needed:
+		1. DR Potongan Penjualan for additional_discount_amount (diskon_akun from POS Profile)
+		2. DR custom_discount_account for item-level pricing rule discounts
 		"""
 		gl_entries = super().get_gl_entries(warehouse_account)
 
-		if not cint(self.is_pos) or not flt(self.discount_amount) or not self.pos_profile:
+		if not cint(self.is_pos):
 			return gl_entries
 
-		# Resolve discount account field from POS Profile.
-		# Check column existence first to avoid MySQL 1054 errors that Frappe
-		# may log even when caught at application level.
+		# --- Pricing rule item-level discount GL entries ---
+		self._add_pricing_rule_discount_gl_entries(gl_entries)
+
+		# --- Additional discount (manual) GL entry ---
+		if not flt(self.discount_amount) or not self.pos_profile:
+			return gl_entries
+
 		diskon_akun = None
 		for fieldname in ("custom_diskon_akun", "diskon_akun", "discount_account"):
 			if not frappe.db.has_column("POS Settings", fieldname) and not frappe.db.has_column("POS Profile", fieldname):
@@ -212,7 +208,6 @@ class CustomSalesInvoice(SalesInvoice):
 		total_credit = sum(flt(e.get("credit") or 0) for e in gl_entries)
 		diff = flt(total_credit - total_debit, 2)
 
-		# If credit exceeds debit, add DR to diskon_akun to balance
 		if diff > 0.01:
 			gl_entries.append(
 				self.get_gl_dict(
@@ -228,6 +223,83 @@ class CustomSalesInvoice(SalesInvoice):
 			)
 
 		return gl_entries
+
+	def _add_pricing_rule_discount_gl_entries(self, gl_entries):
+		"""
+		For each item that has pricing_rules + discount_amount, check if any of
+		those rules have custom_discount_account filled. If yes, create:
+		  DR custom_discount_account  (discount amount)
+		  CR income_account           (restore revenue to full price)
+
+		This routes the pricing rule discount to the configured promo account
+		instead of silently reducing revenue.
+		"""
+		if not frappe.db.has_column("Pricing Rule", "custom_discount_account"):
+			return
+
+		for item in self.get("items", []):
+			if cint(item.get("is_free_item")):
+				continue
+
+			discount_amount = flt(item.get("discount_amount"))
+			if not discount_amount:
+				continue
+
+			pricing_rules_str = (item.get("pricing_rules") or "").strip()
+			if not pricing_rules_str:
+				continue
+
+			income_account = item.get("income_account")
+			if not income_account:
+				continue
+
+			rule_names = [r.strip() for r in pricing_rules_str.split(",") if r.strip()]
+
+			# Use the first rule that has custom_discount_account configured
+			discount_account = None
+			for rule_name in rule_names:
+				try:
+					acct = frappe.db.get_value("Pricing Rule", rule_name, "custom_discount_account")
+					if acct:
+						discount_account = acct
+						break
+				except Exception:
+					continue
+
+			if not discount_account:
+				continue
+
+			cost_center = item.get("cost_center") or self.cost_center
+
+			# DR: promo discount account (records the discount as a separate expense/contra-revenue)
+			gl_entries.append(
+				self.get_gl_dict(
+					{
+						"account": discount_account,
+						"debit": discount_amount,
+						"debit_in_account_currency": discount_amount,
+						"against": self.customer,
+						"cost_center": cost_center,
+						"remarks": f"Pricing Rule Discount: {pricing_rules_str}",
+					},
+					item=item,
+				)
+			)
+
+			# CR: income account (restores revenue to full price_list_rate)
+			gl_entries.append(
+				self.get_gl_dict(
+					{
+						"account": income_account,
+						"credit": discount_amount,
+						"credit_in_account_currency": discount_amount,
+						"against": self.customer,
+						"cost_center": cost_center,
+						"remarks": f"Pricing Rule Discount: {pricing_rules_str}",
+					},
+					item=item,
+				)
+			)
 
 	def make_pos_gl_entries(self, gl_entries):
 		"""
