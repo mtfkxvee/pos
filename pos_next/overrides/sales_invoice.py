@@ -251,6 +251,10 @@ class CustomSalesInvoice(SalesInvoice):
 
 			income_account = item.get("income_account")
 			if not income_account:
+				frappe.logger().warning(
+					f"POS Next: item {item.get('item_code')} has no income_account, "
+					f"skipping pricing rule GL for {pricing_rules_str}"
+				)
 				continue
 
 			rule_names = [r.strip() for r in pricing_rules_str.split(",") if r.strip()]
@@ -271,13 +275,22 @@ class CustomSalesInvoice(SalesInvoice):
 
 			cost_center = item.get("cost_center") or self.cost_center
 
+			frappe.logger().info(
+				f"POS Next pricing rule GL: item={item.get('item_code')} "
+				f"rule={pricing_rules_str} discount={discount_amount} "
+				f"DR={discount_account} CR={income_account}"
+			)
+
 			# DR: promo discount account (records the discount as a separate expense/contra-revenue)
+			# Pass item= for cost_center/project context only
 			gl_entries.append(
 				self.get_gl_dict(
 					{
 						"account": discount_account,
 						"debit": discount_amount,
 						"debit_in_account_currency": discount_amount,
+						"credit": 0,
+						"credit_in_account_currency": 0,
 						"against": self.customer,
 						"cost_center": cost_center,
 						"remarks": f"Pricing Rule Discount: {pricing_rules_str}",
@@ -287,17 +300,22 @@ class CustomSalesInvoice(SalesInvoice):
 			)
 
 			# CR: income account (restores revenue to full price_list_rate)
+			# Do NOT pass item= here — passing item= to an income account entry
+			# causes ERPNext to treat it as a sales deduction (DR) instead of CR.
+			account_currency = get_account_currency(income_account)
 			gl_entries.append(
 				self.get_gl_dict(
 					{
 						"account": income_account,
 						"credit": discount_amount,
 						"credit_in_account_currency": discount_amount,
+						"debit": 0,
+						"debit_in_account_currency": 0,
 						"against": self.customer,
 						"cost_center": cost_center,
 						"remarks": f"Pricing Rule Discount: {pricing_rules_str}",
 					},
-					item=item,
+					account_currency,
 				)
 			)
 
