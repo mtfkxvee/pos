@@ -73,28 +73,6 @@ class CustomSalesInvoice(SalesInvoice):
 		"""
 		intended_da = self.flags.get("pos_next_discount_amount")
 
-		# Debug trace — log item state at every validate() call
-		if cint(self.is_pos):
-			item_debug = []
-			for _it in self.get("items", []):
-				if cint(_it.get("is_free_item")):
-					continue
-				item_debug.append(
-					f"{_it.get('item_code')} qty={_it.get('qty')} "
-					f"rate={_it.get('rate')} plr={_it.get('price_list_rate')} "
-					f"da={_it.get('discount_amount')} pricingr={_it.get('pricing_rules')!r}"
-				)
-			frappe.log_error(
-				title="POS Next: validate() called",
-				message=(
-					f"invoice={self.name} is_new={self.is_new()} "
-					f"intended_da={intended_da} "
-					f"invoice_da={self.discount_amount} "
-					f"net_total={self.net_total} grand_total={self.grand_total}\n"
-					+ "\n".join(item_debug)
-				)
-			)
-
 		# Snapshot item rates BEFORE super().validate().
 		# ERPNext's set_pos_fields() (called inside super()) resets ignore_pricing_rule
 		# from POS Profile and re-evaluates item rules, reverting item.rate to
@@ -161,26 +139,6 @@ class CustomSalesInvoice(SalesInvoice):
 			# calculate_taxes_and_totals() is safe here: it is purely mathematical
 			# and does not call validate() or apply pricing rules.
 			self.calculate_taxes_and_totals()
-
-			# Debug: log item state after restore + recalculate
-			if cint(self.is_pos):
-				post_items = []
-				for _it in self.get("items", []):
-					if not cint(_it.get("is_free_item")):
-						post_items.append(
-							f"{_it.get('item_code')} qty={_it.get('qty')} "
-							f"rate={_it.get('rate')} plr={_it.get('price_list_rate')} "
-							f"da={_it.get('discount_amount')} amount={_it.get('amount')}"
-						)
-				frappe.log_error(
-					title="POS Next: after restore+recalc",
-					message=(
-						f"invoice={self.name} "
-						f"net_total={self.net_total} grand_total={self.grand_total} "
-						f"intended_da={intended_da}\n"
-						+ "\n".join(post_items)
-					)
-				)
 
 		# Restore payments if cleared by super().validate()
 		if db_payment_count and not self.get("payments"):
@@ -284,12 +242,7 @@ class CustomSalesInvoice(SalesInvoice):
 		This routes the pricing rule discount to the configured promo account
 		instead of silently reducing revenue.
 		"""
-		has_col = frappe.db.has_column("Pricing Rule", "custom_discount_account")
-		frappe.log_error(
-			title="POS Next: _add_pricing_rule_discount_gl_entries called",
-			message=f"invoice={self.name} has_column={has_col} items={len(self.get('items', []))}"
-		)
-		if not has_col:
+		if not frappe.db.has_column("Pricing Rule", "custom_discount_account"):
 			return
 
 		for item in self.get("items", []):
@@ -303,17 +256,6 @@ class CustomSalesInvoice(SalesInvoice):
 			discount_amount = flt(discount_per_unit * item_qty_gl)
 			pricing_rules_str = (item.get("pricing_rules") or "").strip()
 			income_account = item.get("income_account")
-
-			frappe.log_error(
-				title="POS Next: item GL check",
-				message=(
-					f"item={item.get('item_code')} "
-					f"discount_per_unit={discount_per_unit} qty={item_qty_gl} "
-					f"total_discount={discount_amount} "
-					f"pricing_rules={pricing_rules_str!r} "
-					f"income_account={income_account!r}"
-				)
-			)
 
 			if not discount_amount:
 				continue
@@ -333,17 +275,6 @@ class CustomSalesInvoice(SalesInvoice):
 						break
 				except Exception:
 					continue
-
-			frappe.log_error(
-				title="POS Next: pricing rule GL result",
-				message=(
-					f"item={item.get('item_code')} "
-					f"rules={pricing_rules_str} "
-					f"discount_amount={discount_amount} "
-					f"discount_account={discount_account!r} "
-					f"income_account={income_account!r}"
-				)
-			)
 
 			if not discount_account:
 				continue
