@@ -582,12 +582,14 @@ def update_invoice(data):
             plr = flt(item.price_list_rate)
             item_qty = flt(item.get("qty") or item.get("quantity") or 1) or 1
             if discount_amt_item > 0 and plr > 0:
-                # Amount-based discount: compute per-unit rate from price_list_rate.
-                # discount_amount is the TOTAL row discount (discount_per_unit × qty),
-                # so divide by qty to get the per-unit deduction.
-                # Keeping discount_percentage = 0 forces ERPNext's exact calculation path.
-                discount_per_unit = discount_amt_item / item_qty
+                # Frontend sends discount_amount as the TOTAL row discount (per_unit × qty).
+                # ERPNext's discount_amount field is per-unit: it uses
+                #   rate = price_list_rate - discount_amount
+                #   net  = rate × qty
+                # so we must store the per-unit value, not the row total.
+                discount_per_unit = flt(discount_amt_item / item_qty, 2)
                 item.rate = flt(max(0, plr - discount_per_unit), 2)
+                item.discount_amount = discount_per_unit  # per-unit for ERPNext
                 item.discount_percentage = 0
             elif discount_pct > 0 and plr > 0:
                 expected_rate = flt(plr * (1 - discount_pct / 100), 2)

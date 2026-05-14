@@ -296,7 +296,11 @@ class CustomSalesInvoice(SalesInvoice):
 			if cint(item.get("is_free_item")):
 				continue
 
-			discount_amount = flt(item.get("discount_amount"))
+			# discount_amount on the item is per-unit (ERPNext convention).
+			# Multiply by qty to get the total row discount for the GL entry.
+			discount_per_unit = flt(item.get("discount_amount"))
+			item_qty_gl = flt(item.get("qty") or 1)
+			discount_amount = flt(discount_per_unit * item_qty_gl)
 			pricing_rules_str = (item.get("pricing_rules") or "").strip()
 			income_account = item.get("income_account")
 
@@ -304,7 +308,8 @@ class CustomSalesInvoice(SalesInvoice):
 				title="POS Next: item GL check",
 				message=(
 					f"item={item.get('item_code')} "
-					f"discount_amount={discount_amount} "
+					f"discount_per_unit={discount_per_unit} qty={item_qty_gl} "
+					f"total_discount={discount_amount} "
 					f"pricing_rules={pricing_rules_str!r} "
 					f"income_account={income_account!r}"
 				)
