@@ -73,6 +73,28 @@ class CustomSalesInvoice(SalesInvoice):
 		"""
 		intended_da = self.flags.get("pos_next_discount_amount")
 
+		# Debug trace — log item state at every validate() call
+		if cint(self.is_pos):
+			item_debug = []
+			for _it in self.get("items", []):
+				if cint(_it.get("is_free_item")):
+					continue
+				item_debug.append(
+					f"{_it.get('item_code')} qty={_it.get('qty')} "
+					f"rate={_it.get('rate')} plr={_it.get('price_list_rate')} "
+					f"da={_it.get('discount_amount')} pricingr={_it.get('pricing_rules')!r}"
+				)
+			frappe.log_error(
+				title="POS Next: validate() called",
+				message=(
+					f"invoice={self.name} is_new={self.is_new()} "
+					f"intended_da={intended_da} "
+					f"invoice_da={self.discount_amount} "
+					f"net_total={self.net_total} grand_total={self.grand_total}\n"
+					+ "\n".join(item_debug)
+				)
+			)
+
 		# Snapshot item rates BEFORE super().validate().
 		# ERPNext's set_pos_fields() (called inside super()) resets ignore_pricing_rule
 		# from POS Profile and re-evaluates item rules, reverting item.rate to
@@ -139,6 +161,26 @@ class CustomSalesInvoice(SalesInvoice):
 			# calculate_taxes_and_totals() is safe here: it is purely mathematical
 			# and does not call validate() or apply pricing rules.
 			self.calculate_taxes_and_totals()
+
+			# Debug: log item state after restore + recalculate
+			if cint(self.is_pos):
+				post_items = []
+				for _it in self.get("items", []):
+					if not cint(_it.get("is_free_item")):
+						post_items.append(
+							f"{_it.get('item_code')} qty={_it.get('qty')} "
+							f"rate={_it.get('rate')} plr={_it.get('price_list_rate')} "
+							f"da={_it.get('discount_amount')} amount={_it.get('amount')}"
+						)
+				frappe.log_error(
+					title="POS Next: after restore+recalc",
+					message=(
+						f"invoice={self.name} "
+						f"net_total={self.net_total} grand_total={self.grand_total} "
+						f"intended_da={intended_da}\n"
+						+ "\n".join(post_items)
+					)
+				)
 
 		# Restore payments if cleared by super().validate()
 		if db_payment_count and not self.get("payments"):
