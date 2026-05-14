@@ -580,14 +580,14 @@ def update_invoice(data):
             # the item-level discount is silently lost in net_total.
             discount_amt_item = flt(item.get("discount_amount") or 0)
             plr = flt(item.price_list_rate)
+            item_qty = flt(item.get("qty") or item.get("quantity") or 1) or 1
             if discount_amt_item > 0 and plr > 0:
-                # Amount-based discount: compute rate exactly and clear percentage.
-                # If discount_percentage is left as the auto-synced irrational value
-                # (e.g. 9.0909...% rounded to 9.09%), ERPNext back-calculates:
-                #   33.000 × (9.09/100) = 2.999,70 → rate = 30.000,30 (off by 0.30).
-                # Keeping discount_percentage = 0 forces ERPNext's exact path:
-                #   rate = price_list_rate - discount_amount = 30.000 (exact).
-                item.rate = flt(max(0, plr - discount_amt_item), 2)
+                # Amount-based discount: compute per-unit rate from price_list_rate.
+                # discount_amount is the TOTAL row discount (discount_per_unit × qty),
+                # so divide by qty to get the per-unit deduction.
+                # Keeping discount_percentage = 0 forces ERPNext's exact calculation path.
+                discount_per_unit = discount_amt_item / item_qty
+                item.rate = flt(max(0, plr - discount_per_unit), 2)
                 item.discount_percentage = 0
             elif discount_pct > 0 and plr > 0:
                 expected_rate = flt(plr * (1 - discount_pct / 100), 2)
