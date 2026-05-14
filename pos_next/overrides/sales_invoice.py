@@ -234,7 +234,12 @@ class CustomSalesInvoice(SalesInvoice):
 		This routes the pricing rule discount to the configured promo account
 		instead of silently reducing revenue.
 		"""
-		if not frappe.db.has_column("Pricing Rule", "custom_discount_account"):
+		has_col = frappe.db.has_column("Pricing Rule", "custom_discount_account")
+		frappe.log_error(
+			title="POS Next: _add_pricing_rule_discount_gl_entries called",
+			message=f"invoice={self.name} has_column={has_col} items={len(self.get('items', []))}"
+		)
+		if not has_col:
 			return
 
 		for item in self.get("items", []):
@@ -242,24 +247,28 @@ class CustomSalesInvoice(SalesInvoice):
 				continue
 
 			discount_amount = flt(item.get("discount_amount"))
+			pricing_rules_str = (item.get("pricing_rules") or "").strip()
+			income_account = item.get("income_account")
+
+			frappe.log_error(
+				title="POS Next: item GL check",
+				message=(
+					f"item={item.get('item_code')} "
+					f"discount_amount={discount_amount} "
+					f"pricing_rules={pricing_rules_str!r} "
+					f"income_account={income_account!r}"
+				)
+			)
+
 			if not discount_amount:
 				continue
-
-			pricing_rules_str = (item.get("pricing_rules") or "").strip()
 			if not pricing_rules_str:
 				continue
-
-			income_account = item.get("income_account")
 			if not income_account:
-				frappe.logger().warning(
-					f"POS Next: item {item.get('item_code')} has no income_account, "
-					f"skipping pricing rule GL for {pricing_rules_str}"
-				)
 				continue
 
 			rule_names = [r.strip() for r in pricing_rules_str.split(",") if r.strip()]
 
-			# Use the first rule that has custom_discount_account configured
 			discount_account = None
 			for rule_name in rule_names:
 				try:
@@ -270,16 +279,21 @@ class CustomSalesInvoice(SalesInvoice):
 				except Exception:
 					continue
 
+			frappe.log_error(
+				title="POS Next: pricing rule GL result",
+				message=(
+					f"item={item.get('item_code')} "
+					f"rules={pricing_rules_str} "
+					f"discount_amount={discount_amount} "
+					f"discount_account={discount_account!r} "
+					f"income_account={income_account!r}"
+				)
+			)
+
 			if not discount_account:
 				continue
 
 			cost_center = item.get("cost_center") or self.cost_center
-
-			frappe.logger().info(
-				f"POS Next pricing rule GL: item={item.get('item_code')} "
-				f"rule={pricing_rules_str} discount={discount_amount} "
-				f"DR={discount_account} CR={income_account}"
-			)
 
 			# DR: promo discount account (records the discount as a separate expense/contra-revenue)
 			# Pass item= for cost_center/project context only
