@@ -658,13 +658,21 @@ export function useInvoice() {
 		const qty = item.quantity || item.qty || 1
 		const priceListRate = item.price_list_rate || item.rate || 0
 		const discountAmount = item.discount_amount || 0
+		const discountPercentage = item.discount_percentage || 0
 
 		if (taxInclusive.value) {
 			// Gross rate: price minus per-unit discount
 			return roundCurrency(priceListRate - discountAmount / qty)
 		}
-		// Net rate: total amount divided by quantity
-		return qty > 0 ? roundCurrency((item.amount || 0) / qty) : item.rate || 0
+
+		// When item has explicit discount, send price_list_rate (full price).
+		// ERPNext will compute: net = price_list_rate * qty - discount_amount.
+		// Sending the already-discounted rate + discount_amount causes double-discounting.
+		if (discountAmount > 0 || discountPercentage > 0) {
+			return roundCurrency(priceListRate)
+		}
+
+		return qty > 0 ? roundCurrency((item.amount || 0) / qty) : priceListRate
 	}
 
 	/**
