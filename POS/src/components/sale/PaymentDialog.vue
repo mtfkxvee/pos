@@ -1857,6 +1857,7 @@ watch(show, (newVal) => {
 				loyaltyPointInfo.value = {
 					loyalty_points: props.customer.loyalty_points || 0,
 					loyalty_program: props.customer.loyalty_program || null,
+					conversion_factor: settingsStore.loyaltyConversionFactor,
 				}
 			} else {
 				loadingLoyalty.value = true

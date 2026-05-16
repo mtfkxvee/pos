@@ -49,6 +49,7 @@ DEFAULT_POS_SETTINGS = {
 	"tax_inclusive": 0,
 	"enable_loyalty_program": 0,
 	"default_loyalty_program": "",
+	"loyalty_conversion_factor": 0,
 	"redeem_loyalty_points": 0,
 	"loyalty_redemption_account": "",
 	"loyalty_redemption_cost_center": "",
