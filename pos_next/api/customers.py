@@ -5,6 +5,7 @@ Handles customer search, creation, and management for POS operations
 
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 
 @frappe.whitelist()
@@ -83,10 +84,23 @@ def get_customers(search_term="", pos_profile=None, limit=20, fields=None):
             
             # Map points back to customers
             points_map = {row.customer: row.total_points for row in points_data}
-            
+
+            # Batch-fetch conversion_factor per unique loyalty program
+            unique_programs = list({c.loyalty_program for c in result if c.loyalty_program})
+            cf_map = {}
+            if unique_programs:
+                cf_rows = frappe.get_all(
+                    "Loyalty Program",
+                    filters={"name": ["in", unique_programs]},
+                    fields=["name", "conversion_factor"],
+                )
+                cf_map = {r.name: flt(r.conversion_factor) for r in cf_rows}
+
             for customer in result:
                 # Add loyalty_points property, default to 0
                 customer.loyalty_points = points_map.get(customer.name, 0)
+                # Add conversion_factor so offline path has the correct rate
+                customer.loyalty_conversion_factor = cf_map.get(customer.loyalty_program, 0)
 
         frappe.logger().debug(f"get_customers returned {len(result)} customers")
         return result
