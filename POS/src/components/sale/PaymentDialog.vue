@@ -1854,13 +1854,15 @@ watch(show, (newVal) => {
 		if (props.customer && props.company) {
 			if (props.isOffline) {
 				log.debug("[PaymentDialog] Using offline cached loyalty points")
+				const customerLp = props.customer?.loyalty_program || null
+				const cfFromMap = customerLp
+					? (settingsStore.loyaltyProgramsCfMap[customerLp] || 0)
+					: 0
 				loyaltyPointInfo.value = {
 					loyalty_points: props.customer.loyalty_points || 0,
-					loyalty_program: props.customer.loyalty_program || null,
-					// Use conversion_factor cached on customer data (per their loyalty program).
-					// Fall back to global setting if not available.
+					loyalty_program: customerLp,
 					conversion_factor:
-						props.customer.loyalty_conversion_factor ||
+						cfFromMap ||
 						settingsStore.loyaltyConversionFactor,
 				}
 			} else {

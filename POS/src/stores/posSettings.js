@@ -86,6 +86,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const loyaltyConversionFactor = computed(() =>
 		Number(settings.value.loyalty_conversion_factor) || 1,
 	)
+	const loyaltyProgramsCfMap = computed(
+		() => settings.value.loyalty_programs_cf_map || {},
+	)
 	const loyaltyRedemptionAccount = computed(
 		() => settings.value.loyalty_redemption_account || "",
 	)
@@ -369,6 +372,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		defaultLoyaltyProgram,
 		redeemLoyaltyPoints,
 		loyaltyConversionFactor,
+		loyaltyProgramsCfMap,
 		loyaltyRedemptionAccount,
 		loyaltyRedemptionCostCenter,
 

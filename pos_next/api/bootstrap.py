@@ -214,15 +214,25 @@ def _get_pos_settings(pos_profile_doc):
 		) else 0
 		settings["disable_rounded_total"] = pos_profile_doc.disable_rounded_total or 0
 
-		# Fetch loyalty conversion_factor from Loyalty Program document.
-		# This is needed offline — PaymentDialog falls back to 1 if not cached.
-		loyalty_program = settings.get("default_loyalty_program")
-		if loyalty_program:
-			try:
-				cf = frappe.db.get_value("Loyalty Program", loyalty_program, "conversion_factor")
-				settings["loyalty_conversion_factor"] = float(cf or 0)
-			except Exception:
-				settings["loyalty_conversion_factor"] = 0
+		# Cache ALL loyalty programs and their conversion_factors.
+		# Used offline so PaymentDialog can look up the correct rate for ANY
+		# customer's loyalty_program without an extra API call.
+		try:
+			lp_rows = frappe.get_all(
+				"Loyalty Program",
+				fields=["name", "conversion_factor"],
+			)
+			settings["loyalty_programs_cf_map"] = {
+				r.name: float(r.conversion_factor or 0) for r in lp_rows
+			}
+			# Also keep a convenience key for the default program
+			default_lp = settings.get("default_loyalty_program") or ""
+			settings["loyalty_conversion_factor"] = settings["loyalty_programs_cf_map"].get(
+				default_lp, 0
+			)
+		except Exception:
+			settings["loyalty_programs_cf_map"] = {}
+			settings["loyalty_conversion_factor"] = 0
 
 		return settings
 	except Exception:
