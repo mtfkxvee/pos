@@ -612,6 +612,41 @@ def update_invoice(data):
                         # Keep original value - malformed JSON will be handled by standardize_pricing_rules
                         item.pricing_rules = ""
 
+        # Populate pricing_rule_details child table for audit trail.
+        # Item-level rules come from item.pricing_rules (set by apply_offers).
+        # Transaction-level rules come from the submit payload.
+        if doctype == "Sales Invoice":
+            try:
+                invoice_doc.set("pricing_rule_details", [])
+                seen_rules = set()
+
+                # Item-level pricing rules
+                for item in invoice_doc.get("items", []):
+                    rules_str = (item.get("pricing_rules") or "").strip()
+                    if not rules_str:
+                        continue
+                    for rule_name in rules_str.split(","):
+                        rule_name = rule_name.strip()
+                        if rule_name and rule_name not in seen_rules:
+                            seen_rules.add(rule_name)
+                            invoice_doc.append("pricing_rule_details", {
+                                "pricing_rule": rule_name,
+                                "item_code": item.get("item_code") or "",
+                            })
+
+                # Transaction-level pricing rules from frontend
+                transaction_rules = data.get("applied_transaction_rules") or []
+                for rule_name in transaction_rules:
+                    rule_name = (rule_name or "").strip()
+                    if rule_name and rule_name not in seen_rules:
+                        seen_rules.add(rule_name)
+                        invoice_doc.append("pricing_rule_details", {
+                            "pricing_rule": rule_name,
+                            "item_code": "",
+                        })
+            except Exception:
+                pass
+
         # Set invoice flags BEFORE calculations
         if doctype == "Sales Invoice":
             invoice_doc.is_pos = 1

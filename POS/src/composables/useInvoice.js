@@ -847,6 +847,7 @@ export function useInvoice() {
 		deliveryDate = null,
 		writeOffAmount = 0,
 		loyaltyData = {},
+		appliedTransactionRules = [],
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -951,6 +952,8 @@ export function useInvoice() {
 					// Grand total as displayed to the cashier — used server-side to
 					// detect any mismatch between UI and what ERPNext actually records
 					ui_grand_total: grandTotal.value || 0,
+					// Applied transaction-level pricing rules for audit trail
+					applied_transaction_rules: appliedTransactionRules,
 				}
 
 	
