@@ -242,14 +242,16 @@ class CustomSalesInvoice(SalesInvoice):
 
 		# Find custom_discount_account from transaction-level pricing rules
 		promo_account = None
+		pr_fieldname = None
+		pr_rows_debug = []
 		try:
-			pr_fieldname = None
 			for _f in frappe.get_meta("Sales Invoice").fields:
 				if _f.fieldtype == "Table" and _f.options == "Pricing Rule Detail":
 					pr_fieldname = _f.fieldname
 					break
 			if pr_fieldname:
 				for row in (self.get(pr_fieldname) or []):
+					pr_rows_debug.append((row.pricing_rule, row.get("item_code")))
 					if not (row.get("item_code") or "").strip():
 						acct = frappe.db.get_value(
 							"Pricing Rule", row.pricing_rule, "custom_discount_account"
@@ -258,7 +260,16 @@ class CustomSalesInvoice(SalesInvoice):
 							promo_account = acct
 							break
 		except Exception:
-			pass
+			frappe.log_error(frappe.get_traceback(), "POS Next: promo GL lookup ERROR")
+
+		frappe.log_error(
+			title="POS Next: _adjust_promo_transaction_discount_gl",
+			message=(
+				f"invoice={self.name} promo_amount={promo_amount} "
+				f"diskon_akun={diskon_akun!r} pr_fieldname={pr_fieldname!r} "
+				f"pr_rows={pr_rows_debug} promo_account={promo_account!r}"
+			)
+		)
 
 		if not promo_account or promo_account == diskon_akun:
 			return
