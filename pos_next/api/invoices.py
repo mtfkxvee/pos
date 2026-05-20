@@ -618,6 +618,14 @@ def update_invoice(data):
         if doctype == "Sales Invoice":
             try:
                 audit_rules = data.get("applied_audit_rules") or []
+                frappe.log_error(
+                    title="POS Next: pricing_rule_details trace",
+                    message=(
+                        f"audit_rules received = {audit_rules}\n"
+                        f"data keys = {list(data.keys())}\n"
+                        f"doctype = {doctype}"
+                    )
+                )
                 if audit_rules:
                     invoice_doc.set("pricing_rule_details", [])
                     seen_keys = set()
@@ -631,8 +639,15 @@ def update_invoice(data):
                                 "pricing_rule": rule_name,
                                 "item_code": item_code,
                             })
-            except Exception:
-                pass
+                    frappe.log_error(
+                        title="POS Next: pricing_rule_details appended",
+                        message=f"appended {len(seen_keys)} entries: {list(seen_keys)}"
+                    )
+            except Exception as e:
+                frappe.log_error(
+                    title="POS Next: pricing_rule_details ERROR",
+                    message=frappe.get_traceback()
+                )
 
         # Set invoice flags BEFORE calculations
         if doctype == "Sales Invoice":
