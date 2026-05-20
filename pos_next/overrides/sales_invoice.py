@@ -235,17 +235,27 @@ class CustomSalesInvoice(SalesInvoice):
 					if _f.fieldtype == "Table" and _f.options == "Pricing Rule Detail":
 						pr_fieldname = _f.fieldname
 						break
-				if pr_fieldname:
-					for row in self.get(pr_fieldname) or []:
-						if not (row.get("item_code") or "").strip():
-							acct = frappe.db.get_value(
-								"Pricing Rule", row.pricing_rule, "custom_discount_account"
-							)
-							if acct:
-								promo_account = acct
-								break
+				rows = self.get(pr_fieldname) if pr_fieldname else []
+				tx_rows = [(r.pricing_rule, r.get("item_code")) for r in (rows or [])]
+				for row in (rows or []):
+					if not (row.get("item_code") or "").strip():
+						acct = frappe.db.get_value(
+							"Pricing Rule", row.pricing_rule, "custom_discount_account"
+						)
+						if acct:
+							promo_account = acct
+							break
+				frappe.log_error(
+					title="POS Next: GL promo split trace",
+					message=(
+						f"invoice={self.name} diff={diff} promo_amount={promo_amount} "
+						f"manual_amount={manual_amount} pr_fieldname={pr_fieldname!r} "
+						f"rows={tx_rows} promo_account={promo_account!r} "
+						f"diskon_akun={diskon_akun!r}"
+					)
+				)
 			except Exception:
-				pass
+				frappe.log_error(frappe.get_traceback(), "POS Next: GL promo split ERROR")
 
 		# DR promo account for transaction-level promo discount
 		if promo_amount > 0.01 and promo_account:
