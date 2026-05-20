@@ -848,6 +848,7 @@ export function useInvoice() {
 		writeOffAmount = 0,
 		loyaltyData = {},
 		appliedTransactionRules = [],
+		promoDiscountAmount = 0,
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -954,6 +955,9 @@ export function useInvoice() {
 					ui_grand_total: grandTotal.value || 0,
 					// Applied pricing rules for audit trail [{rule, item_code}]
 					applied_audit_rules: appliedTransactionRules,
+					// Transaction-level promo discount amount (member/promo rules only)
+					// Used to split GL between promo account and manual potongan penjualan
+					promo_discount_amount: promoDiscountAmount || 0,
 				}
 
 	

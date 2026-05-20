@@ -208,27 +208,92 @@ class CustomSalesInvoice(SalesInvoice):
 			except Exception:
 				pass
 
-		if not diskon_akun:
-			return gl_entries
-
 		# Compute actual GL imbalance (credit - debit)
 		total_debit = sum(flt(e.get("debit") or 0) for e in gl_entries)
 		total_credit = sum(flt(e.get("credit") or 0) for e in gl_entries)
 		diff = flt(total_credit - total_debit, 2)
 
-		if diff > 0.01:
+		if diff <= 0.01:
+			return gl_entries
+
+		# Split diff between promo transaction discount and manual discount.
+		# custom_promo_discount_amount holds the transaction-level promo portion;
+		# the remainder is the manually-entered additional discount.
+		promo_amount = flt(0)
+		if frappe.db.has_column("Sales Invoice", "custom_promo_discount_amount"):
+			promo_amount = flt(self.get("custom_promo_discount_amount") or 0)
+		promo_amount = min(promo_amount, diff)
+		manual_amount = flt(diff - promo_amount, 2)
+
+		# Find custom_discount_account from transaction-level pricing rules
+		# (entries in pricing_rule_details where item_code is empty)
+		promo_account = None
+		if promo_amount > 0.01:
+			try:
+				pr_fieldname = None
+				for _f in frappe.get_meta("Sales Invoice").fields:
+					if _f.fieldtype == "Table" and _f.options == "Pricing Rule Detail":
+						pr_fieldname = _f.fieldname
+						break
+				if pr_fieldname:
+					for row in self.get(pr_fieldname) or []:
+						if not (row.get("item_code") or "").strip():
+							acct = frappe.db.get_value(
+								"Pricing Rule", row.pricing_rule, "custom_discount_account"
+							)
+							if acct:
+								promo_account = acct
+								break
+			except Exception:
+				pass
+
+		# DR promo account for transaction-level promo discount
+		if promo_amount > 0.01 and promo_account:
 			gl_entries.append(
 				self.get_gl_dict(
 					{
-						"account": diskon_akun,
-						"debit": diff,
-						"debit_in_account_currency": diff,
+						"account": promo_account,
+						"debit": promo_amount,
+						"debit_in_account_currency": promo_amount,
 						"against": self.customer,
 						"cost_center": self.cost_center,
 					},
 					item=self,
 				)
 			)
+		else:
+			# No promo account configured — fall back all to manual
+			manual_amount = diff
+
+		# DR diskon_akun for manual additional discount
+		if manual_amount > 0.01 and diskon_akun:
+			gl_entries.append(
+				self.get_gl_dict(
+					{
+						"account": diskon_akun,
+						"debit": manual_amount,
+						"debit_in_account_currency": manual_amount,
+						"against": self.customer,
+						"cost_center": self.cost_center,
+					},
+					item=self,
+				)
+			)
+		elif not diskon_akun and manual_amount > 0.01:
+			# diskon_akun not configured — route remaining to promo account if available
+			if promo_account:
+				gl_entries.append(
+					self.get_gl_dict(
+						{
+							"account": promo_account,
+							"debit": manual_amount,
+							"debit_in_account_currency": manual_amount,
+							"against": self.customer,
+							"cost_center": self.cost_center,
+						},
+						item=self,
+					)
+				)
 
 		return gl_entries
 

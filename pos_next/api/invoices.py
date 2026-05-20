@@ -1428,6 +1428,13 @@ def submit_invoice(invoice=None, data=None):
         except Exception:
             frappe.log_error(frappe.get_traceback(), "POS Next: pricing_rule_details ERROR")
 
+        # Store promo transaction discount separately for GL routing.
+        # This lets get_gl_entries split: promo → custom_discount_account,
+        # manual → diskon_akun (Potongan Penjualan).
+        promo_da = flt(data.get("promo_discount_amount") or 0)
+        if frappe.db.has_column("Sales Invoice", "custom_promo_discount_amount"):
+            invoice_doc.custom_promo_discount_amount = promo_da
+
         # Prevent ERPNext's pricing rule engine from firing during save/submit.
         # set_pos_fields() (called on every validate) resets ignore_pricing_rule
         # from POS Profile (usually 0). Our set_pos_fields() override re-enforces
