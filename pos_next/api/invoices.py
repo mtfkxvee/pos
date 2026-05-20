@@ -1400,28 +1400,32 @@ def submit_invoice(invoice=None, data=None):
                         invoice_doc.additional_discount_account = _diskon_akun
                     invoice_doc.flags.pos_next_diskon_akun = _diskon_akun
 
-        # Populate pricing_rule_details for audit trail.
+        # Populate the Pricing Rule Detail child table for audit trail.
         # applied_audit_rules: [{rule, item_code}] sent by frontend covering
         # item-level (cart item.pricing_rules) and transaction-level rules.
         try:
             audit_rules = data.get("applied_audit_rules") or []
-            frappe.log_error(
-                title="POS Next: submit pricing_rule_details trace",
-                message=f"audit_rules={audit_rules} data_keys={list(data.keys())}"
-            )
             if audit_rules:
-                invoice_doc.set("pricing_rule_details", [])
-                seen_keys = set()
-                for entry in audit_rules:
-                    rule_name = (entry.get("rule") or "").strip()
-                    item_code = (entry.get("item_code") or "").strip()
-                    key = f"{rule_name}::{item_code}"
-                    if rule_name and key not in seen_keys:
-                        seen_keys.add(key)
-                        invoice_doc.append("pricing_rule_details", {
-                            "pricing_rule": rule_name,
-                            "item_code": item_code,
-                        })
+                # Find the correct fieldname dynamically — it varies by ERPNext version
+                pr_fieldname = None
+                for _f in frappe.get_meta("Sales Invoice").fields:
+                    if _f.fieldtype == "Table" and _f.options == "Pricing Rule Detail":
+                        pr_fieldname = _f.fieldname
+                        break
+
+                if pr_fieldname:
+                    invoice_doc.set(pr_fieldname, [])
+                    seen_keys = set()
+                    for entry in audit_rules:
+                        rule_name = (entry.get("rule") or "").strip()
+                        item_code = (entry.get("item_code") or "").strip()
+                        key = f"{rule_name}::{item_code}"
+                        if rule_name and key not in seen_keys:
+                            seen_keys.add(key)
+                            invoice_doc.append(pr_fieldname, {
+                                "pricing_rule": rule_name,
+                                "item_code": item_code,
+                            })
         except Exception:
             frappe.log_error(frappe.get_traceback(), "POS Next: pricing_rule_details ERROR")
 
