@@ -612,42 +612,6 @@ def update_invoice(data):
                         # Keep original value - malformed JSON will be handled by standardize_pricing_rules
                         item.pricing_rules = ""
 
-        # Populate pricing_rule_details child table for audit trail.
-        # Frontend sends applied_audit_rules: [{rule, item_code}] covering both
-        # item-level (from cart item.pricing_rules) and transaction-level rules.
-        if doctype == "Sales Invoice":
-            try:
-                audit_rules = data.get("applied_audit_rules") or []
-                frappe.log_error(
-                    title="POS Next: pricing_rule_details trace",
-                    message=(
-                        f"audit_rules received = {audit_rules}\n"
-                        f"data keys = {list(data.keys())}\n"
-                        f"doctype = {doctype}"
-                    )
-                )
-                if audit_rules:
-                    invoice_doc.set("pricing_rule_details", [])
-                    seen_keys = set()
-                    for entry in audit_rules:
-                        rule_name = (entry.get("rule") or "").strip()
-                        item_code = (entry.get("item_code") or "").strip()
-                        key = f"{rule_name}::{item_code}"
-                        if rule_name and key not in seen_keys:
-                            seen_keys.add(key)
-                            invoice_doc.append("pricing_rule_details", {
-                                "pricing_rule": rule_name,
-                                "item_code": item_code,
-                            })
-                    frappe.log_error(
-                        title="POS Next: pricing_rule_details appended",
-                        message=f"appended {len(seen_keys)} entries: {list(seen_keys)}"
-                    )
-            except Exception as e:
-                frappe.log_error(
-                    title="POS Next: pricing_rule_details ERROR",
-                    message=frappe.get_traceback()
-                )
 
         # Set invoice flags BEFORE calculations
         if doctype == "Sales Invoice":
@@ -1435,6 +1399,31 @@ def submit_invoice(invoice=None, data=None):
                     if meta.has_field("additional_discount_account"):
                         invoice_doc.additional_discount_account = _diskon_akun
                     invoice_doc.flags.pos_next_diskon_akun = _diskon_akun
+
+        # Populate pricing_rule_details for audit trail.
+        # applied_audit_rules: [{rule, item_code}] sent by frontend covering
+        # item-level (cart item.pricing_rules) and transaction-level rules.
+        try:
+            audit_rules = data.get("applied_audit_rules") or []
+            frappe.log_error(
+                title="POS Next: submit pricing_rule_details trace",
+                message=f"audit_rules={audit_rules} data_keys={list(data.keys())}"
+            )
+            if audit_rules:
+                invoice_doc.set("pricing_rule_details", [])
+                seen_keys = set()
+                for entry in audit_rules:
+                    rule_name = (entry.get("rule") or "").strip()
+                    item_code = (entry.get("item_code") or "").strip()
+                    key = f"{rule_name}::{item_code}"
+                    if rule_name and key not in seen_keys:
+                        seen_keys.add(key)
+                        invoice_doc.append("pricing_rule_details", {
+                            "pricing_rule": rule_name,
+                            "item_code": item_code,
+                        })
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "POS Next: pricing_rule_details ERROR")
 
         # Prevent ERPNext's pricing rule engine from firing during save/submit.
         # set_pos_fields() (called on every validate) resets ignore_pricing_rule
