@@ -342,12 +342,41 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		)
 		let result
 		try {
+			// Build structured list of all applied pricing rules for audit trail.
+			// Format: [{rule, item_code}] — item_code blank for transaction-level.
+			const auditRules = []
+			const seenRules = new Set()
+			// Item-level rules from cart items
+			for (const item of invoiceItems.value) {
+				const rulesRaw = item.pricing_rules
+				if (!rulesRaw) continue
+				const names = typeof rulesRaw === "string"
+					? rulesRaw.split(",").map((r) => r.trim()).filter(Boolean)
+					: [String(rulesRaw)]
+				for (const rule of names) {
+					const key = `${rule}::${item.item_code}`
+					if (!seenRules.has(key)) {
+						seenRules.add(key)
+						auditRules.push({ rule, item_code: item.item_code || "" })
+					}
+				}
+			}
+			// Transaction-level rules from appliedOffers
+			for (const offer of appliedOffers.value) {
+				const rule = offer.code || offer.name
+				if (!rule) continue
+				const key = `${rule}::`
+				if (!seenRules.has(key)) {
+					seenRules.add(key)
+					auditRules.push({ rule, item_code: "" })
+				}
+			}
 			result = await baseSubmitInvoice(
 				targetDoctype.value,
 				deliveryDate.value,
 				writeOffAmount.value,
 				toRaw(loyaltyData.value),
-				appliedOffers.value.map((o) => o.code || o.name).filter(Boolean),
+				auditRules,
 			)
 		} finally {
 			// Always restore — even on error — so cart state is consistent

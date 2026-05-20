@@ -613,37 +613,24 @@ def update_invoice(data):
                         item.pricing_rules = ""
 
         # Populate pricing_rule_details child table for audit trail.
-        # Item-level rules come from item.pricing_rules (set by apply_offers).
-        # Transaction-level rules come from the submit payload.
+        # Frontend sends applied_audit_rules: [{rule, item_code}] covering both
+        # item-level (from cart item.pricing_rules) and transaction-level rules.
         if doctype == "Sales Invoice":
             try:
-                invoice_doc.set("pricing_rule_details", [])
-                seen_rules = set()
-
-                # Item-level pricing rules
-                for item in invoice_doc.get("items", []):
-                    rules_str = (item.get("pricing_rules") or "").strip()
-                    if not rules_str:
-                        continue
-                    for rule_name in rules_str.split(","):
-                        rule_name = rule_name.strip()
-                        if rule_name and rule_name not in seen_rules:
-                            seen_rules.add(rule_name)
+                audit_rules = data.get("applied_audit_rules") or []
+                if audit_rules:
+                    invoice_doc.set("pricing_rule_details", [])
+                    seen_keys = set()
+                    for entry in audit_rules:
+                        rule_name = (entry.get("rule") or "").strip()
+                        item_code = (entry.get("item_code") or "").strip()
+                        key = f"{rule_name}::{item_code}"
+                        if rule_name and key not in seen_keys:
+                            seen_keys.add(key)
                             invoice_doc.append("pricing_rule_details", {
                                 "pricing_rule": rule_name,
-                                "item_code": item.get("item_code") or "",
+                                "item_code": item_code,
                             })
-
-                # Transaction-level pricing rules from frontend
-                transaction_rules = data.get("applied_transaction_rules") or []
-                for rule_name in transaction_rules:
-                    rule_name = (rule_name or "").strip()
-                    if rule_name and rule_name not in seen_rules:
-                        seen_rules.add(rule_name)
-                        invoice_doc.append("pricing_rule_details", {
-                            "pricing_rule": rule_name,
-                            "item_code": "",
-                        })
             except Exception:
                 pass
 

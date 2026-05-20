@@ -952,8 +952,8 @@ export function useInvoice() {
 					// Grand total as displayed to the cashier — used server-side to
 					// detect any mismatch between UI and what ERPNext actually records
 					ui_grand_total: grandTotal.value || 0,
-					// Applied transaction-level pricing rules for audit trail
-					applied_transaction_rules: appliedTransactionRules,
+					// Applied pricing rules for audit trail [{rule, item_code}]
+					applied_audit_rules: appliedTransactionRules,
 				}
 
 	
