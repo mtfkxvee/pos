@@ -1435,6 +1435,24 @@ def submit_invoice(invoice=None, data=None):
         if frappe.db.has_column("Sales Invoice", "custom_promo_discount_amount"):
             invoice_doc.custom_promo_discount_amount = promo_da
 
+        # Resolve the promo account from transaction-level rules now (while we
+        # still have applied_audit_rules). Store in flags so get_gl_entries can
+        # read it — the pricing_rules child table gets cleared by ERPNext's
+        # validate() with ignore_pricing_rule=1 before GL entries are made.
+        if promo_da > 0:
+            for entry in (data.get("applied_audit_rules") or []):
+                rule_name = (entry.get("rule") or "").strip()
+                if rule_name and not (entry.get("item_code") or "").strip():
+                    try:
+                        acct = frappe.db.get_value(
+                            "Pricing Rule", rule_name, "custom_discount_account"
+                        )
+                        if acct:
+                            invoice_doc.flags.pos_next_promo_account = acct
+                            break
+                    except Exception:
+                        pass
+
         # Prevent ERPNext's pricing rule engine from firing during save/submit.
         # set_pos_fields() (called on every validate) resets ignore_pricing_rule
         # from POS Profile (usually 0). Our set_pos_fields() override re-enforces
