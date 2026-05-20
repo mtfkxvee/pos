@@ -1406,7 +1406,6 @@ def submit_invoice(invoice=None, data=None):
         try:
             audit_rules = data.get("applied_audit_rules") or []
             if audit_rules:
-                # Find the correct fieldname dynamically — it varies by ERPNext version
                 pr_fieldname = None
                 for _f in frappe.get_meta("Sales Invoice").fields:
                     if _f.fieldtype == "Table" and _f.options == "Pricing Rule Detail":
