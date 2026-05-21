@@ -2813,7 +2813,16 @@ def apply_offers(invoice_data, selected_offers=None):
         # Call ERPNext pricing engine when available; otherwise fall through to
         # our own post-processing (which handles selected_offers directly).
         if erpnext_apply_pricing_rule:
-            pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
+            try:
+                pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
+            except Exception as pr_err:
+                # MultiplePricingRuleConflict or other ERPNext engine errors —
+                # log and fall through to our post-process path instead of crashing.
+                frappe.log_error(
+                    f"ERPNext pricing engine skipped: {pr_err}",
+                    "Apply Offers - Pricing Engine Skipped"
+                )
+                pricing_results = []
         else:
             pricing_results = []
 
