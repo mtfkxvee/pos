@@ -423,10 +423,22 @@ def get_offers(pos_profile: str) -> List[Dict]:
 		standalone_offers = _get_standalone_pricing_rule_offers(profile.company, date)
 		offers.extend(standalone_offers)
 
-		return [offer.to_dict() for offer in offers]
+		result = [offer.to_dict() for offer in offers]
+
+		# Trace log for debugging
+		trace_lines = []
+		for o in result:
+			trace_lines.append(
+				f"  name={o.get('name')} offer={o.get('offer')} apply_on={o.get('apply_on')} "
+				f"min_qty={o.get('min_qty')} min_amt={o.get('min_amt')} "
+				f"free_item={o.get('free_item')} eligible_items={o.get('eligible_items')}"
+			)
+		frappe.log_error("get_offers result:\n" + "\n".join(trace_lines), "Offers Trace")
+
+		return result
 
 	except Exception as e:
-		frappe.log_error(f"Error fetching offers: {str(e)}", "Offers API")
+		frappe.log_error(f"Error fetching offers: {str(e)}\n{frappe.get_traceback()}", "Offers API")
 		return []
 
 

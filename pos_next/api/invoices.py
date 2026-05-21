@@ -3076,6 +3076,12 @@ def apply_offers(invoice_data, selected_offers=None):
         if selected_offer_names:
             # Populate rule_map with any selected rules ERPNext missed entirely
             missed_names = [n for n in selected_offer_names if n not in applied_rules and n not in rule_map]
+            frappe.log_error(
+                f"apply_offers post-process: selected={sorted(selected_offer_names)} "
+                f"applied_so_far={sorted(applied_rules)} rule_map_keys={sorted(rule_map.keys())} "
+                f"missed_names={missed_names} pricing_results_count={len(pricing_results)}",
+                "Apply Offers Trace"
+            )
             if missed_names:
                 missed_records = frappe.get_all(
                     "Pricing Rule",
@@ -3084,9 +3090,15 @@ def apply_offers(invoice_data, selected_offers=None):
                 )
                 for rec in missed_records:
                     full_rule = frappe.get_cached_doc("Pricing Rule", rec.name)
-                    if _rule_qualifies_for_transaction(
+                    qualifies = _rule_qualifies_for_transaction(
                         full_rule, customer_group, transaction_total, pricing_args.get("transaction_date")
-                    ):
+                    )
+                    frappe.log_error(
+                        f"missed rule={rec.name} type={rec.price_or_product_discount} qualifies={qualifies} "
+                        f"customer_group={customer_group} tx_total={transaction_total}",
+                        "Apply Offers Trace"
+                    )
+                    if qualifies:
                         rule_map[rec.name] = frappe._dict(rec)
 
             unapplied = [n for n in selected_offer_names if n not in applied_rules and n in rule_map]
@@ -3096,6 +3108,13 @@ def apply_offers(invoice_data, selected_offers=None):
 
                 if rule_info.price_or_product_discount == "Product":
                     # Free item rule — check if any non-free cart item qualifies
+                    frappe.log_error(
+                        f"Product rule={rule_name} free_item={full_rule.free_item} "
+                        f"min_qty={full_rule.min_qty} apply_on={full_rule.apply_on} "
+                        f"rule_items={[r.item_code for r in (full_rule.items or [])]} "
+                        f"prepared_items={[(i.item_code, i.qty) for i in prepared_items]}",
+                        "Apply Offers Trace"
+                    )
                     if not full_rule.free_item:
                         continue
                     min_qty = flt(full_rule.min_qty or 0)
@@ -3103,9 +3122,15 @@ def apply_offers(invoice_data, selected_offers=None):
                         if item_doc.get("is_free_item"):
                             continue
                         qty = flt(item_doc.get("qty") or 0)
+                        qualifies_item = _item_qualifies_for_rule(item_doc, full_rule)
+                        frappe.log_error(
+                            f"  checking item={item_doc.item_code} qty={qty} min_qty={min_qty} "
+                            f"qualifies={qualifies_item}",
+                            "Apply Offers Trace"
+                        )
                         if min_qty and qty < min_qty:
                             continue
-                        if _item_qualifies_for_rule(item_doc, full_rule):
+                        if qualifies_item:
                             free_items.append(frappe._dict({
                                 "item_code": full_rule.free_item,
                                 "qty": flt(full_rule.free_qty or 1),
@@ -3116,6 +3141,10 @@ def apply_offers(invoice_data, selected_offers=None):
                                 "applied_promotional_scheme": rule_info.promotional_scheme,
                             }))
                             applied_rules.add(rule_name)
+                            frappe.log_error(
+                                f"  => free item ADDED: {full_rule.free_item}",
+                                "Apply Offers Trace"
+                            )
                             break  # one free item entry per rule
 
                 elif rule_info.price_or_product_discount == "Price":
