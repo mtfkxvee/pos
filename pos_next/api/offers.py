@@ -433,7 +433,13 @@ def get_offers(pos_profile: str) -> List[Dict]:
 				f"min_qty={o.get('min_qty')} min_amt={o.get('min_amt')} "
 				f"free_item={o.get('free_item')} eligible_items={o.get('eligible_items')}"
 			)
-		frappe.log_error("get_offers result:\n" + "\n".join(trace_lines), "Offers Trace")
+		try:
+			frappe.log_error(
+				title="Offers Trace",
+				message="get_offers result:\n" + "\n".join(trace_lines)
+			)
+		except Exception:
+			pass
 
 		return result
 

@@ -3085,12 +3085,20 @@ def apply_offers(invoice_data, selected_offers=None):
         if selected_offer_names:
             # Populate rule_map with any selected rules ERPNext missed entirely
             missed_names = [n for n in selected_offer_names if n not in applied_rules and n not in rule_map]
-            frappe.log_error(
-                f"apply_offers post-process: selected={sorted(selected_offer_names)} "
-                f"applied_so_far={sorted(applied_rules)} rule_map_keys={sorted(rule_map.keys())} "
-                f"missed_names={missed_names} pricing_results_count={len(pricing_results)}",
-                "Apply Offers Trace"
-            )
+            try:
+                frappe.log_error(
+                    title="Apply Offers Trace",
+                    message=(
+                        f"selected={sorted(selected_offer_names)}\n"
+                        f"applied_so_far={sorted(applied_rules)}\n"
+                        f"rule_map_keys={sorted(rule_map.keys())}\n"
+                        f"missed_names={missed_names}\n"
+                        f"pricing_results_count={len(pricing_results)}"
+                    )
+                )
+            except Exception:
+                pass
+
             if missed_names:
                 missed_records = frappe.get_all(
                     "Pricing Rule",
@@ -3102,11 +3110,17 @@ def apply_offers(invoice_data, selected_offers=None):
                     qualifies = _rule_qualifies_for_transaction(
                         full_rule, customer_group, transaction_total, pricing_args.get("transaction_date")
                     )
-                    frappe.log_error(
-                        f"missed rule={rec.name} type={rec.price_or_product_discount} qualifies={qualifies} "
-                        f"customer_group={customer_group} tx_total={transaction_total}",
-                        "Apply Offers Trace"
-                    )
+                    try:
+                        frappe.log_error(
+                            title="Apply Offers Trace",
+                            message=(
+                                f"missed rule={rec.name} type={rec.price_or_product_discount} "
+                                f"qualifies={qualifies} customer_group={customer_group} "
+                                f"tx_total={transaction_total}"
+                            )
+                        )
+                    except Exception:
+                        pass
                     if qualifies:
                         rule_map[rec.name] = frappe._dict(rec)
 
@@ -3117,13 +3131,18 @@ def apply_offers(invoice_data, selected_offers=None):
 
                 if rule_info.price_or_product_discount == "Product":
                     # Free item rule — check if any non-free cart item qualifies
-                    frappe.log_error(
-                        f"Product rule={rule_name} free_item={full_rule.free_item} "
-                        f"min_qty={full_rule.min_qty} apply_on={full_rule.apply_on} "
-                        f"rule_items={[r.item_code for r in (full_rule.items or [])]} "
-                        f"prepared_items={[(i.item_code, i.qty) for i in prepared_items]}",
-                        "Apply Offers Trace"
-                    )
+                    try:
+                        frappe.log_error(
+                            title="Apply Offers Trace",
+                            message=(
+                                f"Product rule={rule_name} free_item={full_rule.free_item} "
+                                f"min_qty={full_rule.min_qty} apply_on={full_rule.apply_on}\n"
+                                f"rule_items={[r.item_code for r in (full_rule.items or [])]}\n"
+                                f"prepared_items={[(i.item_code, i.qty) for i in prepared_items]}"
+                            )
+                        )
+                    except Exception:
+                        pass
                     if not full_rule.free_item:
                         continue
                     min_qty = flt(full_rule.min_qty or 0)
@@ -3132,11 +3151,6 @@ def apply_offers(invoice_data, selected_offers=None):
                             continue
                         qty = flt(item_doc.get("qty") or 0)
                         qualifies_item = _item_qualifies_for_rule(item_doc, full_rule)
-                        frappe.log_error(
-                            f"  checking item={item_doc.item_code} qty={qty} min_qty={min_qty} "
-                            f"qualifies={qualifies_item}",
-                            "Apply Offers Trace"
-                        )
                         if min_qty and qty < min_qty:
                             continue
                         if qualifies_item:
@@ -3150,10 +3164,13 @@ def apply_offers(invoice_data, selected_offers=None):
                                 "applied_promotional_scheme": rule_info.promotional_scheme,
                             }))
                             applied_rules.add(rule_name)
-                            frappe.log_error(
-                                f"  => free item ADDED: {full_rule.free_item}",
-                                "Apply Offers Trace"
-                            )
+                            try:
+                                frappe.log_error(
+                                    title="Apply Offers Trace",
+                                    message=f"free item ADDED: {full_rule.free_item} from rule={rule_name}"
+                                )
+                            except Exception:
+                                pass
                             break  # one free item entry per rule
 
                 elif rule_info.price_or_product_discount == "Price":
@@ -3216,13 +3233,18 @@ def apply_offers(invoice_data, selected_offers=None):
                 if rule_map.get(n) and rule_map[n].price_or_product_discount == "Product"
             ]
             if product_selected:
-                frappe.log_error(
-                    f"apply_offers Product rules selected={product_selected} "
-                    f"applied={sorted(applied_rules)} "
-                    f"free_items_raw={len(free_items)} deduped={len(deduped_free_items)} "
-                    f"pricing_results_count={len(pricing_results)}",
-                    "Free Item Trace"
-                )
+                try:
+                    frappe.log_error(
+                        title="Free Item Trace",
+                        message=(
+                            f"Product rules selected={product_selected}\n"
+                            f"applied={sorted(applied_rules)}\n"
+                            f"free_items_raw={len(free_items)} deduped={len(deduped_free_items)}\n"
+                            f"pricing_results_count={len(pricing_results)}"
+                        )
+                    )
+                except Exception:
+                    pass
 
         return {
             "items": [dict(item) for item in prepared_items],
