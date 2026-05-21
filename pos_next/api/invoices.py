@@ -3157,7 +3157,7 @@ def apply_offers(invoice_data, selected_offers=None):
                             free_items.append(frappe._dict({
                                 "item_code": full_rule.free_item,
                                 "qty": flt(full_rule.free_qty or 1),
-                                "uom": full_rule.free_item_uom or full_rule.stock_uom or "Nos",
+                                "uom": full_rule.free_item_uom or "Nos",
                                 "rate": 0,
                                 "pricing_rules": rule_name,
                                 "warehouse": profile.warehouse,
