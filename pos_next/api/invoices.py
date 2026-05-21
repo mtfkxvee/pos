@@ -3058,14 +3058,15 @@ def apply_offers(invoice_data, selected_offers=None):
             )
 
             for free_item in result.get("free_item_data") or []:
-                rule_name = free_item.get("pricing_rules")
-                if not rule_name or rule_name not in rule_map:
+                raw_rule_ref = free_item.get("pricing_rules") or ""
+                # ERPNext may return pricing_rules as "PRLE-0001" or "PRLE-0001,PRLE-0002"
+                candidate_names = [r.strip() for r in str(raw_rule_ref).split(",") if r.strip()]
+                matched_rule = next((n for n in candidate_names if n in rule_map), None)
+                if not matched_rule:
                     continue
                 free_item_doc = frappe._dict(free_item)
-                free_item_doc.applied_promotional_scheme = rule_map[
-                    rule_name
-                ].promotional_scheme
-                free_item_doc.warehouse = profile.warehouse  # Always use POS profile warehouse
+                free_item_doc.applied_promotional_scheme = rule_map[matched_rule].promotional_scheme
+                free_item_doc.warehouse = profile.warehouse
                 free_items.append(free_item_doc)
 
         # Post-process: apply selected offers skipped by ERPNext's priority resolution
@@ -3170,6 +3171,20 @@ def apply_offers(invoice_data, selected_offers=None):
             if key not in seen_free:
                 seen_free.add(key)
                 deduped_free_items.append(fi)
+
+        if selected_offer_names:
+            product_selected = [
+                n for n in selected_offer_names
+                if rule_map.get(n) and rule_map[n].price_or_product_discount == "Product"
+            ]
+            if product_selected:
+                frappe.log_error(
+                    f"apply_offers Product rules selected={product_selected} "
+                    f"applied={sorted(applied_rules)} "
+                    f"free_items_raw={len(free_items)} deduped={len(deduped_free_items)} "
+                    f"pricing_results_count={len(pricing_results)}",
+                    "Free Item Trace"
+                )
 
         return {
             "items": [dict(item) for item in prepared_items],

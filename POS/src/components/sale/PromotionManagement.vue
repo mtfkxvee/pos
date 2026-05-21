@@ -1365,12 +1365,18 @@ function populateFormFromPromotion(promotion) {
 		}))
 	}
 
-	// Populate discount details from slabs
+	// Populate discount details from slabs.
+	// A scheme may have an empty price_discount_slabs row (ERPNext default) even
+	// when it's actually a product/free-item scheme — only treat it as a price
+	// discount if it has a meaningful discount value.
+	const validPriceSlab = (promotion.price_discount_slabs || []).find(
+		(s) => (s.discount_percentage || 0) > 0 || (s.discount_amount || 0) > 0,
+	)
 	if (
-		promotion.price_discount_slabs &&
-		promotion.price_discount_slabs.length > 0
+		validPriceSlab &&
+		!(promotion.product_discount_slabs || []).length
 	) {
-		const slab = promotion.price_discount_slabs[0]
+		const slab = validPriceSlab
 		form.value.min_qty = slab.min_qty || 0
 		form.value.max_qty = slab.max_qty || 0
 		form.value.min_amt = slab.min_amount || 0

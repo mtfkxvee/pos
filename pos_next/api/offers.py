@@ -361,22 +361,24 @@ class OfferBuilder:
 		elif rule["apply_on"] == ApplyOn.BRAND:
 			eligible_brands = eligibility.brands
 
+		is_price_discount = rule.get("price_or_product_discount") == DiscountType.PRICE
+
 		return Offer(
 			name=rule["name"],
 			title=rule.get("title") or rule["name"],
 			description=rule.get("title") or f"Pricing Rule: {rule['name']}",
 			apply_on=rule["apply_on"],
-			offer="Item Price",
+			offer="Item Price" if is_price_discount else "Give Product",
 			auto=is_auto,
 			coupon_based=1 if rule.get("coupon_code_based") else 0,
 			min_qty=flt(rule.get("min_qty", 0)),
 			max_qty=flt(rule.get("max_qty", 0)),
 			min_amt=flt(rule.get("min_amt", 0)),
 			max_amt=flt(rule.get("max_amt", 0)),
-			discount_type=rule.get("rate_or_discount"),
-			rate=flt(rule.get("rate", 0)),
-			discount_amount=flt(rule.get("discount_amount", 0)),
-			discount_percentage=flt(rule.get("discount_percentage", 0)),
+			discount_type=rule.get("rate_or_discount") if is_price_discount else None,
+			rate=flt(rule.get("rate", 0)) if is_price_discount else 0,
+			discount_amount=flt(rule.get("discount_amount", 0)) if is_price_discount else 0,
+			discount_percentage=flt(rule.get("discount_percentage", 0)) if is_price_discount else 0,
 			valid_from=rule.get("valid_from"),
 			valid_upto=rule.get("valid_upto"),
 			source=OfferSource.PRICING_RULE,
@@ -384,7 +386,11 @@ class OfferBuilder:
 			promotional_scheme_id=None,
 			eligible_items=eligible_items,
 			eligible_item_groups=eligible_item_groups,
-			eligible_brands=eligible_brands
+			eligible_brands=eligible_brands,
+			free_item=rule.get("free_item") if not is_price_discount else None,
+			free_qty=flt(rule.get("free_qty", 0)) if not is_price_discount else 0,
+			free_item_uom=rule.get("free_item_uom") if not is_price_discount else None,
+			same_item=1 if rule.get("same_item") and not is_price_discount else 0,
 		)
 
 
@@ -453,13 +459,16 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 	if not pricing_rules:
 		return []
 
-	# Get unique scheme names
+	# Get unique scheme names and rule names
 	scheme_names = list({rule["promotional_scheme"] for rule in pricing_rules})
+	rule_names = [rule["name"] for rule in pricing_rules]
 
-	# Fetch all slabs and eligibility in batch
+	# Fetch all slabs (keyed by scheme name) and eligibility (keyed by rule name).
+	# Slabs live on the Promotional Scheme; eligible items live on the Pricing Rule
+	# (tabPricing Rule Item Code.parent = pricing_rule_name, NOT scheme_name).
 	price_slabs = SlabFetcher.fetch_price_slabs(scheme_names)
 	product_slabs = SlabFetcher.fetch_product_slabs(scheme_names)
-	eligibility_map = EligibilityFetcher.fetch_all(scheme_names)
+	eligibility_map = EligibilityFetcher.fetch_all(rule_names)
 
 	# Build offers
 	offers = []
@@ -475,7 +484,8 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 		if not slab:
 			continue
 
-		eligibility = eligibility_map.get(scheme_name, OfferEligibility([], [], []))
+		# Eligibility is stored on the pricing rule, not the scheme
+		eligibility = eligibility_map.get(rule["name"], OfferEligibility([], [], []))
 		offer = OfferBuilder.build_from_scheme_rule(rule, slab, eligibility)
 		offers.append(offer)
 
@@ -483,7 +493,7 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 
 
 def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
-	"""Fetch offers from standalone pricing rules"""
+	"""Fetch offers from standalone pricing rules (both Price and Product discount types)"""
 
 	# Fetch standalone pricing rules (not linked to schemes)
 	pricing_rules = frappe.db.sql("""
@@ -492,6 +502,7 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			coupon_code_based, price_or_product_discount,
 			rate_or_discount, rate, discount_amount, discount_percentage,
 			min_qty, max_qty, min_amt, max_amt,
+			free_item, free_qty, free_item_uom, same_item,
 			priority, valid_from, valid_upto
 		FROM `tabPricing Rule`
 		WHERE
@@ -501,9 +512,8 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			AND company = %(company)s
 			AND (valid_from IS NULL OR valid_from <= %(date)s)
 			AND (valid_upto IS NULL OR valid_upto >= %(date)s)
-			AND price_or_product_discount = %(discount_type)s
 		ORDER BY priority DESC, name
-	""", {"company": company, "date": date, "discount_type": DiscountType.PRICE}, as_dict=1)
+	""", {"company": company, "date": date}, as_dict=1)
 
 	if not pricing_rules:
 		return []
