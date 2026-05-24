@@ -229,6 +229,7 @@ import {
 	XMarkIcon,
 	BookOpenIcon,
 } from "@heroicons/vue/24/outline"
+import { call } from "@/utils/apiWrapper"
 
 const props = defineProps({
 	modelValue: { type: Boolean, default: false },
@@ -301,19 +302,13 @@ async function loadAccounts() {
 	if (!props.posProfile) return
 	try {
 		const [exp, pay] = await Promise.all([
-			frappe.call({
-				method: "pos_next.api.journal_entry.get_expense_accounts",
-				args: { pos_profile: props.posProfile },
-			}),
-			frappe.call({
-				method: "pos_next.api.journal_entry.get_payment_accounts",
-				args: { pos_profile: props.posProfile },
-			}),
+			call("pos_next.api.journal_entry.get_expense_accounts", { pos_profile: props.posProfile }),
+			call("pos_next.api.journal_entry.get_payment_accounts", { pos_profile: props.posProfile }),
 		])
-		expenseAccounts.value = exp.message || []
-		paymentAccounts.value = pay.message || []
+		expenseAccounts.value = exp || []
+		paymentAccounts.value = pay || []
 	} catch (e) {
-		frappe.msgprint({ message: e.message || __("Failed to load accounts."), indicator: "red" })
+		console.error("Journal: failed to load accounts", e)
 	}
 }
 
@@ -325,11 +320,11 @@ async function loadEntries(reset = false) {
 	}
 	loading.value = true
 	try {
-		const res = await frappe.call({
-			method: "pos_next.api.journal_entry.get_journal_entries",
-			args: { pos_profile: props.posProfile, page_size: PAGE_SIZE, page: page.value },
-		})
-		const rows = res.message || []
+		const rows = await call("pos_next.api.journal_entry.get_journal_entries", {
+			pos_profile: props.posProfile,
+			page_size: PAGE_SIZE,
+			page: page.value,
+		}) || []
 		entries.value = reset ? rows : [...entries.value, ...rows]
 		hasMore.value = rows.length === PAGE_SIZE
 	} finally {
@@ -344,36 +339,33 @@ async function loadMore() {
 
 async function saveEntry(submit) {
 	if (!form.value.credit_account) {
-		frappe.msgprint(__("Please select a credit account."))
+		frappe.show_alert({ message: __("Please select a credit account."), indicator: "orange" })
 		return
 	}
 	const validRows = form.value.expense_rows.filter(r => r.account && r.amount > 0)
 	if (!validRows.length) {
-		frappe.msgprint(__("Please add at least one expense row with account and amount."))
+		frappe.show_alert({ message: __("Please add at least one expense row with account and amount."), indicator: "orange" })
 		return
 	}
 
 	submitting.value = true
 	try {
-		await frappe.call({
-			method: "pos_next.api.journal_entry.create_journal_entry",
-			args: {
-				pos_profile: props.posProfile,
-				posting_date: form.value.posting_date,
-				user_remark: form.value.user_remark,
-				expense_rows: validRows,
-				credit_account: form.value.credit_account,
-				submit,
-			},
+		await call("pos_next.api.journal_entry.create_journal_entry", {
+			pos_profile: props.posProfile,
+			posting_date: form.value.posting_date,
+			user_remark: form.value.user_remark,
+			expense_rows: validRows,
+			credit_account: form.value.credit_account,
+			submit,
 		})
-		frappe.msgprint({
+		frappe.show_alert({
 			message: submit ? __("Journal Entry submitted successfully.") : __("Journal Entry saved as draft."),
 			indicator: "green",
 		})
 		view.value = "list"
 		await loadEntries(true)
 	} catch (e) {
-		frappe.msgprint({ message: e.message || __("Failed to save journal entry."), indicator: "red" })
+		frappe.show_alert({ message: e.message || __("Failed to save journal entry."), indicator: "red" })
 	} finally {
 		submitting.value = false
 	}
