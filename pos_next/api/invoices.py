@@ -1329,23 +1329,37 @@ def submit_invoice(invoice=None, data=None):
         # Handle loyalty point redemption missing accounts
         loyalty_amount = flt(data.get("loyalty_amount") or invoice.get("loyalty_amount") or 0)
         if loyalty_amount > 0 and doctype == "Sales Invoice":
+            # Ensure loyalty_program is set on the doc (frontend may send it in data/invoice)
+            if not invoice_doc.get("loyalty_program"):
+                lp = data.get("loyalty_program") or invoice.get("loyalty_program")
+                if lp:
+                    invoice_doc.loyalty_program = lp
+
             if not invoice_doc.get("loyalty_redemption_account"):
-                # Try getting from POS Settings
-                pos_settings = frappe.get_all(
-                    "POS Settings",
-                    filters={"enabled": 1, "loyalty_redemption_account": ["is", "set"]},
-                    fields=["loyalty_redemption_account", "loyalty_redemption_cost_center"],
-                    limit=1
+                # POS Settings is a singleton — use get_single_value, not get_all
+                acct = frappe.db.get_single_value("POS Settings", "loyalty_redemption_account")
+                cc = frappe.db.get_single_value("POS Settings", "loyalty_redemption_cost_center")
+                if acct:
+                    invoice_doc.loyalty_redemption_account = acct
+                    if not invoice_doc.get("loyalty_redemption_cost_center") and cc:
+                        invoice_doc.loyalty_redemption_cost_center = cc
+
+            if not invoice_doc.get("loyalty_redemption_account") and invoice_doc.get("loyalty_program"):
+                # Fallback: Loyalty Program expense_account
+                expense_account = frappe.db.get_value(
+                    "Loyalty Program", invoice_doc.loyalty_program, "expense_account"
                 )
-                if pos_settings:
-                    invoice_doc.loyalty_redemption_account = pos_settings[0].loyalty_redemption_account
-                    if not invoice_doc.get("loyalty_redemption_cost_center"):
-                        invoice_doc.loyalty_redemption_cost_center = pos_settings[0].loyalty_redemption_cost_center
-                elif invoice_doc.get("loyalty_program"):
-                    # Fallback to the loyalty program's expense account
-                    expense_account = frappe.db.get_value("Loyalty Program", invoice_doc.loyalty_program, "expense_account")
-                    if expense_account:
-                        invoice_doc.loyalty_redemption_account = expense_account
+                if expense_account:
+                    invoice_doc.loyalty_redemption_account = expense_account
+
+            if not invoice_doc.get("loyalty_redemption_account"):
+                frappe.throw(
+                    _(
+                        "Loyalty redemption account not configured. "
+                        "Please set 'Expense Account' on Loyalty Program '{0}' "
+                        "or configure it in POS Settings."
+                    ).format(invoice_doc.get("loyalty_program") or "")
+                )
 
         # Check if POS Settings allows negative stock
         pos_settings_allow_negative = False
