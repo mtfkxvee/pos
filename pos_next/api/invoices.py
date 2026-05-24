@@ -816,16 +816,13 @@ def _apply_discount_to_items(invoice_doc, discount_amount):
     """
     items = [i for i in (invoice_doc.get("items") or []) if not i.get("is_free_item")]
     if not items:
-        frappe.log_error("DISC-ITEM: no non-free items found", "Discount Trace")
         return
 
     discount_amount = flt(discount_amount)
     total_current_amount = sum(flt(i.amount or 0) for i in items)
     if not total_current_amount:
-        frappe.log_error(f"DISC-ITEM: total_amount=0, skip", "Discount Trace")
         return
 
-    log_lines = [f"DISC-ITEM: distributing {discount_amount} across {len(items)} items (total={total_current_amount})"]
     distributed = 0.0
 
     for idx, item in enumerate(items):
@@ -833,8 +830,6 @@ def _apply_discount_to_items(invoice_doc, discount_amount):
         price_list_rate = flt(item.price_list_rate or 0)
         current_rate = flt(item.rate or 0)
         current_amount = flt(item.amount or 0)
-        old_disc_pct = flt(item.discount_percentage or 0)
-        old_disc_amt = flt(item.discount_amount or 0)  # per-unit in ERPNext
 
         # Proportional share based on current item amount
         if idx == len(items) - 1:
@@ -850,12 +845,6 @@ def _apply_discount_to_items(invoice_doc, discount_amount):
         # ERPNext uses this when discount_percentage=0: rate = price_list_rate - discount_amount
         total_per_unit_discount = flt(price_list_rate - new_rate, 6) if price_list_rate else 0
 
-        log_lines.append(
-            f"  item[{idx}] {item.item_code}: qty={qty} plr={price_list_rate} "
-            f"cur_rate={current_rate} old_pct={old_disc_pct} old_da={old_disc_amt} "
-            f"share={item_share} new_rate={new_rate} new_da={total_per_unit_discount}"
-        )
-
         # Zero discount_percentage so ERPNext uses discount_amount (not pct) for rate calc
         item.discount_percentage = 0
         # Set per-unit discount_amount (ERPNext formula: rate = price_list_rate - discount_amount)
@@ -864,9 +853,6 @@ def _apply_discount_to_items(invoice_doc, discount_amount):
         item.amount = flt(new_rate * qty, 2)
 
         distributed = flt(distributed + item_share, 2)
-
-    log_lines.append(f"  total_distributed={distributed}")
-    frappe.log_error("\n".join(log_lines)[:1000], "Discount Trace")
 
 
 def _ensure_offline_uniqueness(offline_id, pos_profile=None, customer=None):
@@ -2829,13 +2815,9 @@ def apply_offers(invoice_data, selected_offers=None):
         if erpnext_apply_pricing_rule:
             try:
                 pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
-            except Exception as pr_err:
+            except Exception:
                 # MultiplePricingRuleConflict or other ERPNext engine errors —
-                # log and fall through to our post-process path instead of crashing.
-                frappe.log_error(
-                    f"ERPNext pricing engine skipped: {pr_err}",
-                    "Apply Offers - Pricing Engine Skipped"
-                )
+                # fall through to post-process path.
                 pricing_results = []
         else:
             pricing_results = []
