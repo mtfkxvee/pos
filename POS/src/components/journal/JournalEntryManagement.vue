@@ -503,36 +503,28 @@ async function saveEntry(submit) {
 	}
 }
 
-function confirmCancel(entry) {
-	frappe.confirm(
-		__("Cancel Journal Entry {0}?", [entry.name]),
-		async () => {
-			try {
-				await call("pos_next.api.journal_entry.cancel_journal_entry", { name: entry.name })
-				showSuccess(__("Journal Entry cancelled."))
-				goToList()
-				await loadEntries(true)
-			} catch (e) {
-				showError(e.message || __("Failed to cancel."))
-			}
-		}
-	)
+async function confirmCancel(entry) {
+	if (!confirm(__("Cancel Journal Entry {0}?", [entry.name]))) return
+	try {
+		await call("pos_next.api.journal_entry.cancel_journal_entry", { name: entry.name })
+		showSuccess(__("Journal Entry cancelled."))
+		goToList()
+		await loadEntries(true)
+	} catch (e) {
+		showError(e.message || __("Failed to cancel."))
+	}
 }
 
-function confirmDelete(entry) {
-	frappe.confirm(
-		__("Delete Journal Entry {0}? This cannot be undone.", [entry.name]),
-		async () => {
-			try {
-				await call("pos_next.api.journal_entry.delete_journal_entry", { name: entry.name })
-				showSuccess(__("Journal Entry deleted."))
-				goToList()
-				await loadEntries(true)
-			} catch (e) {
-				showError(e.message || __("Failed to delete."))
-			}
-		}
-	)
+async function confirmDelete(entry) {
+	if (!confirm(__("Delete Journal Entry {0}? This cannot be undone.", [entry.name]))) return
+	try {
+		await call("pos_next.api.journal_entry.delete_journal_entry", { name: entry.name })
+		showSuccess(__("Journal Entry deleted."))
+		goToList()
+		await loadEntries(true)
+	} catch (e) {
+		showError(e.message || __("Failed to delete."))
+	}
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
