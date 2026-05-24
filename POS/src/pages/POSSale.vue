@@ -654,6 +654,14 @@
 				:company="shiftStore.profileCompany"
 			/>
 
+			<!-- Journal Entry -->
+			<JournalEntryManagement
+				v-model="showJournalEntry"
+				:pos-profile="shiftStore.profileName"
+				:company="shiftStore.profileCompany"
+				:currency="shiftStore.profileCurrency"
+			/>
+
 			<!-- Invoice Management -->
 			<InvoiceManagement
 				v-model="showInvoiceManagement"
@@ -1034,6 +1042,7 @@ import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
 import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailabilityDialog.vue";
 import POSSettings from "@/components/settings/POSSettings.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
+import JournalEntryManagement from "@/components/journal/JournalEntryManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -1152,6 +1161,9 @@ const showStockLookup = ref(false);
 
 // Invoice Management dialog
 const showInvoiceManagement = ref(false);
+
+// Journal Entry dialog
+const showJournalEntry = ref(false);
 
 // Warehouse availability dialog state
 const showWarehouseDialog = ref(false)
@@ -2946,6 +2958,8 @@ function handleManagementMenuClick(menuItem) {
 	} else if (menuItem === "products") {
 		// Open Stock Lookup dialog in search mode
 		showStockLookup.value = true;
+	} else if (menuItem === "journal") {
+		showJournalEntry.value = true;
 	}
 }
 
