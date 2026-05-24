@@ -1321,14 +1321,18 @@ def submit_invoice(invoice=None, data=None):
                 if lp:
                     invoice_doc.loyalty_program = lp
 
-            if not invoice_doc.get("loyalty_redemption_account"):
-                # POS Settings is a singleton — use get_single_value, not get_all
-                acct = frappe.db.get_single_value("POS Settings", "loyalty_redemption_account")
-                cc = frappe.db.get_single_value("POS Settings", "loyalty_redemption_cost_center")
-                if acct:
-                    invoice_doc.loyalty_redemption_account = acct
-                    if not invoice_doc.get("loyalty_redemption_cost_center") and cc:
-                        invoice_doc.loyalty_redemption_cost_center = cc
+            if not invoice_doc.get("loyalty_redemption_account") and pos_profile:
+                # POS Settings is a per-profile doctype — query by pos_profile
+                ps = frappe.db.get_value(
+                    "POS Settings",
+                    {"pos_profile": pos_profile},
+                    ["loyalty_redemption_account", "loyalty_redemption_cost_center"],
+                    as_dict=True,
+                )
+                if ps and ps.get("loyalty_redemption_account"):
+                    invoice_doc.loyalty_redemption_account = ps.loyalty_redemption_account
+                    if not invoice_doc.get("loyalty_redemption_cost_center") and ps.get("loyalty_redemption_cost_center"):
+                        invoice_doc.loyalty_redemption_cost_center = ps.loyalty_redemption_cost_center
 
             if not invoice_doc.get("loyalty_redemption_account") and invoice_doc.get("loyalty_program"):
                 # Fallback: Loyalty Program expense_account
