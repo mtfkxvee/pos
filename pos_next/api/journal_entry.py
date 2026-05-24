@@ -6,8 +6,11 @@ from frappe.utils import flt, nowdate
 
 
 @frappe.whitelist()
-def get_expense_accounts(company):
-	"""Return all active leaf expense accounts for the given company."""
+def get_expense_accounts(pos_profile):
+	"""Return all active leaf expense accounts for the POS Profile's company."""
+	company = frappe.db.get_value("POS Profile", pos_profile, "company")
+	if not company:
+		return []
 	return frappe.get_all(
 		"Account",
 		filters={"company": company, "disabled": 0, "is_group": 0, "root_type": "Expense"},
@@ -17,8 +20,11 @@ def get_expense_accounts(company):
 
 
 @frappe.whitelist()
-def get_payment_accounts(company):
+def get_payment_accounts(pos_profile):
 	"""Return active Cash/Bank accounts for the credit side."""
+	company = frappe.db.get_value("POS Profile", pos_profile, "company")
+	if not company:
+		return []
 	return frappe.get_all(
 		"Account",
 		filters={

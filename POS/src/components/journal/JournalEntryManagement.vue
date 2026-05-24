@@ -233,7 +233,6 @@ import {
 const props = defineProps({
 	modelValue: { type: Boolean, default: false },
 	posProfile: { type: String, default: "" },
-	company: { type: String, default: "" },
 	currency: { type: String, default: "IDR" },
 })
 
@@ -299,22 +298,22 @@ function handleClose() {
 }
 
 async function loadAccounts() {
-	if (!props.company) return
+	if (!props.posProfile) return
 	try {
 		const [exp, pay] = await Promise.all([
 			frappe.call({
 				method: "pos_next.api.journal_entry.get_expense_accounts",
-				args: { company: props.company },
+				args: { pos_profile: props.posProfile },
 			}),
 			frappe.call({
 				method: "pos_next.api.journal_entry.get_payment_accounts",
-				args: { company: props.company },
+				args: { pos_profile: props.posProfile },
 			}),
 		])
 		expenseAccounts.value = exp.message || []
 		paymentAccounts.value = pay.message || []
-	} catch {
-		// non-critical
+	} catch (e) {
+		frappe.msgprint({ message: e.message || __("Failed to load accounts."), indicator: "red" })
 	}
 }
 

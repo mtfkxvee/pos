@@ -658,7 +658,6 @@
 			<JournalEntryManagement
 				v-model="showJournalEntry"
 				:pos-profile="shiftStore.profileName"
-				:company="shiftStore.profileCompany"
 				:currency="shiftStore.profileCurrency"
 			/>
 
