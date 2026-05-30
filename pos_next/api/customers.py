@@ -9,7 +9,7 @@ from frappe.utils import flt
 
 
 @frappe.whitelist()
-def get_customers(search_term="", pos_profile=None, limit=20, fields=None):
+def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=None):
 
     """
     Search customers for inline customer selection in POS.
@@ -53,17 +53,20 @@ def get_customers(search_term="", pos_profile=None, limit=20, fields=None):
                     fields.append('name')
                 fetch_fields = fields
 
-        # Return all customers (for client-side filtering)
         filters["disabled"] = 0
-        customer_limit = limit if limit not in (None, 0, "0", "") else frappe.db.count("Customer", filters)
-        
-        result = frappe.get_all(
-            "Customer",
+        start = int(start or 0)
+        limit = int(limit) if limit not in (None, 0, "0", "") else None
+
+        get_all_kwargs = dict(
             filters=filters,
             fields=fetch_fields,
-            limit=customer_limit,
             order_by="customer_name asc",
         )
+        if limit:
+            get_all_kwargs["limit"] = limit
+            get_all_kwargs["limit_start"] = start
+
+        result = frappe.get_all("Customer", **get_all_kwargs)
 
         # Batch fetch loyalty points for all retrieved customers
         # To avoid performance issues, we do a single aggregate query

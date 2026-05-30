@@ -1539,53 +1539,61 @@ function getStockSyncStatus() {
  * @param {string} posProfile - POS Profile name
  * @returns {Promise<Array>} Items array
  */
+const WORKER_BATCH_SIZE = 500
+
+async function workerFetchBatch(endpoint, body) {
+	const headers = { "Content-Type": "application/json", Accept: "application/json" }
+	if (csrfToken) headers["X-Frappe-CSRF-Token"] = csrfToken
+
+	const controller = new AbortController()
+	const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+	try {
+		const response = await fetch(endpoint, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(body),
+			signal: controller.signal,
+		})
+		clearTimeout(timeoutId)
+		if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+		const data = await response.json()
+		return data?.message || data || []
+	} catch (err) {
+		clearTimeout(timeoutId)
+		throw err
+	}
+}
+
 async function fetchItems(posProfile) {
 	if (!posProfile) {
 		log.warn("Fetch items skipped: No POS Profile provided")
 		return []
 	}
 
-	try {
-		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout for large datasets
+	let start = 0
+	let allItems = []
 
-		const headers = {
-			"Content-Type": "application/json",
-			Accept: "application/json",
-		}
+	log.info("Fetching items from server (paginated)...")
 
-		if (csrfToken) {
-			headers["X-Frappe-CSRF-Token"] = csrfToken
-		}
+	while (true) {
+		const batch = await workerFetchBatch(
+			"/api/method/pos_next.api.items.get_items",
+			{ pos_profile: posProfile, start, limit: WORKER_BATCH_SIZE },
+		)
 
-		// Use limit: 0 or a very large number to get all items
-		// Using POST to send JSON body
-		const response = await fetch("/api/method/pos_next.api.items.get_items", {
-			method: "POST",
-			headers,
-			body: JSON.stringify({
-				pos_profile: posProfile,
-				start: 0,
-				limit: 100000, // Large limit to get all
-			}),
-			signal: controller.signal,
-		})
+		if (!Array.isArray(batch) || batch.length === 0) break
+		allItems = allItems.concat(batch)
+		log.info(`Fetched ${allItems.length} items so far...`)
 
-		clearTimeout(timeoutId)
+		if (batch.length < WORKER_BATCH_SIZE) break
+		start += WORKER_BATCH_SIZE
 
-		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-		}
-
-		const data = await response.json()
-		const items = data?.message || data || []
-
-		log.info(`Fetched ${items.length} items from server`)
-		return items
-	} catch (error) {
-		log.error("Error fetching items from server", error)
-		throw error
+		await new Promise((r) => setTimeout(r, 200))
 	}
+
+	log.info(`Total fetched: ${allItems.length} items`)
+	return allItems
 }
 
 /**
@@ -1599,45 +1607,30 @@ async function fetchCustomers(posProfile) {
 		return []
 	}
 
+	let start = 0
+	let allCustomers = []
+
+	log.info("Fetching customers from server (paginated)...")
+
 	try {
-		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
+		while (true) {
+			const batch = await workerFetchBatch(
+				"/api/method/pos_next.api.customers.get_customers",
+				{ pos_profile: posProfile, start, limit: WORKER_BATCH_SIZE },
+			)
 
-		const headers = {
-			"Content-Type": "application/json",
-			Accept: "application/json",
+			if (!Array.isArray(batch) || batch.length === 0) break
+			allCustomers = allCustomers.concat(batch)
+			log.info(`Fetched ${allCustomers.length} customers so far...`)
+
+			if (batch.length < WORKER_BATCH_SIZE) break
+			start += WORKER_BATCH_SIZE
+
+			await new Promise((r) => setTimeout(r, 200))
 		}
 
-		if (csrfToken) {
-			headers["X-Frappe-CSRF-Token"] = csrfToken
-		}
-
-		const response = await fetch(
-			"/api/method/pos_next.api.customers.get_customers",
-			{
-				method: "POST",
-				headers,
-				body: JSON.stringify({
-					pos_profile: posProfile,
-					start: 0,
-					limit: 0, // 0 means all
-					fields: ["*", "custom_kode_pelanggan"],
-				}),
-				signal: controller.signal,
-			},
-		)
-
-		clearTimeout(timeoutId)
-
-		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-		}
-
-		const data = await response.json()
-		const customers = data?.message || data || []
-
-		log.info(`Fetched ${customers.length} customers from server`)
-		return customers
+		log.info(`Total fetched: ${allCustomers.length} customers`)
+		return allCustomers
 	} catch (error) {
 		log.error("Error fetching customers from server", error)
 		throw error

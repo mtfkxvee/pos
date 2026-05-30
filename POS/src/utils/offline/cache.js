@@ -157,22 +157,27 @@ export const toggleManualOffline = async () => {
 	return newState
 }
 
-// Load items from server (returns data for worker to cache)
+const CACHE_BATCH_SIZE = 500
+
+// Load items from server with pagination (prevents server timeout on large catalogs)
 export const cacheItemsFromServer = async (posProfile) => {
 	try {
-		console.log("Fetching items from server...")
+		let start = 0
+		let allItems = []
 
-		const response = await call("pos_next.api.items.get_items", {
-			pos_profile: posProfile,
-			start: 0,
-			limit: 9999, // Get all items
-		})
+		console.log("Fetching items from server (paginated)...")
 
-		if (response.message && Array.isArray(response.message)) {
-			const items = response.message
+		while (true) {
+			const response = await call("pos_next.api.items.get_items", {
+				pos_profile: posProfile,
+				start,
+				limit: CACHE_BATCH_SIZE,
+			})
 
-			// Process items to add searchable fields
-			const processedItems = items.map((item) => ({
+			const batch = response?.message ?? response ?? []
+			if (!Array.isArray(batch) || batch.length === 0) break
+
+			const processed = batch.map((item) => ({
 				...item,
 				barcodes: item.item_barcode
 					? Array.isArray(item.item_barcode)
@@ -181,36 +186,53 @@ export const cacheItemsFromServer = async (posProfile) => {
 					: [],
 			}))
 
-			console.log(`Fetched ${processedItems.length} items from server`)
-			return { items: processedItems }
+			allItems = allItems.concat(processed)
+			console.log(`Fetched ${allItems.length} items so far...`)
+
+			if (batch.length < CACHE_BATCH_SIZE) break
+			start += CACHE_BATCH_SIZE
+
+			// Small delay between batches to avoid overloading the server
+			await new Promise((r) => setTimeout(r, 200))
 		}
 
-		return { items: [] }
+		console.log(`Total fetched: ${allItems.length} items`)
+		return { items: allItems }
 	} catch (error) {
 		console.error("Error fetching items from server:", error)
 		throw error
 	}
 }
 
-// Load customers from server (returns data for worker to cache)
+// Load customers from server with pagination
 export const cacheCustomersFromServer = async (posProfile) => {
 	try {
-		console.log("Fetching customers from server...")
+		let start = 0
+		let allCustomers = []
 
-		const response = await call("pos_next.api.customers.get_customers", {
-			pos_profile: posProfile,
-			start: 0,
-			limit: 0, // Get all customers
-		})
+		console.log("Fetching customers from server (paginated)...")
 
-		if (response.message && Array.isArray(response.message)) {
-			const customers = response.message
+		while (true) {
+			const response = await call("pos_next.api.customers.get_customers", {
+				pos_profile: posProfile,
+				start,
+				limit: CACHE_BATCH_SIZE,
+			})
 
-			console.log(`Fetched ${customers.length} customers from server`)
-			return { customers }
+			const batch = response?.message ?? response ?? []
+			if (!Array.isArray(batch) || batch.length === 0) break
+
+			allCustomers = allCustomers.concat(batch)
+			console.log(`Fetched ${allCustomers.length} customers so far...`)
+
+			if (batch.length < CACHE_BATCH_SIZE) break
+			start += CACHE_BATCH_SIZE
+
+			await new Promise((r) => setTimeout(r, 200))
 		}
 
-		return { customers: [] }
+		console.log(`Total fetched: ${allCustomers.length} customers`)
+		return { customers: allCustomers }
 	} catch (error) {
 		console.error("Error fetching customers from server:", error)
 		throw error
