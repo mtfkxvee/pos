@@ -1052,22 +1052,8 @@ const paymentMethods = ref([])
 const loadingPaymentMethods = ref(false)
 const lastSelectedMethod = ref(null)
 const showDiscountDialog = ref(false)
-const DISCOUNT_AUTH_DURATION = 60 * 60 * 1000 // 1 hour
-
-function isDiscountAuthorized() {
-	const posProfile = settingsStore.settings?.pos_profile || ""
-	const ts = Number(localStorage.getItem(`pos_discount_auth_${posProfile}`) || 0)
-	return ts > 0 && Date.now() - ts < DISCOUNT_AUTH_DURATION
-}
-
-function markDiscountAuthorized() {
-	const posProfile = settingsStore.settings?.pos_profile || ""
-	localStorage.setItem(`pos_discount_auth_${posProfile}`, String(Date.now()))
-}
-
 function handleDiscountButtonClick() {
-	const pwd = settingsStore.discountPasswords.length
-	if (!pwd || isDiscountAuthorized()) {
+	if (!settingsStore.discountPasswords.length) {
 		showDiscountDialog.value = true
 	} else {
 		emit("request-discount-auth")
@@ -1076,7 +1062,6 @@ function handleDiscountButtonClick() {
 
 defineExpose({
 	openDiscountDialog() {
-		markDiscountAuthorized()
 		showDiscountDialog.value = true
 	},
 })
