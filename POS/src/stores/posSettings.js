@@ -16,6 +16,8 @@ const DEFAULT_SETTINGS = {
 	loyalty_redemption_account: "",
 	loyalty_redemption_cost_center: "",
 	// General Settings
+	discount_password_2: "",
+	discount_password_3: "",
 	max_discount_allowed: 0,
 	use_percentage_discount: 0,
 	allow_user_to_edit_additional_discount: 0,
@@ -108,6 +110,13 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		Boolean(settings.value.allow_user_to_edit_additional_discount),
 	)
 	const discountPassword = computed(() => settings.value.discount_password || "")
+	const discountPasswords = computed(() =>
+		[
+			settings.value.discount_password,
+			settings.value.discount_password_2,
+			settings.value.discount_password_3,
+		].filter(Boolean)
+	)
 	const allowItemDiscount = computed(() =>
 		Boolean(settings.value.allow_user_to_edit_item_discount),
 	)
@@ -383,6 +392,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		usePercentageDiscount,
 		allowAdditionalDiscount,
 		discountPassword,
+		discountPasswords,
 		allowItemDiscount,
 		disableRoundedTotal,
 		allowCreditSale,

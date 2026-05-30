@@ -1066,7 +1066,7 @@ function markDiscountAuthorized() {
 }
 
 function handleDiscountButtonClick() {
-	const pwd = settingsStore.discountPassword
+	const pwd = settingsStore.discountPasswords.length
 	if (!pwd || isDiscountAuthorized()) {
 		showDiscountDialog.value = true
 	} else {

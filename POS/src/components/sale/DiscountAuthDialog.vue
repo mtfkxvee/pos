@@ -65,7 +65,7 @@ import { LockClosedIcon, EyeIcon, EyeSlashIcon } from "@heroicons/vue/24/outline
 
 const props = defineProps({
 	modelValue: Boolean,
-	correctPassword: { type: String, default: "" },
+	correctPasswords: { type: Array, default: () => [] },
 })
 const emit = defineEmits(["update:modelValue", "authorized"])
 
@@ -101,7 +101,7 @@ async function verify() {
 
 	await new Promise((r) => setTimeout(r, 150))
 
-	if (password.value === props.correctPassword) {
+	if (props.correctPasswords.includes(password.value)) {
 		emit("authorized")
 		emit("update:modelValue", false)
 	} else {

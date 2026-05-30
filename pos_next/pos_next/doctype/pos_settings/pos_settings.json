@@ -160,7 +160,17 @@
             "description": "If set, cashier must enter this password before applying additional discount. Leave empty to allow without authorization.",
             "fieldname": "discount_password",
             "fieldtype": "Data",
-            "label": "Discount Authorization Password"
+            "label": "Discount Authorization Password 1"
+        },
+        {
+            "fieldname": "discount_password_2",
+            "fieldtype": "Data",
+            "label": "Discount Authorization Password 2"
+        },
+        {
+            "fieldname": "discount_password_3",
+            "fieldtype": "Data",
+            "label": "Discount Authorization Password 3"
         },
         {
             "default": "1",

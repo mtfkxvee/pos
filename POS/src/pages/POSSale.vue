@@ -503,7 +503,7 @@
 		/>
 		<DiscountAuthDialog
 			v-model="showDiscountAuthDialog"
-			:correct-password="posSettingsStore.discountPassword"
+			:correct-passwords="posSettingsStore.discountPasswords"
 			@authorized="paymentDialogRef?.openDiscountDialog()"
 		/>
 
