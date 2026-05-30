@@ -1059,24 +1059,9 @@ const lastSelectedMethod = ref(null)
 const showDiscountDialog = ref(false)
 const showDiscountAuthDialog = ref(false)
 
-const DISCOUNT_AUTH_DURATION = 60 * 60 * 1000 // 1 hour
-
-function isDiscountAuthorized() {
-	const posProfile = settingsStore.settings?.pos_profile || ""
-	const key = `pos_discount_auth_${posProfile}`
-	const ts = Number(localStorage.getItem(key) || 0)
-	return ts > 0 && Date.now() - ts < DISCOUNT_AUTH_DURATION
-}
-
-function markDiscountAuthorized() {
-	const posProfile = settingsStore.settings?.pos_profile || ""
-	const key = `pos_discount_auth_${posProfile}`
-	localStorage.setItem(key, String(Date.now()))
-}
-
 function handleDiscountButtonClick() {
 	const pwd = settingsStore.discountPassword
-	if (!pwd || isDiscountAuthorized()) {
+	if (!pwd) {
 		showDiscountDialog.value = true
 	} else {
 		showDiscountAuthDialog.value = true
@@ -1084,7 +1069,6 @@ function handleDiscountButtonClick() {
 }
 
 function onDiscountAuthorized() {
-	markDiscountAuthorized()
 	showDiscountDialog.value = true
 }
 const customAmount = ref("")
