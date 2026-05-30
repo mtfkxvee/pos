@@ -937,16 +937,10 @@
 		v-model="showDiscountDialog"
 		:subtotal="subtotal"
 	/>
-	<DiscountAuthDialog
-		v-model="showDiscountAuthDialog"
-		:correct-password="settingsStore.discountPassword"
-		@authorized="onDiscountAuthorized"
-	/>
 </template>
 
 <script setup>
 import DiscountComplimentDialog from "@/components/sale/DiscountComplimentDialog.vue"
-import DiscountAuthDialog from "@/components/sale/DiscountAuthDialog.vue"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import {
 	DEFAULT_CURRENCY,
@@ -1046,6 +1040,7 @@ const emit = defineEmits([
 	"update:modelValue",
 	"payment-completed",
 	"update-additional-discount",
+	"request-discount-auth",
 ])
 
 const show = computed({
@@ -1057,20 +1052,20 @@ const paymentMethods = ref([])
 const loadingPaymentMethods = ref(false)
 const lastSelectedMethod = ref(null)
 const showDiscountDialog = ref(false)
-const showDiscountAuthDialog = ref(false)
-
 function handleDiscountButtonClick() {
 	const pwd = settingsStore.discountPassword
 	if (!pwd) {
 		showDiscountDialog.value = true
 	} else {
-		showDiscountAuthDialog.value = true
+		emit("request-discount-auth")
 	}
 }
 
-function onDiscountAuthorized() {
-	showDiscountDialog.value = true
-}
+defineExpose({
+	openDiscountDialog() {
+		showDiscountDialog.value = true
+	},
+})
 const customAmount = ref("")
 const paymentEntries = ref([])
 const customerCredit = ref([])

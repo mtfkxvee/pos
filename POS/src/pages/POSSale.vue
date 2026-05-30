@@ -477,6 +477,7 @@
 
 			<!-- Payment Dialog -->
 		<PaymentDialog
+			ref="paymentDialogRef"
 			v-model="uiStore.showPaymentDialog"
 			:grand-total="cartStore.grandTotal"
 			:subtotal="cartStore.subtotal"
@@ -498,6 +499,12 @@
 			:is-submitting="cartStore.isSubmitting"
 			@payment-completed="handlePaymentCompleted"
 			@update-additional-discount="handleAdditionalDiscountUpdate"
+			@request-discount-auth="showDiscountAuthDialog = true"
+		/>
+		<DiscountAuthDialog
+			v-model="showDiscountAuthDialog"
+			:correct-password="posSettingsStore.discountPassword"
+			@authorized="paymentDialogRef?.openDiscountDialog()"
 		/>
 
 			<!-- Customer Selection Dialog -->
@@ -1036,6 +1043,7 @@ import ItemsSelector from "@/components/sale/ItemsSelector.vue";
 import OffersDialog from "@/components/sale/OffersDialog.vue";
 import OfflineInvoicesDialog from "@/components/sale/OfflineInvoicesDialog.vue";
 import PaymentDialog from "@/components/sale/PaymentDialog.vue";
+import DiscountAuthDialog from "@/components/sale/DiscountAuthDialog.vue";
 import PromotionManagement from "@/components/sale/PromotionManagement.vue";
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
 import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailabilityDialog.vue";
@@ -1163,6 +1171,10 @@ const showInvoiceManagement = ref(false);
 
 // Journal Entry dialog
 const showJournalEntry = ref(false);
+
+// Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
+const paymentDialogRef = ref(null);
+const showDiscountAuthDialog = ref(false);
 
 // Warehouse availability dialog state
 const showWarehouseDialog = ref(false)
