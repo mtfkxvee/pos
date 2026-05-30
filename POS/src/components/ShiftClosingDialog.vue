@@ -227,7 +227,7 @@
               <!-- ENTRY MODE: Simple blind input list (when hideExpectedAmount is enabled and not showing report) -->
               <div v-if="isInEntryMode" class="flex flex-col gap-3 md:gap-4">
                 <div
-                  v-for="(payment, idx) in closingData.payment_reconciliation.filter(p => p.mode_of_payment && p.mode_of_payment.toLowerCase() === 'cash')"
+                  v-for="(payment, idx) in closingData.payment_reconciliation.filter(p => p.mode_of_payment && (p.opening_amount > 0 || p.expected_amount > 0))"
                   :key="idx"
                   class="border border-gray-200 rounded-lg p-3 md:p-4 bg-white hover:border-gray-300 transition-colors"
                 >
@@ -263,7 +263,7 @@
               <!-- REVIEW MODE: Full payment method cards (when not in entry mode) -->
               <div v-else class="flex flex-col gap-4 md:gap-5">
                 <div
-                  v-for="(payment, idx) in closingData.payment_reconciliation.filter(p => p.mode_of_payment && p.mode_of_payment.toLowerCase() === 'cash')"
+                  v-for="(payment, idx) in closingData.payment_reconciliation.filter(p => p.mode_of_payment && (p.opening_amount > 0 || p.expected_amount > 0))"
                   :key="idx"
                   :class="[
                     'border rounded-lg p-3 md:p-5 transition-all',
@@ -677,8 +677,12 @@ const canSubmit = computed(() => {
 	if (!closingData.value || !closingData.value.payment_reconciliation)
 		return false
 
-	// Check if all closing amounts are filled
-	return closingData.value.payment_reconciliation.every(
+	const active = closingData.value.payment_reconciliation.filter(
+		(p) => p.mode_of_payment && (p.opening_amount > 0 || p.expected_amount > 0),
+	)
+	if (active.length === 0) return true
+
+	return active.every(
 		(payment) =>
 			payment.closing_amount !== null &&
 			payment.closing_amount !== undefined &&
