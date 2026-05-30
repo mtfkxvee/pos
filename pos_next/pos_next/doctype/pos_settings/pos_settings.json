@@ -17,6 +17,8 @@
         "section_break_general",
         "allow_user_to_edit_additional_discount",
         "discount_password",
+        "discount_password_2",
+        "discount_password_3",
         "allow_user_to_edit_item_discount",
         "use_percentage_discount",
         "max_discount_allowed",
