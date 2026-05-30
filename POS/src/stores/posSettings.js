@@ -107,6 +107,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	const allowAdditionalDiscount = computed(() =>
 		Boolean(settings.value.allow_user_to_edit_additional_discount),
 	)
+	const discountPassword = computed(() => settings.value.discount_password || "")
 	const allowItemDiscount = computed(() =>
 		Boolean(settings.value.allow_user_to_edit_item_discount),
 	)
@@ -381,6 +382,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		maxDiscountAllowed,
 		usePercentageDiscount,
 		allowAdditionalDiscount,
+		discountPassword,
 		allowItemDiscount,
 		disableRoundedTotal,
 		allowCreditSale,

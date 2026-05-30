@@ -315,7 +315,7 @@
 								<div class="flex items-center gap-2">
 									<div class="flex-1">
 										<button
-											@click="showDiscountDialog = true"
+											@click="handleDiscountButtonClick"
 											class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-orange-300 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors text-sm font-medium"
 										>
 											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -937,10 +937,16 @@
 		v-model="showDiscountDialog"
 		:subtotal="subtotal"
 	/>
+	<DiscountAuthDialog
+		v-model="showDiscountAuthDialog"
+		:correct-password="settingsStore.discountPassword"
+		@authorized="onDiscountAuthorized"
+	/>
 </template>
 
 <script setup>
 import DiscountComplimentDialog from "@/components/sale/DiscountComplimentDialog.vue"
+import DiscountAuthDialog from "@/components/sale/DiscountAuthDialog.vue"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import {
 	DEFAULT_CURRENCY,
@@ -1051,6 +1057,36 @@ const paymentMethods = ref([])
 const loadingPaymentMethods = ref(false)
 const lastSelectedMethod = ref(null)
 const showDiscountDialog = ref(false)
+const showDiscountAuthDialog = ref(false)
+
+const DISCOUNT_AUTH_DURATION = 60 * 60 * 1000 // 1 hour
+
+function isDiscountAuthorized() {
+	const posProfile = settingsStore.settings?.pos_profile || ""
+	const key = `pos_discount_auth_${posProfile}`
+	const ts = Number(localStorage.getItem(key) || 0)
+	return ts > 0 && Date.now() - ts < DISCOUNT_AUTH_DURATION
+}
+
+function markDiscountAuthorized() {
+	const posProfile = settingsStore.settings?.pos_profile || ""
+	const key = `pos_discount_auth_${posProfile}`
+	localStorage.setItem(key, String(Date.now()))
+}
+
+function handleDiscountButtonClick() {
+	const pwd = settingsStore.discountPassword
+	if (!pwd || isDiscountAuthorized()) {
+		showDiscountDialog.value = true
+	} else {
+		showDiscountAuthDialog.value = true
+	}
+}
+
+function onDiscountAuthorized() {
+	markDiscountAuthorized()
+	showDiscountDialog.value = true
+}
 const customAmount = ref("")
 const paymentEntries = ref([])
 const customerCredit = ref([])

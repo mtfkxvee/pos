@@ -16,6 +16,7 @@
         "loyalty_redemption_cost_center",
         "section_break_general",
         "allow_user_to_edit_additional_discount",
+        "discount_password",
         "allow_user_to_edit_item_discount",
         "use_percentage_discount",
         "max_discount_allowed",
@@ -154,6 +155,12 @@
             "fieldname": "allow_user_to_edit_additional_discount",
             "fieldtype": "Check",
             "label": "Allow Additional Discount"
+        },
+        {
+            "description": "If set, cashier must enter this password before applying additional discount. Leave empty to allow without authorization.",
+            "fieldname": "discount_password",
+            "fieldtype": "Password",
+            "label": "Discount Authorization Password"
         },
         {
             "default": "1",
