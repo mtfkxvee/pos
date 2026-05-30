@@ -1,5 +1,6 @@
 <template>
-	<Transition name="fade">
+	<Teleport to="body">
+		<Transition name="fade">
 		<div v-if="modelValue" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-50">
 			<div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
 				<!-- Header -->
@@ -56,6 +57,7 @@
 			</div>
 		</div>
 	</Transition>
+	</Teleport>
 </template>
 
 <script setup>
