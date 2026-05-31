@@ -68,4 +68,6 @@ export {
 	needsCacheRefresh,
 	clearAllCache,
 	getCacheStats,
+	cacheCompanyAddress,
+	getCachedCompanyAddress,
 } from "./cache"

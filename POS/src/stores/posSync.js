@@ -18,6 +18,7 @@ import { useToast } from "@/composables/useToast"
 import {
 	cacheCustomersFromServer,
 	cachePaymentMethodsFromServer,
+	cacheCompanyAddress,
 	syncOfflineInvoices,
 	cacheInvoiceHistory,
 	cacheUnpaidInvoices,
@@ -272,6 +273,13 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 			const stats = await getCacheStats()
 			const needsRefresh =
 				!stats.lastSync || Date.now() - stats.lastSync > 24 * 60 * 60 * 1000
+
+			// Cache company address for offline print
+			try {
+				await cacheCompanyAddress(currentProfile.company)
+			} catch (e) {
+				log.warn("Could not cache company address", e)
+			}
 
 			// Always load payment methods for reliable offline support
 			log.info("Loading payment methods for offline use")

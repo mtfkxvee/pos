@@ -445,5 +445,65 @@ export async function getCachedPaymentMethods(posProfile) {
 	}
 }
 
+const COMPANY_ADDRESS_KEY = "pos_company_address"
+
+/**
+ * Fetch company address from server and persist to localStorage for offline print use.
+ * @param {string} company - Company name to filter (optional)
+ */
+export async function cacheCompanyAddress(company) {
+	try {
+		const filters = [["is_your_company_address", "=", 1], ["is_primary_address", "=", 1]]
+		if (company) filters.push(["address_title", "like", `%${company}%`])
+
+		let rows = await call("frappe.client.get_list", {
+			doctype: "Address",
+			filters,
+			fields: ["name", "address_title", "address_line1", "address_line2", "city", "state", "phone"],
+			limit: 1,
+		})
+
+		// Fallback: try without address_title filter
+		if ((!rows || rows.length === 0) && company) {
+			rows = await call("frappe.client.get_list", {
+				doctype: "Address",
+				filters: [["is_your_company_address", "=", 1], ["is_primary_address", "=", 1]],
+				fields: ["name", "address_title", "address_line1", "address_line2", "city", "state", "phone"],
+				limit: 1,
+			})
+		}
+
+		// Last fallback: just any company address
+		if (!rows || rows.length === 0) {
+			rows = await call("frappe.client.get_list", {
+				doctype: "Address",
+				filters: [["is_your_company_address", "=", 1]],
+				fields: ["name", "address_title", "address_line1", "address_line2", "city", "state", "phone"],
+				limit: 1,
+			})
+		}
+
+		if (rows && rows.length > 0) {
+			localStorage.setItem(COMPANY_ADDRESS_KEY, JSON.stringify(rows[0]))
+			return rows[0]
+		}
+	} catch (e) {
+		console.warn("Could not cache company address:", e)
+	}
+	return null
+}
+
+/**
+ * Get cached company address from localStorage
+ */
+export function getCachedCompanyAddress() {
+	try {
+		const raw = localStorage.getItem(COMPANY_ADDRESS_KEY)
+		return raw ? JSON.parse(raw) : null
+	} catch {
+		return null
+	}
+}
+
 // Initialize cache on import
 initMemoryCache()

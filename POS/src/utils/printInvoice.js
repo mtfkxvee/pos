@@ -1,6 +1,7 @@
 import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
+import { getCachedCompanyAddress } from "@/utils/offline/cache"
 
 const log = logger.create("PrintInvoice")
 
@@ -131,6 +132,7 @@ export async function printInvoice(
 export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 	const is58mm = printFormat && printFormat.includes("58")
 	const windowWidth = is58mm ? "220" : "350"
+	const addr = getCachedCompanyAddress()
 
 	const fmtDate = (d) => {
 		const dd = String(d.getDate()).padStart(2, '0')
@@ -208,8 +210,12 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 </head>
 <body class="print-format">
 
-<p class="tc" style="font-size:9px; letter-spacing:1px;">${invoiceData.company || ""}</p>
-<p class="tc" style="font-size:9px; font-weight:normal;">${invoiceData.select_print_heading || "Invoice"}</p>
+${addr ? `
+${addr.address_title ? `<p class="tc" style="font-size:13px; letter-spacing:1px; font-weight:bold;">${addr.address_title}</p>` : ""}
+${addr.address_line1 ? `<p class="tc" style="font-size:8px; font-weight:bold;">${addr.address_line1}</p>` : ""}
+${addr.address_line2 ? `<p class="tc" style="font-size:8px; font-weight:bold;">${addr.address_line2}</p>` : ""}
+<p class="tc" style="font-size:8px; font-weight:bold;">${[addr.city, addr.phone].filter(Boolean).join(" | ")}</p>
+` : `<p class="tc" style="font-size:13px; letter-spacing:1px; font-weight:bold;">${invoiceData.company || ""}</p>`}
 <hr>
 <p>No  : ${invoiceData.name}</p>
 <p>Ksr : ${invoiceData.owner || "Kasir"}</p>
