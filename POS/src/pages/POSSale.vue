@@ -1095,7 +1095,7 @@ const customerSearchStore = useCustomerSearchStore();
 const settingsStore = posSettingsStore;
 
 // Print Format Composable
-const { printFormat, showFormatDialog, setPrintFormat, promptForFormat, getEffectiveFormat } = usePrintFormat();
+const { printFormat, showFormatDialog, setPrintFormat, promptForFormat, getEffectiveFormat, getPaperSize } = usePrintFormat();
 
 // Real-time stock updates
 const { onStockUpdate } = useRealtimeStock();
@@ -2136,7 +2136,7 @@ async function handlePaymentCompleted(paymentData) {
 			// No auto-print: show success dialog (has its own Print button)
 			if (shiftStore.autoPrintEnabled) {
 				try {
-					printInvoiceCustom(offlinePrintData, getEffectiveFormat());
+					printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
 					showSuccess(__("Invoice saved offline and sent to printer"));
 				} catch (printError) {
 					log.warn("Offline print failed:", printError);
@@ -2770,7 +2770,7 @@ async function handleDeleteOfflineInvoice(invoiceId) {
 
 function handlePrintOfflineInvoice(invoiceData) {
 	try {
-		printInvoiceCustom(invoiceData, getEffectiveFormat());
+		printInvoiceCustom(invoiceData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
 	} catch (error) {
 		log.error("Error printing offline invoice:", error);
 	}
@@ -3041,13 +3041,11 @@ function handleViewInvoice(invoice) {
 // Centralized print handler - uses printInvoice.js utilities
 async function handlePrintInvoice(invoiceData) {
 	try {
-		// If invoiceData is a full document with items, use printInvoice directly
+		const paperSize = getPaperSize()
 		if (invoiceData.items && Array.isArray(invoiceData.items)) {
-			await printInvoice(invoiceData);
+			await printInvoice(invoiceData, null, null, paperSize);
 		} else {
-			// If it's just an invoice object with name, fetch and print
-			// printInvoiceByName will automatically fetch the print format from the invoice's POS Profile
-			await printInvoiceByName(invoiceData.name);
+			await printInvoiceByName(invoiceData.name, null, null, paperSize);
 		}
 	} catch (error) {
 		log.error("Error printing invoice:", error);

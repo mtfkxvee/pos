@@ -7,53 +7,100 @@ const log = logger.create("PrintInvoice")
 /**
  * Print invoice using Frappe's print format system
  * @param {Object} invoiceData - The invoice document data
- * @param {string} printFormat - The print format name (optional)
+ * @param {string} printFormat - The print format name from POS Profile (optional)
  * @param {string} letterhead - The letterhead name (optional)
- * @note Use "POS Next Receipt" format for thermal printer (80mm) or configure via POS Profile
+ * @param {string} paperSize - "58mm" or "80mm" — controls CSS override only, not which format is used
  */
 export async function printInvoice(
 	invoiceData,
 	printFormat = null,
 	letterhead = null,
+	paperSize = null,
 ) {
+	let format = printFormat
 	try {
 		if (!invoiceData || !invoiceData.name) {
 			throw new Error("Invalid invoice data")
 		}
 
 		const doctype = invoiceData.doctype || "Sales Invoice"
-		const format = printFormat || "POS Next Receipt"
 
-		// Build PDF print URL
+		// If no format given, try to get from POS Profile on the invoice
+		if (!format && invoiceData.pos_profile) {
+			try {
+				const posProfileDoc = await call("frappe.client.get", {
+					doctype: "POS Profile",
+					name: invoiceData.pos_profile,
+				})
+				if (posProfileDoc?.print_format) {
+					format = posProfileDoc.print_format
+					if (!letterhead) letterhead = posProfileDoc.letter_head
+				}
+			} catch (e) {
+				log.warn("Could not fetch POS Profile for print format:", e)
+			}
+		}
+		format = format || "POS Next Receipt"
+
+		const is80mm = paperSize === "80mm"
+
 		const params = new URLSearchParams({
-			doctype: doctype,
+			doctype,
 			name: invoiceData.name,
-			format: format,
+			format,
 			no_letterhead: letterhead ? 0 : 1,
 			_lang: "en",
-			trigger_print: 1,
-			_t: Date.now(), // Cache buster to force fresh print format
+			_t: Date.now(),
 		})
+		if (letterhead) params.append("letterhead", letterhead)
 
-		if (letterhead) {
-			params.append("letterhead", letterhead)
-		}
-
-		// Open PDF in new window - browser will handle print dialog
 		const printUrl = `/printview?${params.toString()}`
-		const printWindow = window.open(printUrl, "_blank", "width=800,height=600")
 
-		if (!printWindow) {
-			throw new Error(
-				"Failed to open print window. Please check your popup blocker settings.",
-			)
+		if (!is80mm) {
+			// 58mm: no CSS override needed — just let trigger_print handle it
+			params.append("trigger_print", "1")
+			const pw = window.open(`/printview?${params.toString()}`, "_blank", "width=800,height=600")
+			if (!pw) throw new Error("Failed to open print window. Please check your popup blocker settings.")
+			return true
 		}
+
+		// 80mm: open without trigger_print, inject CSS override, then print manually
+		const printWindow = window.open(printUrl, "_blank", "width=800,height=600")
+		if (!printWindow) throw new Error("Failed to open print window. Please check your popup blocker settings.")
+
+		await new Promise((resolve) => {
+			let done = false
+			const inject = () => {
+				if (done) return
+				done = true
+				try {
+					const style = printWindow.document.createElement("style")
+					style.textContent = `
+						@page { size: 80mm auto !important; margin: 0 !important; }
+						body, .print-format {
+							width: 80mm !important;
+							max-width: 80mm !important;
+						}
+					`
+					printWindow.document.head.appendChild(style)
+				} catch (e) {
+					log.warn("Could not inject 80mm CSS override:", e)
+				}
+				setTimeout(() => {
+					printWindow.focus()
+					printWindow.print()
+					resolve()
+				}, 300)
+			}
+			printWindow.addEventListener("load", inject)
+			// Fallback if load event already fired or is slow
+			setTimeout(inject, 1500)
+		})
 
 		return true
 	} catch (error) {
 		log.error("Error printing with Frappe print format:", error)
-		// Fallback to custom print format
-		return printInvoiceCustom(invoiceData, format)
+		return printInvoiceCustom(invoiceData, paperSize === "80mm" ? "80 PRINTER" : "58 PRINTER")
 	}
 }
 
@@ -469,38 +516,21 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
  * @param {string} invoiceName - The name of the invoice to print
  * @param {string} printFormat - Optional print format override
  * @param {string} letterhead - Optional letterhead override
+ * @param {string} paperSize - "58mm" or "80mm" from the POS dropdown
  */
 export async function printInvoiceByName(
 	invoiceName,
 	printFormat = null,
 	letterhead = null,
+	paperSize = null,
 ) {
 	try {
-		// Fetch the invoice document using proper POS API endpoint
 		const invoiceDoc = await call("pos_next.api.invoices.get_invoice", {
 			invoice_name: invoiceName,
 		})
 
 		if (!invoiceDoc) {
 			throw new Error("Invoice not found")
-		}
-
-		// If no print format specified and invoice has a POS Profile, fetch its print settings
-		if (!printFormat && invoiceDoc.pos_profile) {
-			try {
-				const posProfileDoc = await call("frappe.client.get", {
-					doctype: "POS Profile",
-					name: invoiceDoc.pos_profile,
-				})
-
-				if (posProfileDoc) {
-					printFormat = posProfileDoc.print_format
-					letterhead = letterhead || posProfileDoc.letter_head
-				}
-			} catch (error) {
-				log.warn("Could not fetch POS Profile print settings:", error)
-				// Continue with default print format
-			}
 		}
 
 		// Fetch loyalty points if invoice has a loyalty program
@@ -518,8 +548,8 @@ export async function printInvoiceByName(
 			}
 		}
 
-		// Print the invoice
-		return await printInvoice(invoiceDoc, printFormat, letterhead)
+		// printInvoice will auto-fetch POS Profile format if printFormat is null
+		return await printInvoice(invoiceDoc, printFormat, letterhead, paperSize)
 	} catch (error) {
 		log.error("Error fetching invoice for print:", error)
 		throw error

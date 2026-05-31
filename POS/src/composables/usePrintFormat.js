@@ -44,11 +44,20 @@ export function usePrintFormat() {
 		return printFormat.value || "80 PRINTER"
 	}
 
+	/**
+	 * Returns the paper size in mm based on the selected format
+	 * @returns {"58mm"|"80mm"}
+	 */
+	function getPaperSize() {
+		return getEffectiveFormat().includes("58") ? "58mm" : "80mm"
+	}
+
 	return {
 		printFormat,
 		showFormatDialog,
 		setPrintFormat,
 		promptForFormat,
 		getEffectiveFormat,
+		getPaperSize,
 	}
 }
