@@ -520,6 +520,7 @@ import { usePOSSettingsStore } from "../stores/posSettings"
 import { usePOSShiftStore } from "../stores/posShift"
 import TranslatedHTML from "./common/TranslatedHTML.vue"
 import { printShiftClosing } from "@/utils/printInvoice"
+import { usePrintFormat } from "@/composables/usePrintFormat"
 
 const props = defineProps({
 	modelValue: {
@@ -542,6 +543,7 @@ const open = computed({
 
 const { getClosingShiftData, submitClosingShift } = useShift()
 const { formatQuantity, formatDateTime, formatTime } = useFormatters()
+const { getPaperSize } = usePrintFormat()
 
 function formatCurrency(amount) {
 	if (amount === null || amount === undefined) return "Rp. 0"
@@ -726,7 +728,7 @@ async function submitClosing() {
 
 function handlePrintReport() {
 	if (!closingData.value) return
-	printShiftClosing(closingData.value)
+	printShiftClosing(closingData.value, getPaperSize())
 }
 
 function closeDialog() {

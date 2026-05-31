@@ -306,10 +306,13 @@ export async function printInvoiceByName(
 /**
  * Generates and prints a Shift Closing Receipt
  * @param {Object} closingData - The shift closing data
+ * @param {string} paperSize - "58mm" or "80mm"
  */
-export function printShiftClosing(closingData) {
-	// Open print window with receipt size dimensions (80mm ≈ 302px at 96 DPI)
-	const printWindow = window.open("", "_blank", "width=350,height=600")
+export function printShiftClosing(closingData, paperSize = "80mm") {
+	const is58mm = paperSize === "58mm"
+	const paperWidth = is58mm ? "58mm" : "80mm"
+	const windowWidth = is58mm ? "220" : "350"
+	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
 
 	const salesTotal = closingData.sales_total ?? closingData.grand_total ?? 0
 	const taxesTotal = closingData.taxes
@@ -345,10 +348,10 @@ export function printShiftClosing(closingData) {
 
 				body {
 					font-family: 'Courier New', monospace;
-					padding: 10px;
-					width: 80mm;
+					padding: ${is58mm ? "2px 5px" : "10px"};
+					width: ${paperWidth};
 					margin: 0;
-					max-width: 80mm;
+					max-width: ${paperWidth};
 					font-weight: bold;
 					color: black;
 				}
@@ -404,13 +407,13 @@ export function printShiftClosing(closingData) {
 
 				@media print {
 					@page {
-						size: 80mm auto;
+						size: ${paperWidth} auto;
 						margin: 0;
 					}
 
 					body {
-						width: 80mm;
-						padding: 5mm;
+						width: ${paperWidth};
+						padding: ${is58mm ? "2px 5px" : "5mm"};
 						margin: 0;
 					}
 
