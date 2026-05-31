@@ -449,10 +449,33 @@ const COMPANY_ADDRESS_KEY = "pos_company_address"
 
 /**
  * Fetch company address from server and persist to localStorage for offline print use.
- * @param {string} company - Company name to filter (optional)
+ * @param {string} company - Company name (used as fallback filter)
+ * @param {string} addressName - Specific address name from POS Profile's company_address field (preferred)
  */
-export async function cacheCompanyAddress(company) {
+export async function cacheCompanyAddress(company, addressName) {
 	try {
+		// If POS Profile has a specific address set, fetch it directly
+		if (addressName) {
+			const doc = await call("frappe.client.get", {
+				doctype: "Address",
+				name: addressName,
+			})
+			if (doc) {
+				const addr = {
+					name: doc.name,
+					address_title: doc.address_title,
+					address_line1: doc.address_line1,
+					address_line2: doc.address_line2,
+					city: doc.city,
+					state: doc.state,
+					phone: doc.phone,
+				}
+				localStorage.setItem(COMPANY_ADDRESS_KEY, JSON.stringify(addr))
+				return addr
+			}
+		}
+
+		// Fallback: search by company
 		const filters = [["is_your_company_address", "=", 1], ["is_primary_address", "=", 1]]
 		if (company) filters.push(["address_title", "like", `%${company}%`])
 
@@ -463,7 +486,6 @@ export async function cacheCompanyAddress(company) {
 			limit: 1,
 		})
 
-		// Fallback: try without address_title filter
 		if ((!rows || rows.length === 0) && company) {
 			rows = await call("frappe.client.get_list", {
 				doctype: "Address",
@@ -473,7 +495,6 @@ export async function cacheCompanyAddress(company) {
 			})
 		}
 
-		// Last fallback: just any company address
 		if (!rows || rows.length === 0) {
 			rows = await call("frappe.client.get_list", {
 				doctype: "Address",

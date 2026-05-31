@@ -276,7 +276,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 
 			// Cache company address for offline print
 			try {
-				await cacheCompanyAddress(currentProfile.company)
+				await cacheCompanyAddress(currentProfile.company, currentProfile.company_address)
 			} catch (e) {
 				log.warn("Could not cache company address", e)
 			}
