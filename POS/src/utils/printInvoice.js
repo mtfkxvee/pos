@@ -106,32 +106,15 @@ export async function printInvoice(
 }
 
 /**
- * Generates and prints a custom POS receipt using a thermal printer layout.
- *
- * This fallback printer is used when Frappe's standard print format is unavailable.
- * The receipt is optimized for 80mm thermal printers with clean, readable formatting.
- *
- * Receipt Structure:
- * - Header: Company name and invoice type
- * - Info: Invoice number, date, customer, payment status
- * - Items: Each item shows quantity × original price = subtotal
- * - Discounts: Displayed as separate line items with negative amounts
- * - Totals: Subtotal, tax, and grand total
- * - Payments: Payment methods and amounts, change, outstanding balance
- * - Footer: Thank you message and branding
- *
- * @param {Object} invoiceData - The invoice document data from ERPNext
- * @param {string} invoiceData.name - Invoice number
- * @param {string} invoiceData.company - Company name
- * @param {Array} invoiceData.items - Invoice line items
- * @param {Array} invoiceData.payments - Payment records
- * @param {Array} invoiceData.payments - Payment records
- * @param {number} invoiceData.grand_total - Invoice total amount
- * @param {string} printFormat - The requested print format (e.g., "58 PRINTER" or "80 PRINTER")
+ * Generates and prints a custom POS receipt matching the "58 TEST" Jinja format.
+ * Uses one template for both 58mm and 80mm — only CSS width changes.
+ * @param {Object} invoiceData
+ * @param {string} printFormat - "58 PRINTER" or "80 PRINTER"
  */
-export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
-	const is58mm = printFormat && printFormat.includes("58")
-	const windowWidth = is58mm ? "220" : "350"
+export function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
+	const is80mm = printFormat && printFormat.includes("80")
+	const paperWidth = is80mm ? "80mm" : "58mm"
+	const windowWidth = is80mm ? "350" : "220"
 	const addr = getCachedCompanyAddress()
 
 	const fmtDate = (d) => {
@@ -157,43 +140,41 @@ export function printInvoiceCustom(invoiceData, printFormat = "80 PRINTER") {
 		}
 	}
 
+	const rp = (val) => {
+		const v = Math.floor(val || 0)
+		if (v >= 1000000) return `Rp${Math.floor(v/1000000)}.${String(Math.floor((v%1000000)/1000)).padStart(3,'0')}.${String(v%1000).padStart(3,'0')}`
+		if (v >= 1000) return `Rp${Math.floor(v/1000)}.${String(v%1000).padStart(3,'0')}`
+		return `Rp${v}`
+	}
+	const num = (val) => {
+		const v = Math.floor(val || 0)
+		if (v >= 1000000) return `${Math.floor(v/1000000)}.${String(Math.floor((v%1000000)/1000)).padStart(3,'0')}.${String(v%1000).padStart(3,'0')}`
+		if (v >= 1000) return `${Math.floor(v/1000)}.${String(v%1000).padStart(3,'0')}`
+		return `${v}`
+	}
+
+	const showInclusiveTax = invoiceData.flags?.show_inclusive_tax_in_print || invoiceData.show_inclusive_tax_in_print
+	const paidAmount = invoiceData.paid_amount || (invoiceData.payments || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+	const rawCustomer = invoiceData.customer_name || invoiceData.customer || "Guest"
+	const trimmedCustomer = rawCustomer.split(' XSA')[0].split(' XPY')[0].split(' XS')[0].split(' - ')[0]
+	const ownerShort = (invoiceData.owner || "Kasir").substring(0, 8)
+	const redeemLoyalty = invoiceData.redeem_loyalty_points || invoiceData.loyalty_amount > 0
+
 	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
 
-	let printContent
-
-	if (is58mm) {
-		// 58mm thermal format — matches Jinja print template exactly
-		const rp = (val) => {
-			const v = Math.floor(val || 0)
-			if (v >= 1000000) return `Rp${Math.floor(v/1000000)}.${String(Math.floor((v%1000000)/1000)).padStart(3,'0')}.${String(v%1000).padStart(3,'0')}`
-			if (v >= 1000) return `Rp${Math.floor(v/1000)}.${String(v%1000).padStart(3,'0')}`
-			return `Rp${v}`
-		}
-		const num = (val) => {
-			const v = Math.floor(val || 0)
-			if (v >= 1000000) return `${Math.floor(v/1000000)}.${String(Math.floor((v%1000000)/1000)).padStart(3,'0')}.${String(v%1000).padStart(3,'0')}`
-			if (v >= 1000) return `${Math.floor(v/1000)}.${String(v%1000).padStart(3,'0')}`
-			return `${v}`
-		}
-
-		const showInclusiveTax = invoiceData.flags?.show_inclusive_tax_in_print || invoiceData.show_inclusive_tax_in_print
-		const paidAmount = invoiceData.paid_amount || (invoiceData.payments || []).reduce((s, r) => s + Number(r.amount || 0), 0)
-		const rawCustomer = invoiceData.customer_name || invoiceData.customer || "Guest"
-		const trimmedCustomer = rawCustomer.split(' XSA')[0].split(' XPY')[0].split(' XS')[0].split(' - ')[0]
-
-		printContent = `
+	const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>${__("Invoice - {0}", [invoiceData.name])}</title>
+<title>${invoiceData.name || "Invoice"}</title>
 <style>
-	@page { size: 58mm auto; margin: 0; }
+	@page { size: ${paperWidth} auto; margin: 0; }
 	* { box-sizing: border-box; }
 	body, .print-format {
 		font-family: 'Courier New', 'Courier', monospace;
-		width: 58mm;
-		max-width: 58mm;
+		width: ${paperWidth};
+		max-width: ${paperWidth};
 		margin: 0;
 		padding: 2px 20px;
 		font-size: 12px;
@@ -217,296 +198,56 @@ ${addr.address_line2 ? `<p class="tc" style="font-size:8px; font-weight:bold;">$
 <p class="tc" style="font-size:8px; font-weight:bold;">${[addr.city, addr.phone].filter(Boolean).join(" | ")}</p>
 ` : `<p class="tc" style="font-size:13px; letter-spacing:1px; font-weight:bold;">${invoiceData.company || ""}</p>`}
 <hr>
-<p>No  : ${invoiceData.name}</p>
-<p>Ksr : ${invoiceData.owner || "Kasir"}</p>
-<p>Tgl : ${docDateStr} ${docTimeStr}</p>
-<p>Pel : ${trimmedCustomer}</p>
+<p>No : ${invoiceData.name}</p>
+<p>Ksr: ${ownerShort} Tgl: ${docDateStr}</p>
+<p>Pel: ${trimmedCustomer}</p>
 <hr>
 
 ${(invoiceData.items || []).map((item) => {
 	const qty = item.qty !== undefined ? item.qty : (item.quantity || 0)
 	const rate = item.rate || item.price_list_rate || 0
 	const amount = item.amount !== undefined ? item.amount : qty * rate
+	const discountAmount = item.discount_amount || 0
 	const displayQty = qty % 1 === 0 ? Math.floor(qty) : qty
 	const itemName = item.item_name || item.item_code
 	return `<p>${itemName}</p>
-<p>${displayQty} x ${num(rate)}<span style="float:right;">${num(amount)}</span></p>${item.serial_no ? `\n<p style="font-size:7px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</p>` : ""}`
+<p>${displayQty} x ${num(rate)}<span style="float:right;">${num(amount)}</span></p>${discountAmount > 0 ? `\n<p>  Diskon<span style="float:right;">-${num(discountAmount)}</span></p>` : ""}${item.serial_no ? `\n<p style="font-size:7px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</p>` : ""}`
 }).join("\n")}
 
 <hr>
-
 ${showInclusiveTax
 	? `<p>Total Excl. Tax<span style="float:right;">${num(invoiceData.net_total || invoiceData.grand_total)}</span></p>`
-	: `<p>Total<span style="float:right;">${num(invoiceData.total || invoiceData.grand_total)}</span></p>`
-}
-
+	: `<p>Total<span style="float:right;">${num(invoiceData.total || invoiceData.grand_total)}</span></p>`}
 ${(invoiceData.taxes || []).filter(row => !row.included_in_print_rate || showInclusiveTax).map(row => {
 	const desc = row.description || ""
 	const label = desc.includes('%') ? desc : `${desc}@${row.rate}%`
 	return `<p>${label}<span style="float:right;">${num(row.tax_amount)}</span></p>`
 }).join("\n")}
-
 ${invoiceData.discount_amount ? `<p>Diskon<span style="float:right;">-${num(invoiceData.discount_amount)}</span></p>` : ""}
-
+${invoiceData.loyalty_amount ? `<p>Tukar Poin<span style="float:right;">-${num(invoiceData.loyalty_amount)}</span></p>` : ""}
 <p style="font-size:11px; border-top:2px solid #000; border-bottom:2px solid #000; margin-top:2px; padding:3px 0;">Grand Total<span style="float:right;">${rp(invoiceData.grand_total)}</span></p>
-
 ${invoiceData.rounded_total ? `<p>Dibulatkan<span style="float:right;">${rp(invoiceData.rounded_total)}</span></p>` : ""}
-
 ${(invoiceData.payments || []).map(row => `<p>${row.mode_of_payment}<span style="float:right;">${num(row.amount)}</span></p>`).join("\n")}
-
 <p style="border-top:1px dashed #333; margin-top:2px; padding-top:2px;">Bayar<span style="float:right;">${num(paidAmount)}</span></p>
+${invoiceData.change_amount > 0 ? `<p>Kembali<span style="float:right;">${num(invoiceData.change_amount)}</span></p>` : ""}
+${invoiceData.outstanding_amount > 0 ? `<p>Sisa Tagihan<span style="float:right;">${num(invoiceData.outstanding_amount)}</span></p>` : ""}
 
-${invoiceData.change_amount && invoiceData.change_amount > 0 ? `<p>Kembali<span style="float:right;">${num(invoiceData.change_amount)}</span></p>` : ""}
-
-${invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0 ? `<p>Sisa Tagihan<span style="float:right;">${num(invoiceData.outstanding_amount)}</span></p>` : ""}
-
-${invoiceData._earned_loyalty_points !== undefined ? `<hr>
-<p style="font-size:9px;">Poin Diperoleh<span style="float:right;">${invoiceData._earned_loyalty_points}</span></p>
-<p style="font-size:9px;">Total Poin Anda<span style="float:right;">${invoiceData._total_loyalty_points}</span></p>` : ""}
+${(invoiceData._earned_loyalty_points !== undefined || invoiceData._total_loyalty_points !== undefined) ? `<hr>
+<p class="tc" style="font-size:10px;">-- LOYALTY POINTS --</p>
+${!redeemLoyalty && invoiceData._earned_loyalty_points ? `<p>Poin Didapat<span style="float:right;">+${invoiceData._earned_loyalty_points}</span></p>` : ""}
+${redeemLoyalty && invoiceData._earned_loyalty_points ? `<p>Poin Ditukar<span style="float:right;">-${invoiceData._earned_loyalty_points}</span></p>` : ""}
+${invoiceData._total_loyalty_points ? `<p>Total Poin<span style="float:right;">${invoiceData._total_loyalty_points}</span></p>` : ""}` : ""}
 
 <hr>
 ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 <p class="tc" style="font-size:8px; margin-top:2px;">Terima kasih, sampai jumpa lagi.</p>
 
-<div class="no-print" style="text-align: center; margin-top: 20px;">
-	<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">${__("Print Receipt")}</button>
-	<button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">${__("Close")}</button>
+<div class="no-print" style="text-align:center; margin-top:20px;">
+	<button onclick="window.print()" style="padding:10px 20px; font-size:14px; cursor:pointer;">Print</button>
+	<button onclick="window.close()" style="padding:10px 20px; font-size:14px; cursor:pointer; margin-left:10px;">Close</button>
 </div>
 </body>
 </html>`
-	} else {
-		// 80mm thermal format
-		const formatNumber = (val) => new Intl.NumberFormat('id-ID').format(val || 0)
-
-		printContent = `
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<meta charset="UTF-8">
-			<title>${__("Invoice - {0}", [invoiceData.name])}</title>
-			<style>
-				@page {
-					size: 80mm auto;
-					margin: 0mm;
-				}
-				body, .print-format {
-					font-family: 'Courier New', Courier, monospace;
-					width: 72mm;
-					max-width: 72mm;
-					margin: 0 auto;
-					padding: 0mm;
-					font-size: 11px;
-					box-sizing: border-box;
-					color: black;
-				}
-				.print-format table, .print-format tr,
-				.print-format td, .print-format div, .print-format p {
-					line-height: 1.2;
-					vertical-align: top;
-				}
-				.text-center { text-align: center; }
-				.text-right { text-align: right; }
-				.text-left { text-align: left; }
-				p { margin: 0 0 4px 0; }
-				hr {
-					border: none;
-					border-top: 1px dashed #000;
-					margin: 6px 0;
-				}
-				table {
-					width: 100%;
-					border-collapse: collapse;
-					font-size: 11px;
-                    table-layout: fixed;
-				}
-				table td {
-					padding: 1px 0px;
-				}
-
-				@media print {
-					body, .print-format { padding: 3mm 0mm; }
-					.no-print { display: none; }
-				}
-			</style>
-		</head>
-		<body class="print-format">
-			<!-- HEADER -->
-			<p class="text-center" style="margin-bottom: 6px;">
-				<b style="font-size: 14px;">${invoiceData.company || "X-SHA"}</b><br>
-			</p>
-
-			<!-- INFO -->
-			<table style="margin-bottom: 4px;">
-				<tr>
-                    <td colspan="2" class="text-left">${invoiceData.name}</td>
-                </tr>
-                <tr>
-                    <td class="text-left" style="width: 50%;">${docDateStr + " " + docTimeStr}</td>
-					<td class="text-right" style="width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${invoiceData.owner || "Kasir"}/${invoiceData.customer_name || invoiceData.customer || "Guest"}</td>
-				</tr>
-			</table>
-
-			<hr>
-
-			<!-- ITEMS TABLE -->
-			<table>
-				<tbody>
-					${(invoiceData.items || [])
-						.map((item) => {
-							const qty = item.quantity || item.qty
-							const displayRate = item.price_list_rate || item.rate
-							const subtotal = qty * displayRate
-							const isFree = item.is_free_item
-
-                            const itemName = item.item_name || item.item_code
-                            let itemDisplayName = itemName + (isFree ? " (F)" : "")
-
-							return `
-						<tr>
-							<td class="text-left" style="width: 44%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 2px;">
-								${itemDisplayName}
-							</td>
-							<td class="text-right" style="width: 8%;">${qty}</td>
-							<td class="text-right" style="width: 23%; padding-right: 2px;">${formatNumber(displayRate)}</td>
-							<td class="text-right" style="width: 25%; font-size: 11px;">${formatNumber(subtotal)}</td>
-						</tr>
-						${item.serial_no ? `<tr><td colspan="4" style="font-size: 8.5px;">S/N: ${item.serial_no.replace(/\n/g, ", ")}</td></tr>` : ""}
-						`
-						})
-						.join("")}
-				</tbody>
-			</table>
-
-			<hr style="margin: 4px 0;">
-
-			<!-- TOTALS TABLE -->
-			<table>
-				<tbody>
-					<!-- Subtotal / Total -->
-					<tr>
-                        <td style="width:30%"></td>
-						${
-							invoiceData.total_taxes_and_charges && invoiceData.total_taxes_and_charges > 0
-								? `
-						<td class="text-right" style="width:45%;">TOTAL SBM PPN:</td>
-						<td class="text-right" style="width:25%;">${formatNumber((invoiceData.grand_total || 0) - (invoiceData.total_taxes_and_charges || 0))}</td>
-						`
-								: `
-						<td class="text-right" style="width:45%;">HARGA JUAL :</td>
-						<td class="text-right" style="width:25%;">${formatNumber(invoiceData.grand_total)}</td>
-						`
-						}
-					</tr>
-
-					<!-- Taxes -->
-					${(invoiceData.taxes || [])
-						.map(
-							(row) => `
-					<tr>
-                        <td></td>
-						<td class="text-right">${row.description}:</td>
-						<td class="text-right">${formatNumber(row.tax_amount)}</td>
-					</tr>
-					`,
-						)
-						.join("")}
-
-					<!-- Discount -->
-					${
-						invoiceData.discount_amount
-							? `
-					<tr>
-                        <td></td>
-						<td class="text-right">DISCOUNT :</td>
-						<td class="text-right">(${formatNumber(Math.abs(invoiceData.discount_amount))})</td>
-					</tr>
-					`
-							: ""
-					}
-
-					<tr><td colspan="3"><hr style="margin: 2px 0;"></td></tr>
-
-					<!-- Grand Total -->
-					<tr>
-                        <td></td>
-						<td class="text-right"><b>TOTAL :</b></td>
-						<td class="text-right"><b>${formatNumber(invoiceData.grand_total)}</b></td>
-					</tr>
-
-					<!-- Payment Methods -->
-					${(invoiceData.payments || []).filter(function(row) { return Number(row.amount) > 0; })
-						.map(
-							(row) => `
-					<tr>
-                        <td></td>
-						<td class="text-right">${row.mode_of_payment.toUpperCase()} :</td>
-						<td class="text-right">${formatNumber(row.amount)}</td>
-					</tr>
-					`,
-						)
-						.join("")}
-
-					<!-- Change Amount -->
-					${
-						invoiceData.change_amount && invoiceData.change_amount > 0
-							? `
-					<tr>
-                        <td></td>
-						<td class="text-right"><b>KEMBALI :</b></td>
-						<td class="text-right"><b>${formatNumber(invoiceData.change_amount)}</b></td>
-					</tr>
-					`
-							: ""
-					}
-
-					<!-- Outstanding -->
-					${
-						invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
-							? `
-					<tr>
-                        <td></td>
-						<td class="text-right">KURANG BAYAR :</td>
-						<td class="text-right">${formatNumber(invoiceData.outstanding_amount)}</td>
-					</tr>
-					`
-							: ""
-					}
-
-					<!-- Loyalty Points -->
-					${invoiceData._earned_loyalty_points !== undefined ? `
-					<tr><td colspan="3"><hr style="margin: 2px 0;"></td></tr>
-					<tr>
-                        <td></td>
-						<td class="text-right">POIN DIPEROLEH :</td>
-						<td class="text-right">${invoiceData._earned_loyalty_points}</td>
-					</tr>
-					<tr>
-                        <td></td>
-						<td class="text-right">TOTAL POIN :</td>
-						<td class="text-right">${invoiceData._total_loyalty_points}</td>
-					</tr>
-					` : ""}
-				</tbody>
-			</table>
-
-			<hr>
-
-			<!-- TERMS & FOOTER -->
-			<p class="text-center" style="margin-top:5px; margin-bottom: 2px;">Terima kasih atas kunjungan Anda.</p>
-			<p class="text-center" style="font-size: 8px;">Simpan struk ini sebagai bukti pembayaran.</p>
-
-			<div class="no-print" style="text-align: center; margin-top: 20px;">
-				<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
-					${__("Print Receipt")}
-				</button>
-				<button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
-					${__("Close")}
-				</button>
-			</div>
-		</body>
-		</html>
-	`
-	}
 
 	printWindow.document.write(printContent)
 	printWindow.document.close()
