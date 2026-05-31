@@ -176,7 +176,7 @@ export function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
 		width: ${paperWidth};
 		max-width: ${paperWidth};
 		margin: 0;
-		padding: 2px 20px;
+		padding: ${is80mm ? "2px 20px" : "2px 5px"};
 		font-size: 12px;
 		line-height: 1.4;
 		background: #fff;
