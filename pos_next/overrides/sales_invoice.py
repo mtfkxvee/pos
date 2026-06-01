@@ -153,7 +153,12 @@ class CustomSalesInvoice(SalesInvoice):
 					self.set("payments", db_payments)
 					total_paid = sum(flt(p.get("amount", 0)) for p in db_payments)
 					self.paid_amount = total_paid
-					self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
+					loyalty_amt = flt(self.loyalty_amount or 0)
+					write_off_amt = flt(self.write_off_amount or 0)
+					self.outstanding_amount = max(
+						0,
+						flt(self.grand_total) - total_paid - loyalty_amt - write_off_amt,
+					)
 			except Exception as e:
 				frappe.log_error(
 					f"POS Next: failed to restore payments for {self.name}: {e}",
@@ -176,7 +181,12 @@ class CustomSalesInvoice(SalesInvoice):
 				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
 				for p in (self.get("payments") or [])
 			)
-			self.outstanding_amount = max(0, flt(self.grand_total) - total_paid)
+			loyalty_amt = flt(self.loyalty_amount or 0)
+			write_off_amt = flt(self.write_off_amount or 0)
+			self.outstanding_amount = max(
+				0,
+				flt(self.grand_total) - total_paid - loyalty_amt - write_off_amt,
+			)
 
 	def get_gl_entries(self, warehouse_account=None):
 		"""

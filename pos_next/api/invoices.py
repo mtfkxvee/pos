@@ -1474,6 +1474,12 @@ def submit_invoice(invoice=None, data=None):
         invoice_doc.submit()
         invoice_submitted = True
 
+        # Reload to get post-GL-reconciliation values (outstanding_amount, etc.)
+        try:
+            invoice_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
+        except Exception:
+            pass
+
         # ── Grand Total Integrity Check ──────────────────────────────────────
         # Compare the grand_total the UI displayed (sent by frontend as
         # data.ui_grand_total) with the grand_total ERPNext actually recorded
