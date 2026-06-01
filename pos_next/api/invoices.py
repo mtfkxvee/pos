@@ -2628,12 +2628,20 @@ def _item_qualifies_for_rule(item_doc, rule_doc):
         item_group = item_doc.get("item_group")
         if item_group in rule_groups:
             return True
-        # Also check ancestors — rule may target a parent group
+        # Check if item_group is a descendant of any rule group
+        if not item_group:
+            return False
         try:
-            from frappe.utils.nestedset import get_ancestors_of
-            ancestors = get_ancestors_of("Item Group", item_group) if item_group else []
-            return bool(rule_groups & set(ancestors))
-        except Exception:
+            from frappe.utils.nestedset import get_descendants_of
+            for rg in rule_groups:
+                try:
+                    descendants = get_descendants_of("Item Group", rg, ignore_permissions=True)
+                    if item_group in descendants:
+                        return True
+                except Exception:
+                    pass
+            return False
+        except ImportError:
             return False
     elif apply_on == "Brand":
         return item_doc.get("brand") in [r.brand for r in (rule_doc.brands or [])]
@@ -2916,17 +2924,6 @@ def apply_offers(invoice_data, selected_offers=None):
         else:
             pricing_results = []
 
-        # Diagnostic log — remove after debugging nested item group issue
-        frappe.log_error(
-            title="POS apply_offers diagnostic",
-            message=(
-                f"selected_offer_names: {selected_offer_names}\n"
-                f"pricing_results count: {len(pricing_results)}\n"
-                f"items: {[{'code': pi.get('item_code'), 'group': pi.get('item_group')} for pi in pricing_items]}\n"
-                f"pricing_results[0] (if any): {pricing_results[0] if pricing_results else '(none)'}"
-            ),
-        )
-
         if not pricing_results and not selected_offer_names:
             return {"items": items}
 
@@ -3186,7 +3183,6 @@ def apply_offers(invoice_data, selected_offers=None):
         if selected_offer_names:
             # Populate rule_map with any selected rules ERPNext missed entirely
             missed_names = [n for n in selected_offer_names if n not in applied_rules and n not in rule_map]
-            _dbg_missed = []
             if missed_names:
                 missed_records = frappe.get_all(
                     "Pricing Rule",
@@ -3198,24 +3194,8 @@ def apply_offers(invoice_data, selected_offers=None):
                     qualifies = _rule_qualifies_for_transaction(
                         full_rule, customer_group, transaction_total, pricing_args.get("transaction_date")
                     )
-                    _dbg_missed.append(
-                        f"  {rec.name}: p_or_p={rec.price_or_product_discount} "
-                        f"apply_on={full_rule.apply_on} "
-                        f"dp={full_rule.discount_percentage} da={full_rule.discount_amount} "
-                        f"qualifies_tx={qualifies} "
-                        f"item_groups={[r.item_group for r in (full_rule.item_groups or [])]}"
-                    )
                     if qualifies:
                         rule_map[rec.name] = frappe._dict(rec)
-            frappe.log_error(
-                title="POS apply_offers fallback diagnostic",
-                message=(
-                    f"missed_names: {missed_names}\n"
-                    f"customer_group: {customer_group}\n"
-                    f"transaction_total: {transaction_total}\n"
-                    f"Records:\n" + "\n".join(_dbg_missed)
-                ),
-            )
 
             unapplied = [n for n in selected_offer_names if n not in applied_rules and n in rule_map]
             for rule_name in unapplied:
@@ -3299,15 +3279,6 @@ def apply_offers(invoice_data, selected_offers=None):
             if key not in seen_free:
                 seen_free.add(key)
                 deduped_free_items.append(fi)
-
-        frappe.log_error(
-            title="POS apply_offers result diagnostic",
-            message=(
-                f"applied_rules: {sorted(applied_rules)}\n"
-                f"items result: {[{'code': i.get('item_code'), 'dp': i.get('discount_percentage'), 'da': i.get('discount_amount'), 'pr': i.get('pricing_rules')} for i in prepared_items]}\n"
-                f"transaction_discount_amount: {transaction_discount_amount}"
-            ),
-        )
 
         return {
             "items": [dict(item) for item in prepared_items],
