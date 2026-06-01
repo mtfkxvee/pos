@@ -1117,9 +1117,11 @@ function handleSearchInput(event) {
 	}
 }
 
-// Handle click on search input to clear it
+// Handle click on search input — only clear if scanner/auto-add is active
 function handleSearchClick() {
-	itemStore.clearSearch()
+	if (scannerEnabled.value || autoAddEnabled.value) {
+		itemStore.clearSearch()
+	}
 }
 
 // Create optimized click handlers for better touch response
