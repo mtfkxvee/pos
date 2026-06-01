@@ -288,6 +288,20 @@
 							'group relative bg-white border border-gray-200 rounded-lg p-1.5 sm:p-2.5 touch-manipulation transition-[border-color,box-shadow] duration-100 cursor-pointer hover:border-blue-400 hover:shadow-md',
 						]"
 					>
+						<!-- Pin Button - top-left corner -->
+						<button
+							@click.stop.prevent="togglePin(item)"
+							:class="[
+								'absolute -top-1.5 -start-1.5 sm:-top-2 sm:-start-2 z-10 rounded-md shadow-sm border-2 border-white p-0.5 touch-manipulation transition-colors duration-100',
+								pinnedItems.has(item.item_code) ? 'bg-yellow-400 hover:bg-yellow-500' : 'bg-white hover:bg-yellow-50',
+							]"
+							:title="pinnedItems.has(item.item_code) ? __('Unpin item') : __('Pin to top')"
+						>
+							<svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" :class="pinnedItems.has(item.item_code) ? 'text-white' : 'text-gray-400'" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+							</svg>
+						</button>
+
 						<!-- Stock Badge - Tap to select, long press to view warehouse availability -->
 						<div
 							v-if="(item.is_stock_item || item.is_bundle) && !item.has_variants"
@@ -546,8 +560,22 @@
 								</div>
 							</td>
 							<td class="px-2 sm:px-3 py-2 max-w-[120px] sm:max-w-[180px] md:max-w-[200px]">
-								<div class="text-xs sm:text-sm font-medium text-gray-900 truncate" :title="item.item_name">
-									{{ item.item_name }}
+								<div class="flex items-center gap-1">
+									<button
+										@click.stop.prevent="togglePin(item)"
+										:class="[
+											'flex-shrink-0 p-0.5 rounded touch-manipulation transition-colors duration-100',
+											pinnedItems.has(item.item_code) ? 'text-yellow-400 hover:text-yellow-500' : 'text-gray-300 hover:text-yellow-400',
+										]"
+										:title="pinnedItems.has(item.item_code) ? __('Unpin item') : __('Pin to top')"
+									>
+										<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+											<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+										</svg>
+									</button>
+									<div class="text-xs sm:text-sm font-medium text-gray-900 truncate" :title="item.item_name">
+										{{ item.item_name }}
+									</div>
 								</div>
 							</td>
 							<td class="hidden sm:table-cell px-2 sm:px-3 py-2 whitespace-nowrap sm:max-w-[150px]">
@@ -771,7 +799,12 @@ const {
 	sortBy,
 	sortOrder,
 	totalServerItems,
+	pinnedItems,
 } = storeToRefs(itemStore)
+
+function togglePin(item) {
+	itemStore.togglePinnedItem(item.item_code)
+}
 
 // Local state
 const viewMode = ref("grid")

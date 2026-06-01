@@ -163,6 +163,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	const posProfile = ref(null)
 	const cartItems = ref([])
 
+	// Pinned items state - per POS Profile, persisted server-side
+	const pinnedItems = ref(new Set())
+
 	// Sorting state - for user-triggered sorting filters
 	const sortBy = ref(null) // Options: 'name', 'quantity', 'item_group', null (no sorting)
 	const sortOrder = ref("asc") // Options: 'asc', 'desc'
@@ -628,50 +631,47 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			}
 		})
 
-		// Step 5: Conditional sorting - only sort when user explicitly triggers a sort filter
-		// This optimizes performance by avoiding unnecessary sorting on every render
-		if (sortBy.value) {
-			itemsWithStock.sort((a, b) => {
-				let compareResult = 0
+		// Step 5: Sorting — pinned items first (when not searching), then user sort
+		const isSearching = !!searchTerm.value?.trim()
+		const hasPinned = !isSearching && pinnedItems.value.size > 0
 
+		if (hasPinned || sortBy.value) {
+			itemsWithStock.sort((a, b) => {
+				// Pinned items always come first when not searching
+				if (hasPinned) {
+					const aPinned = pinnedItems.value.has(a.item_code) ? 0 : 1
+					const bPinned = pinnedItems.value.has(b.item_code) ? 0 : 1
+					if (aPinned !== bPinned) return aPinned - bPinned
+				}
+
+				if (!sortBy.value) return 0
+
+				let compareResult = 0
 				switch (sortBy.value) {
 					case "name":
-						// Sort by item_name alphabetically
 						const nameA = (a.item_name || "").toLowerCase()
 						const nameB = (b.item_name || "").toLowerCase()
 						compareResult = nameA.localeCompare(nameB)
 						break
-
 					case "quantity":
-						// Sort by stock quantity
 						compareResult = (a.actual_qty ?? 0) - (b.actual_qty ?? 0)
 						break
-
 					case "item_group":
-						// Sort by item_group alphabetically
 						const groupA = (a.item_group || "").toLowerCase()
 						const groupB = (b.item_group || "").toLowerCase()
 						compareResult = groupA.localeCompare(groupB)
 						break
-
 					case "price":
-						// Sort by price_list_rate (standard selling rate)
 						compareResult = (a.price_list_rate ?? 0) - (b.price_list_rate ?? 0)
 						break
-
 					case "item_code":
-						// Sort by item_code alphabetically
 						const codeA = (a.item_code || "").toLowerCase()
 						const codeB = (b.item_code || "").toLowerCase()
 						compareResult = codeA.localeCompare(codeB)
 						break
-
 					default:
-						// No sorting
 						compareResult = 0
 				}
-
-				// Apply sort order (asc or desc)
 				return sortOrder.value === "desc" ? -compareResult : compareResult
 			})
 		}
@@ -1886,6 +1886,37 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		log.debug("Sort filter cleared")
 	}
 
+	async function loadPinnedItems(profile) {
+		if (!profile) {
+			pinnedItems.value = new Set()
+			return
+		}
+		try {
+			const result = await call("pos_next.api.pinned_items.get_pinned_items", {
+				pos_profile: profile,
+			})
+			const list = result?.message || result || []
+			pinnedItems.value = new Set(list)
+		} catch (e) {
+			log.warn("Failed to load pinned items", e)
+		}
+	}
+
+	async function togglePinnedItem(item_code) {
+		const profile = posProfile.value
+		if (!profile || !item_code) return
+		try {
+			const result = await call("pos_next.api.pinned_items.toggle_pinned_item", {
+				pos_profile: profile,
+				item_code,
+			})
+			const list = result?.message?.pinned_items || result?.pinned_items || []
+			pinnedItems.value = new Set(list)
+		} catch (e) {
+			log.warn("Failed to toggle pinned item", e)
+		}
+	}
+
 	function cleanup() {
 		// Stop background sync when store is destroyed
 		stopBackgroundCacheSync()
@@ -2143,6 +2174,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			itemGroups.value = data?.item_groups_hierarchy || []
 			log.info(`Loaded ${itemGroups.value.length} item groups with hierarchy`)
 
+			// Load pinned items for this profile (non-blocking)
+			loadPinnedItems(profile)
+
 			// Cache profile data for offline use (survives component remount)
 			try {
 				sessionStorage.setItem(
@@ -2231,6 +2265,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		cacheStats,
 		sortBy,
 		sortOrder,
+		pinnedItems,
 
 		// ========================================================================
 		// COMPUTED PROPERTIES
@@ -2258,6 +2293,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		invalidateCache,
 		setSortFilter,
 		clearSortFilter,
+		togglePinnedItem,
 
 		// ========================================================================
 		// STOCK ACTIONS - Delegates to stock store
