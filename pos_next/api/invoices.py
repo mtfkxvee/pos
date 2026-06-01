@@ -2623,6 +2623,73 @@ def _item_qualifies_for_rule(item_doc, rule_doc):
     return False
 
 
+def _resolve_pricing_warehouses(pricing_items: list) -> None:
+    """Replace each item's warehouse with the most-specific ancestor warehouse
+    that appears in an active pricing rule.
+
+    ERPNext's filter_pricing_rules() does an exact warehouse match, so a rule
+    set for parent warehouse "FASHION" never fires for items in child warehouse
+    "SELLING AREA CIKIRAY".  We resolve upward through the Nested Set Model so
+    that the engine sees the right level.
+
+    Only items whose warehouse is NOT already a pricing-rule warehouse are
+    remapped; exact matches are left untouched.
+    """
+    item_warehouses = list({
+        item.get("warehouse") for item in pricing_items if item.get("warehouse")
+    })
+    if not item_warehouses:
+        return
+
+    # Fetch all warehouses referenced in active selling pricing rules
+    rule_warehouses = frappe.db.sql("""
+        SELECT DISTINCT warehouse
+        FROM `tabPricing Rule`
+        WHERE warehouse IS NOT NULL AND warehouse != ''
+          AND disable = 0 AND selling = 1
+    """, pluck=True)
+
+    if not rule_warehouses:
+        return
+
+    # Items already exactly matching a rule warehouse need no remapping
+    needs_resolve = [wh for wh in item_warehouses if wh not in rule_warehouses]
+    if not needs_resolve:
+        return
+
+    # One query: for each item warehouse that needs resolving, find all ancestor
+    # warehouses that are pricing-rule warehouses, ordered most-specific first
+    # (highest lft = deepest level in the tree).
+    resolution_map = {}
+    try:
+        rows = frappe.db.sql("""
+            SELECT
+                child_wh.name  AS item_wh,
+                parent_wh.name AS rule_wh,
+                parent_wh.lft  AS depth
+            FROM `tabWarehouse` child_wh
+            JOIN `tabWarehouse` parent_wh
+                ON parent_wh.lft  <= child_wh.lft
+               AND parent_wh.rgt  >= child_wh.rgt
+               AND parent_wh.name != child_wh.name
+            WHERE child_wh.name  IN %s
+              AND parent_wh.name IN %s
+            ORDER BY child_wh.name, parent_wh.lft DESC
+        """, [needs_resolve, list(rule_warehouses)], as_dict=1)
+
+        for row in rows:
+            # Keep only the first (most-specific) ancestor per item warehouse
+            if row["item_wh"] not in resolution_map:
+                resolution_map[row["item_wh"]] = row["rule_wh"]
+    except Exception:
+        return  # Fall back to unmodified warehouses on any DB error
+
+    for item in pricing_items:
+        wh = item.get("warehouse")
+        if wh in resolution_map:
+            item["warehouse"] = resolution_map[wh]
+
+
 @frappe.whitelist()
 def apply_offers(invoice_data, selected_offers=None):
     """Calculate and apply promotional offers using ERPNext Pricing Rules.
@@ -2802,6 +2869,10 @@ def apply_offers(invoice_data, selected_offers=None):
                 "items": pricing_items,
             }
         )
+
+        # Resolve item warehouses upward so parent-warehouse pricing rules fire
+        # (e.g. rule set for FASHION also applies to SELLING AREA CIKIRAY items)
+        _resolve_pricing_warehouses(pricing_items)
 
         # Call ERPNext pricing engine - it handles all conflicts based on priority
         #
