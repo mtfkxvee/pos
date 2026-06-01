@@ -93,16 +93,6 @@
 							<div class="flex items-center gap-0.5 flex-shrink-0" @click.stop>
 								<button
 									type="button"
-									@click.stop="$emit('edit-customer', customer)"
-									class="w-7 h-7 flex items-center justify-center text-blue-500 hover:bg-blue-50 active:bg-blue-100 rounded-lg transition-colors touch-manipulation"
-									:title="__('Edit customer details')"
-								>
-									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-									</svg>
-								</button>
-								<button
-									type="button"
 									@click.stop="$emit('create-customer', '')"
 									class="w-7 h-7 flex items-center justify-center text-green-600 hover:bg-green-50 active:bg-green-100 rounded-lg transition-colors touch-manipulation"
 									:title="__('Create new customer')"
