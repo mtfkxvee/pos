@@ -165,6 +165,18 @@ class CustomSalesInvoice(SalesInvoice):
 					"POS Payment Restore"
 				)
 
+		# Safety net: ensure outstanding is never wrong for POS invoices.
+		# ERPNext's calculate_outstanding_amount() skips recalculation when the
+		# payments child table is empty, so a frontend bug sending outstanding=0
+		# with paid_amount=0 would slip through undetected.
+		if cint(self.is_pos) and not cint(self.is_return):
+			_paid = flt(self.paid_amount or 0)
+			_loyalty = flt(self.loyalty_amount or 0)
+			_write_off = flt(self.write_off_amount or 0)
+			_expected = max(0, flt(self.grand_total) - _paid - _loyalty - _write_off)
+			if flt(self.outstanding_amount) != _expected:
+				self.outstanding_amount = _expected
+
 		# Restore fixed discount if pricing rule recalculated it from percentage
 		if intended_da is not None and (
 			flt(self.discount_amount) != flt(intended_da)
