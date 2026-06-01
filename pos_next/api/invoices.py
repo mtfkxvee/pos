@@ -662,6 +662,28 @@ def update_invoice(data):
         # Populate missing fields (company, currency, accounts, etc.)
         invoice_doc.set_missing_values()
 
+        # Trace item discount state after set_missing_values() but before calculate_taxes_and_totals()
+        _ui_gt = flt(data.get("ui_grand_total") or data.get("grand_total") or 0)
+        if _ui_gt > 0:
+            _item_lines = []
+            for _it in invoice_doc.get("items", []):
+                _item_lines.append(
+                    f"  {_it.get('item_code') or '?'}: qty={flt(_it.get('qty') or 0)} "
+                    f"rate={flt(_it.get('rate') or 0)} plr={flt(_it.get('price_list_rate') or 0)} "
+                    f"da={flt(_it.get('discount_amount') or 0)} dp={flt(_it.get('discount_percentage') or 0)} "
+                    f"pr={repr(_it.get('pricing_rules') or '')}"
+                )
+            frappe.log_error(
+                title="POS update_invoice item state",
+                message=(
+                    f"Invoice name: {invoice_doc.get('name') or '(new)'}\n"
+                    f"UI grand total from data: {_ui_gt:,.0f}\n"
+                    f"data.discount_amount: {flt(data.get('discount_amount') or 0):,.0f}\n"
+                    f"Items after set_missing_values, before calculate_taxes_and_totals:\n"
+                    + "\n".join(_item_lines)
+                ),
+            )
+
         # Re-enforce discount AFTER set_missing_values() which may reset it.
         _discount_amount = flt(data.get("discount_amount") or 0)
         if _discount_amount > 0:
@@ -685,6 +707,27 @@ def update_invoice(data):
             invoice_doc.grand_total = 0.0
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
+
+        # Trace final totals after calculate_taxes_and_totals
+        if _ui_gt > 0:
+            _item_lines2 = []
+            for _it in invoice_doc.get("items", []):
+                _item_lines2.append(
+                    f"  {_it.get('item_code') or '?'}: qty={flt(_it.get('qty') or 0)} "
+                    f"rate={flt(_it.get('rate') or 0)} net_amount={flt(_it.get('net_amount') or 0)} "
+                    f"da={flt(_it.get('discount_amount') or 0)} dp={flt(_it.get('discount_percentage') or 0)}"
+                )
+            frappe.log_error(
+                title="POS update_invoice after calc",
+                message=(
+                    f"Invoice name: {invoice_doc.get('name') or '(new)'}\n"
+                    f"net_total={flt(invoice_doc.net_total or 0):,.0f}  "
+                    f"grand_total={flt(invoice_doc.grand_total or 0):,.0f}  "
+                    f"discount_amount={flt(invoice_doc.discount_amount or 0):,.0f}\n"
+                    f"Items after calculate_taxes_and_totals:\n"
+                    + "\n".join(_item_lines2)
+                ),
+            )
 
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:
