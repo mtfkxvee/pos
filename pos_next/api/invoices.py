@@ -554,6 +554,12 @@ def update_invoice(data):
         # Formula: rate = price_list_rate * (1 - discount_percentage/100)
         # Reverse: price_list_rate = rate / (1 - discount_percentage/100)
         # ========================================================================
+        # Per-item manual discounts (no pricing_rule) are folded into the
+        # invoice-level discount_amount so they survive set_missing_values() and
+        # calculate_taxes_and_totals() without any per-item discount juggling.
+        # Items that carry a pricing_rule keep their per-item discount unchanged.
+        _manual_item_discount_total = 0
+
         for item in invoice_doc.get("items", []):
             item_rate = flt(item.rate or 0)
             discount_pct = flt(item.discount_percentage or 0)
@@ -573,44 +579,50 @@ def update_invoice(data):
             if flt(item.price_list_rate) < item_rate:
                 item.price_list_rate = item_rate
 
-            # Recalculate item.rate from price_list_rate + discount so ERPNext
-            # uses the correct net rate in calculate_taxes_and_totals().
-            # ERPNext's calculate_item_values() only auto-sets rate when rate=0;
-            # if rate is still the full list price, net_amount = full price and
-            # the item-level discount is silently lost in net_total.
-            discount_amt_item = flt(item.get("discount_amount") or 0)
             plr = flt(item.price_list_rate)
             item_qty = flt(item.get("qty") or item.get("quantity") or 1) or 1
-            if discount_amt_item > 0 and plr > 0:
-                # Frontend sends discount_amount as the TOTAL row discount (per_unit × qty).
-                # ERPNext's discount_amount field is per-unit: it uses
-                #   rate = price_list_rate - discount_amount
-                #   net  = rate × qty
-                # so we must store the per-unit value, not the row total.
-                discount_per_unit = flt(discount_amt_item / item_qty, 2)
-                item.rate = flt(max(0, plr - discount_per_unit), 2)
-                item.discount_amount = discount_per_unit  # per-unit for ERPNext
-                item.discount_percentage = 0
-            elif discount_pct > 0 and plr > 0:
-                expected_rate = flt(plr * (1 - discount_pct / 100), 2)
-                if flt(item.rate) > expected_rate + 0.01:
-                    item.rate = expected_rate
+            discount_amt_item = flt(item.get("discount_amount") or 0)
+            pr_val = item.get("pricing_rules") or ""
+            has_pricing_rule = bool(pr_val.strip() if isinstance(pr_val, str) else pr_val)
 
             # Convert pricing_rules from list to comma-separated string
-            # ERPNext expects pricing_rules as a string, not a list
             pricing_rules = item.get("pricing_rules")
             if pricing_rules:
                 if isinstance(pricing_rules, list):
                     item.pricing_rules = ",".join(str(r) for r in pricing_rules)
                 elif isinstance(pricing_rules, str) and pricing_rules.startswith("["):
-                    # Handle JSON string representation of list
                     try:
                         rules_list = json.loads(pricing_rules)
                         if isinstance(rules_list, list):
                             item.pricing_rules = ",".join(str(r) for r in rules_list)
                     except (json.JSONDecodeError, TypeError):
-                        # Keep original value - malformed JSON will be handled by standardize_pricing_rules
                         item.pricing_rules = ""
+
+            if not has_pricing_rule and (discount_amt_item > 0 or discount_pct > 0) and plr > 0:
+                # Manual per-item discount: accumulate into invoice-level discount_amount
+                # and restore item to full price so ERPNext's calculate_taxes_and_totals()
+                # sees clean items (no per-item discount to lose or double-apply).
+                if discount_amt_item > 0:
+                    # Frontend sends TOTAL row discount; accumulate as-is
+                    _manual_item_discount_total += discount_amt_item
+                else:
+                    _manual_item_discount_total += flt(plr * item_qty * discount_pct / 100, 2)
+                item.rate = plr          # full price
+                item.discount_amount = 0
+                item.discount_percentage = 0
+            elif not has_pricing_rule and plr > 0:
+                # No discount on this item — just ensure rate equals price_list_rate
+                item.rate = plr
+            elif has_pricing_rule and discount_amt_item > 0 and plr > 0:
+                # Pricing-rule discount: convert frontend TOTAL to per-unit for ERPNext
+                discount_per_unit = flt(discount_amt_item / item_qty, 2)
+                item.rate = flt(max(0, plr - discount_per_unit), 2)
+                item.discount_amount = discount_per_unit
+                item.discount_percentage = 0
+            elif has_pricing_rule and discount_pct > 0 and plr > 0:
+                expected_rate = flt(plr * (1 - discount_pct / 100), 2)
+                if flt(item.rate) > expected_rate + 0.01:
+                    item.rate = expected_rate
 
 
         # Set invoice flags BEFORE calculations
@@ -662,30 +674,9 @@ def update_invoice(data):
         # Populate missing fields (company, currency, accounts, etc.)
         invoice_doc.set_missing_values()
 
-        # Trace item discount state after set_missing_values() but before calculate_taxes_and_totals()
-        _ui_gt = flt(data.get("ui_grand_total") or data.get("grand_total") or 0)
-        if _ui_gt > 0:
-            _item_lines = []
-            for _it in invoice_doc.get("items", []):
-                _item_lines.append(
-                    f"  {_it.get('item_code') or '?'}: qty={flt(_it.get('qty') or 0)} "
-                    f"rate={flt(_it.get('rate') or 0)} plr={flt(_it.get('price_list_rate') or 0)} "
-                    f"da={flt(_it.get('discount_amount') or 0)} dp={flt(_it.get('discount_percentage') or 0)} "
-                    f"pr={repr(_it.get('pricing_rules') or '')}"
-                )
-            frappe.log_error(
-                title="POS update_invoice item state",
-                message=(
-                    f"Invoice name: {invoice_doc.get('name') or '(new)'}\n"
-                    f"UI grand total from data: {_ui_gt:,.0f}\n"
-                    f"data.discount_amount: {flt(data.get('discount_amount') or 0):,.0f}\n"
-                    f"Items after set_missing_values, before calculate_taxes_and_totals:\n"
-                    + "\n".join(_item_lines)
-                ),
-            )
-
         # Re-enforce discount AFTER set_missing_values() which may reset it.
-        _discount_amount = flt(data.get("discount_amount") or 0)
+        # Include any manual per-item discounts folded into the invoice-level total.
+        _discount_amount = flt(data.get("discount_amount") or 0) + _manual_item_discount_total
         if _discount_amount > 0:
             invoice_doc.discount_amount = _discount_amount
             invoice_doc.apply_discount_on = data.get("apply_discount_on") or "Grand Total"
@@ -1217,52 +1208,26 @@ def submit_invoice(invoice=None, data=None):
         # discount_amount on the invoice — identical to how the user's manual discount works.
         # Items that have a pricing rule keep their per-item discount unchanged.
         _manual_item_discount_total = 0
-        _item_discount_trace = []
         if doctype == "Sales Invoice" and not invoice_doc.get("is_return"):
             for _item in invoice_doc.get("items", []):
-                _ic = _item.get("item_code") or "?"
-                _is_free = _item.get("is_free_item")
-                if _is_free:
-                    _item_discount_trace.append(f"  {_ic}: SKIPPED (free item)")
+                if _item.get("is_free_item"):
                     continue
                 _pr = _item.get("pricing_rules") or ""
                 _has_pr = bool(_pr.strip() if isinstance(_pr, str) else _pr)
+                if _has_pr:
+                    continue
                 _da = flt(_item.get("discount_amount") or 0)
                 _dp = flt(_item.get("discount_percentage") or 0)
                 _plr = flt(_item.get("price_list_rate") or _item.get("rate") or 0)
                 _qty = flt(_item.get("qty") or 1) or 1
-                _rate = flt(_item.get("rate") or 0)
-                _item_discount_trace.append(
-                    f"  {_ic}: qty={_qty} rate={_rate} plr={_plr} da={_da} dp={_dp} "
-                    f"pr={repr(_pr)} has_pr={_has_pr}"
-                )
-                if _has_pr:
-                    continue
                 if _da > 0:
-                    _contrib = _da * _qty
-                    _manual_item_discount_total += _contrib
-                    _item_discount_trace.append(f"    → folded da*qty = {_contrib}")
+                    _manual_item_discount_total += _da * _qty
                 elif _dp > 0:
-                    _contrib = flt(_plr * _qty * _dp / 100, 2)
-                    _manual_item_discount_total += _contrib
-                    _item_discount_trace.append(f"    → folded pct discount = {_contrib}")
+                    _manual_item_discount_total += flt(_plr * _qty * _dp / 100, 2)
                 if _da > 0 or _dp > 0:
-                    _item.rate = _plr          # restore full price
+                    _item.rate = _plr
                     _item.discount_amount = 0
                     _item.discount_percentage = 0
-
-        # Always log per-item discount trace so we can debug mismatch issues
-        _trace_lines = "\n".join(_item_discount_trace) if _item_discount_trace else "  (no items)"
-        frappe.log_error(
-            title="POS Item Discount Fold Trace",
-            message=(
-                f"Invoice: {invoice.get('name') or '(new)'}\n"
-                f"UI grand total: {flt(data.get('ui_grand_total') or 0):,.0f}\n"
-                f"data.discount_amount: {flt(data.get('discount_amount') or 0):,.0f}\n"
-                f"_manual_item_discount_total: {_manual_item_discount_total:,.0f}\n"
-                f"Items:\n{_trace_lines}"
-            ),
-        )
 
         # Ensure update_stock is set for Sales Invoice
         if doctype == "Sales Invoice":
