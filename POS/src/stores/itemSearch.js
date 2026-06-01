@@ -165,6 +165,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 	// Pinned items state - per POS Profile, persisted server-side
 	const pinnedItems = ref(new Set())
+	const pinnedItemDetails = ref([]) // Full item objects for pinned codes
 
 	// Sorting state - for user-triggered sorting filters
 	const sortBy = ref(null) // Options: 'name', 'quantity', 'item_group', null (no sorting)
@@ -614,9 +615,21 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			}
 		}
 
+		// Step 3b: Prepend pinned item details when not searching
+		// These are fetched upfront so they appear even if not yet in the lazy-loaded list
+		const isSearchingNow = !!searchTerm.value?.trim()
+		let sourceList = list
+		if (!isSearchingNow && pinnedItemDetails.value.length > 0) {
+			const listCodes = new Set(list.map((i) => i.item_code))
+			const extraPinned = pinnedItemDetails.value.filter(
+				(i) => !listCodes.has(i.item_code),
+			)
+			sourceList = extraPinned.length > 0 ? [...extraPinned, ...list] : list
+		}
+
 		// Step 4: Inject live stock quantities (optimized)
 		// Use a simple map operation - O(n) complexity
-		const itemsWithStock = list.map((item) => {
+		const itemsWithStock = sourceList.map((item) => {
 			// Get display stock (includes reservations from cart)
 			const displayStock = stockStore.getDisplayStock(item.item_code)
 			// Get original server stock (without reservations)
@@ -1889,6 +1902,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	async function loadPinnedItems(profile) {
 		if (!profile) {
 			pinnedItems.value = new Set()
+			pinnedItemDetails.value = []
 			return
 		}
 		try {
@@ -1897,6 +1911,20 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			})
 			const list = result?.message || result || []
 			pinnedItems.value = new Set(list)
+
+			if (list.length > 0) {
+				// Fetch full item details so pinned items appear at top even before lazy load reaches them
+				const detailsResult = await call(
+					"pos_next.api.pinned_items.get_pinned_item_details",
+					{ pos_profile: profile, item_codes: JSON.stringify(list) },
+				)
+				pinnedItemDetails.value = detailsResult?.message || detailsResult || []
+				if (pinnedItemDetails.value.length > 0) {
+					registerItems(pinnedItemDetails.value, registeredAllItems)
+				}
+			} else {
+				pinnedItemDetails.value = []
+			}
 		} catch (e) {
 			log.warn("Failed to load pinned items", e)
 		}
@@ -1910,8 +1938,23 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				pos_profile: profile,
 				item_code,
 			})
-			const list = result?.message?.pinned_items || result?.pinned_items || []
+			const data = result?.message || result || {}
+			const list = data.pinned_items || []
 			pinnedItems.value = new Set(list)
+
+			// Re-fetch details to reflect updated pin list
+			if (list.length > 0) {
+				const detailsResult = await call(
+					"pos_next.api.pinned_items.get_pinned_item_details",
+					{ pos_profile: profile, item_codes: JSON.stringify(list) },
+				)
+				pinnedItemDetails.value = detailsResult?.message || detailsResult || []
+				if (pinnedItemDetails.value.length > 0) {
+					registerItems(pinnedItemDetails.value, registeredAllItems)
+				}
+			} else {
+				pinnedItemDetails.value = []
+			}
 		} catch (e) {
 			log.warn("Failed to toggle pinned item", e)
 		}
