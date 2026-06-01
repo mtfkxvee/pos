@@ -2788,6 +2788,14 @@ def apply_offers(invoice_data, selected_offers=None):
             # Use batch-fetched item details
             cached = item_details_map.get(item_code)
 
+            # Enrich prepared_items with item_group/brand from cache so fallback
+            # path (_item_qualifies_for_rule) can match on these fields
+            if cached:
+                if not item.get("item_group"):
+                    item.item_group = cached.item_group
+                if not item.get("brand"):
+                    item.brand = cached.brand
+
             conversion_factor = flt(item.get("conversion_factor") or 1) or 1
             price_list_rate = flt(item.get("price_list_rate") or item.get("rate") or 0)
 
