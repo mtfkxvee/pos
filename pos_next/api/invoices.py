@@ -1167,6 +1167,34 @@ def submit_invoice(invoice=None, data=None):
             invoice_doc = frappe.get_doc(doctype, invoice_name)
             invoice_doc.update(invoice)
 
+        # Fold manual per-item discounts into invoice-level discount_amount.
+        # Items with no pricing_rules that carry discount_percentage or discount_amount
+        # (entered via the edit-item dialog) are reset to their full price and their
+        # total discount is accumulated so it travels as a single additional
+        # discount_amount on the invoice — identical to how the user's manual discount works.
+        # Items that have a pricing rule keep their per-item discount unchanged.
+        _manual_item_discount_total = 0
+        if doctype == "Sales Invoice" and not invoice_doc.get("is_return"):
+            for _item in invoice_doc.get("items", []):
+                if _item.get("is_free_item"):
+                    continue
+                _pr = _item.get("pricing_rules") or ""
+                _has_pr = bool(_pr.strip() if isinstance(_pr, str) else _pr)
+                if _has_pr:
+                    continue
+                _da = flt(_item.get("discount_amount") or 0)   # per-unit (converted by update_invoice)
+                _dp = flt(_item.get("discount_percentage") or 0)
+                _plr = flt(_item.get("price_list_rate") or _item.get("rate") or 0)
+                _qty = flt(_item.get("qty") or 1) or 1
+                if _da > 0:
+                    _manual_item_discount_total += _da * _qty
+                elif _dp > 0:
+                    _manual_item_discount_total += flt(_plr * _qty * _dp / 100, 2)
+                if _da > 0 or _dp > 0:
+                    _item.rate = _plr          # restore full price
+                    _item.discount_amount = 0
+                    _item.discount_percentage = 0
+
         # Ensure update_stock is set for Sales Invoice
         if doctype == "Sales Invoice":
             invoice_doc.update_stock = 1
@@ -1371,11 +1399,13 @@ def submit_invoice(invoice=None, data=None):
         if frontend_remarks:
             invoice_doc.remarks = frontend_remarks
 
-        # Set discount at invoice level (promo + manual combined).
+        # Set discount at invoice level (promo + manual + folded per-item discounts).
+        # _manual_item_discount_total contains discounts from items without pricing rules
+        # that were folded above; data.discount_amount is the user's manual/promo discount.
         # Zero additional_discount_percentage so ERPNext doesn't recalculate it
         # as 1% × net_total (which would override our fixed amount).
         # The CustomSalesInvoice.validate() override preserves this via flags.
-        discount_amount = flt(data.get("discount_amount") or invoice.get("discount_amount") or 0)
+        discount_amount = flt(data.get("discount_amount") or 0) + _manual_item_discount_total
         if discount_amount > 0:
             invoice_doc.discount_amount = discount_amount
             invoice_doc.additional_discount_percentage = 0
