@@ -699,27 +699,6 @@ def update_invoice(data):
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
 
-        # Trace final totals after calculate_taxes_and_totals
-        if _ui_gt > 0:
-            _item_lines2 = []
-            for _it in invoice_doc.get("items", []):
-                _item_lines2.append(
-                    f"  {_it.get('item_code') or '?'}: qty={flt(_it.get('qty') or 0)} "
-                    f"rate={flt(_it.get('rate') or 0)} net_amount={flt(_it.get('net_amount') or 0)} "
-                    f"da={flt(_it.get('discount_amount') or 0)} dp={flt(_it.get('discount_percentage') or 0)}"
-                )
-            frappe.log_error(
-                title="POS update_invoice after calc",
-                message=(
-                    f"Invoice name: {invoice_doc.get('name') or '(new)'}\n"
-                    f"net_total={flt(invoice_doc.net_total or 0):,.0f}  "
-                    f"grand_total={flt(invoice_doc.grand_total or 0):,.0f}  "
-                    f"discount_amount={flt(invoice_doc.discount_amount or 0):,.0f}\n"
-                    f"Items after calculate_taxes_and_totals:\n"
-                    + "\n".join(_item_lines2)
-                ),
-            )
-
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:
             mode_of_payment = payment.get("mode_of_payment")
