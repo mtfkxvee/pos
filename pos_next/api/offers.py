@@ -189,7 +189,12 @@ class EligibilityFetcher:
 
 	@staticmethod
 	def _fetch_item_groups(parent_names: List[str]) -> Dict[str, List[str]]:
-		"""Fetch item groups for given parents"""
+		"""Fetch item groups for given parents, expanding to include all descendant groups.
+
+		ERPNext pricing rules configured for a parent group (e.g. LADIESWEAR) are
+		intended to apply to all child groups as well (e.g. Ladies Jackets, Ladies Tops).
+		We expand the list here so the frontend exact-match check works correctly.
+		"""
 		results = frappe.db.sql("""
 			SELECT parent, item_group
 			FROM `tabPricing Rule Item Group`
@@ -199,7 +204,39 @@ class EligibilityFetcher:
 		groups_map = {}
 		for row in results:
 			groups_map.setdefault(row["parent"], []).append(row["item_group"])
-		return groups_map
+
+		if not groups_map:
+			return {}
+
+		# Collect all unique root groups to expand
+		all_root_groups = list({g for groups in groups_map.values() for g in groups})
+
+		# One SQL join fetches all descendants (including the group itself) for all
+		# root groups using Frappe's Nested Set Model lft/rgt columns.
+		descendants_map = {}
+		if all_root_groups:
+			try:
+				desc_results = frappe.db.sql("""
+					SELECT root_ig.name AS root_group, child_ig.name AS descendant
+					FROM `tabItem Group` root_ig
+					JOIN `tabItem Group` child_ig
+						ON child_ig.lft >= root_ig.lft
+						AND child_ig.rgt <= root_ig.rgt
+					WHERE root_ig.name IN %s
+				""", [all_root_groups], as_dict=1)
+				for row in desc_results:
+					descendants_map.setdefault(row["root_group"], set()).add(row["descendant"])
+			except Exception:
+				pass  # Fall back to exact groups only if NSM query fails
+
+		expanded_map = {}
+		for parent, groups in groups_map.items():
+			expanded = set(groups)
+			for group in groups:
+				expanded.update(descendants_map.get(group, set()))
+			expanded_map[parent] = list(expanded)
+
+		return expanded_map
 
 	@staticmethod
 	def _fetch_brands(parent_names: List[str]) -> Dict[str, List[str]]:
