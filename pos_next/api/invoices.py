@@ -2633,13 +2633,17 @@ def _item_qualifies_for_rule(item_doc, rule_doc):
             return False
         try:
             from frappe.utils.nestedset import get_descendants_of
+            _desc_log = []
             for rg in rule_groups:
                 try:
                     descendants = get_descendants_of("Item Group", rg, ignore_permissions=True)
+                    _desc_log.append(f"  rg={rg} descendants_count={len(descendants)} item_group_in={item_group in descendants}")
                     if item_group in descendants:
+                        frappe.log_error(title="POS _item_qualifies TRUE", message=f"item_group={item_group} matched rg={rg}")
                         return True
-                except Exception:
-                    pass
+                except Exception as ex:
+                    _desc_log.append(f"  rg={rg} ERROR={ex}")
+            frappe.log_error(title="POS _item_qualifies FALSE", message=f"item_group={item_group} rule_groups={rule_groups}\n" + "\n".join(_desc_log))
             return False
         except ImportError:
             return False
@@ -3183,6 +3187,12 @@ def apply_offers(invoice_data, selected_offers=None):
         if selected_offer_names:
             # Populate rule_map with any selected rules ERPNext missed entirely
             missed_names = [n for n in selected_offer_names if n not in applied_rules and n not in rule_map]
+            _dbg_lines = [
+                f"selected_offer_names={selected_offer_names}",
+                f"applied_rules={applied_rules}",
+                f"rule_map keys={list(rule_map.keys())}",
+                f"missed_names={missed_names}",
+            ]
             if missed_names:
                 missed_records = frappe.get_all(
                     "Pricing Rule",
@@ -3194,10 +3204,17 @@ def apply_offers(invoice_data, selected_offers=None):
                     qualifies = _rule_qualifies_for_transaction(
                         full_rule, customer_group, transaction_total, pricing_args.get("transaction_date")
                     )
+                    _dbg_lines.append(
+                        f"  missed {rec.name}: p_or_p={rec.price_or_product_discount} apply_on={full_rule.apply_on} "
+                        f"item_groups={[r.item_group for r in (full_rule.item_groups or [])]} qualifies_tx={qualifies}"
+                    )
                     if qualifies:
                         rule_map[rec.name] = frappe._dict(rec)
 
             unapplied = [n for n in selected_offer_names if n not in applied_rules and n in rule_map]
+            _dbg_lines.append(f"unapplied={unapplied}")
+            _dbg_lines.append(f"items_groups={[{'code': i.get('item_code'), 'group': i.get('item_group')} for i in prepared_items]}")
+            frappe.log_error(title="POS fallback diag v2", message="\n".join(_dbg_lines))
             for rule_name in unapplied:
                 rule_info = rule_map[rule_name]
                 full_rule = frappe.get_cached_doc("Pricing Rule", rule_name)
