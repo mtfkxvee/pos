@@ -447,7 +447,7 @@
 		</div>
 
 		<!-- Cart Items -->
-		<div class="flex-1 overflow-y-auto p-0.5 sm:p-1.5 bg-gray-50">
+		<div ref="cartScrollContainer" class="flex-1 overflow-y-auto p-0.5 sm:p-1.5 bg-gray-50">
 			<div
 				v-if="items.length === 0"
 				class="flex flex-col items-center justify-center h-full px-3 sm:px-4 py-6"
@@ -1270,6 +1270,7 @@ const emit = defineEmits([
  * ============================================================================
  */
 // Customer search state
+const cartScrollContainer = ref(null) // Ref to cart items scroll container
 const customerSearch = ref("") // Current search query
 const customerSearchContainer = ref(null) // Ref to search container for click-outside detection
 const customerSearchFocused = ref(false) // Track if search input is focused
@@ -1351,6 +1352,16 @@ watch(
 			giftCardsResource.reload()
 		} else {
 			availableGiftCards.value = []
+		}
+	},
+)
+
+watch(
+	() => props.items.length,
+	async (newLen, oldLen) => {
+		if (newLen > oldLen && cartScrollContainer.value) {
+			await nextTick()
+			cartScrollContainer.value.scrollTop = cartScrollContainer.value.scrollHeight
 		}
 	},
 )
