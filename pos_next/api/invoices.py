@@ -2916,6 +2916,17 @@ def apply_offers(invoice_data, selected_offers=None):
         else:
             pricing_results = []
 
+        # Diagnostic log — remove after debugging nested item group issue
+        frappe.log_error(
+            title="POS apply_offers diagnostic",
+            message=(
+                f"selected_offer_names: {selected_offer_names}\n"
+                f"pricing_results count: {len(pricing_results)}\n"
+                f"items: {[{'code': pi.get('item_code'), 'group': pi.get('item_group')} for pi in pricing_items]}\n"
+                f"pricing_results[0] (if any): {pricing_results[0] if pricing_results else '(none)'}"
+            ),
+        )
+
         if not pricing_results and not selected_offer_names:
             return {"items": items}
 

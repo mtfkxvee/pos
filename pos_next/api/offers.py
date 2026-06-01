@@ -480,6 +480,17 @@ def get_offers(pos_profile: str) -> List[Dict]:
 		standalone_offers = _get_standalone_pricing_rule_offers(profile.company, date)
 		offers.extend(standalone_offers)
 
+		# Diagnostic: log every offer with its eligible_item_groups
+		offer_log = []
+		for o in offers:
+			if o.apply_on == "Item Group":
+				offer_log.append(f"  {o.name} | apply_on={o.apply_on} | groups={o.eligible_item_groups}")
+		if offer_log:
+			frappe.log_error(
+				title="POS get_offers item_group diagnostic",
+				message="\n".join(offer_log),
+			)
+
 		return [offer.to_dict() for offer in offers]
 
 	except Exception as e:
