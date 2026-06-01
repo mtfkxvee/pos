@@ -1174,26 +1174,52 @@ def submit_invoice(invoice=None, data=None):
         # discount_amount on the invoice — identical to how the user's manual discount works.
         # Items that have a pricing rule keep their per-item discount unchanged.
         _manual_item_discount_total = 0
+        _item_discount_trace = []
         if doctype == "Sales Invoice" and not invoice_doc.get("is_return"):
             for _item in invoice_doc.get("items", []):
-                if _item.get("is_free_item"):
+                _ic = _item.get("item_code") or "?"
+                _is_free = _item.get("is_free_item")
+                if _is_free:
+                    _item_discount_trace.append(f"  {_ic}: SKIPPED (free item)")
                     continue
                 _pr = _item.get("pricing_rules") or ""
                 _has_pr = bool(_pr.strip() if isinstance(_pr, str) else _pr)
-                if _has_pr:
-                    continue
-                _da = flt(_item.get("discount_amount") or 0)   # per-unit (converted by update_invoice)
+                _da = flt(_item.get("discount_amount") or 0)
                 _dp = flt(_item.get("discount_percentage") or 0)
                 _plr = flt(_item.get("price_list_rate") or _item.get("rate") or 0)
                 _qty = flt(_item.get("qty") or 1) or 1
+                _rate = flt(_item.get("rate") or 0)
+                _item_discount_trace.append(
+                    f"  {_ic}: qty={_qty} rate={_rate} plr={_plr} da={_da} dp={_dp} "
+                    f"pr={repr(_pr)} has_pr={_has_pr}"
+                )
+                if _has_pr:
+                    continue
                 if _da > 0:
-                    _manual_item_discount_total += _da * _qty
+                    _contrib = _da * _qty
+                    _manual_item_discount_total += _contrib
+                    _item_discount_trace.append(f"    → folded da*qty = {_contrib}")
                 elif _dp > 0:
-                    _manual_item_discount_total += flt(_plr * _qty * _dp / 100, 2)
+                    _contrib = flt(_plr * _qty * _dp / 100, 2)
+                    _manual_item_discount_total += _contrib
+                    _item_discount_trace.append(f"    → folded pct discount = {_contrib}")
                 if _da > 0 or _dp > 0:
                     _item.rate = _plr          # restore full price
                     _item.discount_amount = 0
                     _item.discount_percentage = 0
+
+        # Always log per-item discount trace so we can debug mismatch issues
+        _trace_lines = "\n".join(_item_discount_trace) if _item_discount_trace else "  (no items)"
+        frappe.log_error(
+            title="POS Item Discount Fold Trace",
+            message=(
+                f"Invoice: {invoice.get('name') or '(new)'}\n"
+                f"UI grand total: {flt(data.get('ui_grand_total') or 0):,.0f}\n"
+                f"data.discount_amount: {flt(data.get('discount_amount') or 0):,.0f}\n"
+                f"_manual_item_discount_total: {_manual_item_discount_total:,.0f}\n"
+                f"Items:\n{_trace_lines}"
+            ),
+        )
 
         # Ensure update_stock is set for Sales Invoice
         if doctype == "Sales Invoice":
