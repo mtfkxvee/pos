@@ -192,8 +192,9 @@ class EligibilityFetcher:
 		"""Fetch item groups for given parents, expanding to include all descendant groups.
 
 		ERPNext pricing rules configured for a parent group (e.g. LADIESWEAR) are
-		intended to apply to all child groups as well (e.g. Ladies Jackets, Ladies Tops).
-		We expand the list here so the frontend exact-match check works correctly.
+		intended to apply to all child groups as well (e.g. Ladies Tops, Shirts).
+		We expand the list here so the frontend exact-match check works correctly
+		for deeply nested hierarchies (fashion → ladieswear → top → shirt).
 		"""
 		results = frappe.db.sql("""
 			SELECT parent, item_group
@@ -211,10 +212,27 @@ class EligibilityFetcher:
 		# Collect all unique root groups to expand
 		all_root_groups = list({g for groups in groups_map.values() for g in groups})
 
-		# One SQL join fetches all descendants (including the group itself) for all
-		# root groups using Frappe's Nested Set Model lft/rgt columns.
+		# Build a complete descendants map using two methods:
+		# Method 1: Frappe's built-in get_descendants_of (reliable, uses NSM internally)
+		# Method 2: Raw lft/rgt SQL JOIN as fallback if method 1 fails
 		descendants_map = {}
-		if all_root_groups:
+
+		# Method 1: Frappe built-in (preferred — handles edge cases correctly)
+		try:
+			from frappe.utils.nestedset import get_descendants_of
+			for group in all_root_groups:
+				try:
+					children = get_descendants_of("Item Group", group, ignore_permissions=True)
+					descendants_map.setdefault(group, set()).add(group)  # include self
+					descendants_map[group].update(children)
+				except Exception:
+					descendants_map.setdefault(group, set()).add(group)
+		except ImportError:
+			pass
+
+		# Method 2: lft/rgt SQL as fallback for any groups method 1 didn't cover
+		missing = [g for g in all_root_groups if g not in descendants_map]
+		if missing:
 			try:
 				desc_results = frappe.db.sql("""
 					SELECT root_ig.name AS root_group, child_ig.name AS descendant
@@ -223,11 +241,13 @@ class EligibilityFetcher:
 						ON child_ig.lft >= root_ig.lft
 						AND child_ig.rgt <= root_ig.rgt
 					WHERE root_ig.name IN %s
-				""", [all_root_groups], as_dict=1)
+				""", [missing], as_dict=1)
 				for row in desc_results:
 					descendants_map.setdefault(row["root_group"], set()).add(row["descendant"])
 			except Exception:
-				pass  # Fall back to exact groups only if NSM query fails
+				# Last resort: exact match only (no descendants)
+				for group in missing:
+					descendants_map.setdefault(group, set()).add(group)
 
 		expanded_map = {}
 		for parent, groups in groups_map.items():
