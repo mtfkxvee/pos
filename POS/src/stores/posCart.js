@@ -1068,10 +1068,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				return
 			}
 
-			// Find offers that are not yet applied
+			// Find offers that are not yet applied, excluding those that require
+			// manual activation (validate_applied_rule = 1)
 			const appliedOfferCodes = new Set(appliedOffers.value.map((o) => o.code))
 			const newOffers = allEligibleOffers.filter(
-				(offer) => !appliedOfferCodes.has(offer.name),
+				(offer) => !appliedOfferCodes.has(offer.name) && !offer.validate_applied_rule,
 			)
 
 			const existingCodes = appliedOffers.value.map((entry) => entry.code)

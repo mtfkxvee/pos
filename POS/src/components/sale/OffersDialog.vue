@@ -162,7 +162,7 @@
 							</p>
 						</div>
 
-						<!-- Offer Status - Auto-applied/removed based on cart -->
+						<!-- Offer Status -->
 						<div class="mt-3">
 							<div
 								v-if="isOfferApplied(offer)"
@@ -173,6 +173,19 @@
 								</svg>
 								{{ __('Applied') }}
 							</div>
+							<!-- Manual activation required -->
+							<button
+								v-else-if="offer.validate_applied_rule"
+								type="button"
+								class="w-full py-2 px-4 rounded-lg font-semibold text-sm bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white flex items-center justify-center gap-2 transition-colors"
+								@click="$emit('apply-offer', offer)"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+								</svg>
+								{{ __('Tap to Apply') }}
+							</button>
+							<!-- Auto-apply -->
 							<div
 								v-else
 								class="w-full py-2 px-4 rounded-lg font-semibold text-sm bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center gap-2"
@@ -232,7 +245,7 @@ const props = defineProps({
 	},
 })
 
-const emit = defineEmits(["update:modelValue"])
+const emit = defineEmits(["update:modelValue", "apply-offer"])
 
 const show = ref(props.modelValue)
 const appliedOfferCodes = computed(() => {

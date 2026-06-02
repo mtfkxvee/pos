@@ -86,6 +86,7 @@ class Offer:
 	is_recursive: int = 0  # 1 if offer applies recursively (e.g., buy 2 get 1 free for every 2)
 	recurse_for: float = 0  # Give free item for every N quantity (used when is_recursive=1)
 	apply_recursion_over: float = 0  # Qty for which recursion isn't applicable
+	validate_applied_rule: int = 0  # 1 = must be manually activated by cashier, no auto-apply
 
 	def to_dict(self) -> Dict:
 		"""Convert to dictionary for API response"""
@@ -448,6 +449,7 @@ class OfferBuilder:
 			free_qty=flt(rule.get("free_qty", 0)) if not is_price_discount else 0,
 			free_item_uom=rule.get("free_item_uom") if not is_price_discount else None,
 			same_item=1 if rule.get("same_item") and not is_price_discount else 0,
+			validate_applied_rule=1 if rule.get("validate_applied_rule") else 0,
 		)
 
 
@@ -560,7 +562,8 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			rate_or_discount, rate, discount_amount, discount_percentage,
 			min_qty, max_qty, min_amt, max_amt,
 			free_item, free_qty, free_item_uom, same_item,
-			priority, valid_from, valid_upto
+			priority, valid_from, valid_upto,
+			validate_applied_rule
 		FROM `tabPricing Rule`
 		WHERE
 			disable = 0
