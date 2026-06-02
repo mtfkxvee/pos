@@ -323,6 +323,7 @@ import {
 } from "@heroicons/vue/24/outline"
 import { call } from "@/utils/apiWrapper"
 import { useToast } from "@/composables/useToast"
+import { friendlyError } from "@/utils/errorHandler"
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -497,7 +498,7 @@ async function saveEntry(submit) {
 		goToList()
 		await loadEntries(true)
 	} catch (e) {
-		showError(e.message || __("Failed to save journal entry."))
+		showError(friendlyError(e, __("Failed to save journal entry.")))
 	} finally {
 		submitting.value = false
 	}
@@ -511,7 +512,7 @@ async function confirmCancel(entry) {
 		goToList()
 		await loadEntries(true)
 	} catch (e) {
-		showError(e.message || __("Failed to cancel."))
+		showError(friendlyError(e, __("Failed to cancel.")))
 	}
 }
 
@@ -523,7 +524,7 @@ async function confirmDelete(entry) {
 		goToList()
 		await loadEntries(true)
 	} catch (e) {
-		showError(e.message || __("Failed to delete."))
+		showError(friendlyError(e, __("Failed to delete.")))
 	}
 }
 

@@ -204,6 +204,7 @@
 import { usePOSPermissions } from "@/composables/usePermissions"
 import { useToast } from "@/composables/useToast"
 import { useCountriesStore } from "@/stores/countries"
+import { friendlyError } from "@/utils/errorHandler"
 import { logger } from "@/utils/logger"
 import { saveOfflineCustomer } from "@/utils/offline"
 import { offlineState } from "@/utils/offline/offlineState"
@@ -396,7 +397,12 @@ const updateCustomerResource = createResource({
 	},
 	onError: (error) => {
 		log.error("Error updating customer", error)
-		showError(error.message || __("Failed to update customer"))
+		const msg = error.message || ""
+		if (msg.includes("UniqueValidationError") || msg.includes("Duplicate entry")) {
+			showError(__("Kode pelanggan {0} sudah digunakan. Gunakan kode lain.", [customerData.value.custom_kode_pelanggan]))
+		} else {
+			showError(friendlyError(error, __("Failed to update customer")))
+		}
 	},
 })
 
@@ -506,7 +512,7 @@ const handleCreate = async () => {
 			show.value = false
 		} catch (error) {
 			log.error("Error saving customer offline", error)
-			showError(error.message || __("Failed to save customer offline"))
+			showError(friendlyError(error, __("Failed to save customer offline")))
 		}
 	} else {
 		await createCustomerResource.submit()

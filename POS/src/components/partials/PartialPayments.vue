@@ -215,6 +215,7 @@ import { getInvoiceStatusColor } from "@/utils/invoice"
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { useToast } from "@/composables/useToast"
+import { friendlyError } from "@/utils/errorHandler"
 import { useFormatters } from "@/composables/useFormatters"
 import { Button, call } from "frappe-ui"
 import { onMounted, ref, watch } from "vue"
@@ -283,7 +284,7 @@ async function loadInvoices() {
 		invoices.value = result || []
 	} catch (error) {
 		console.error("Error loading partial payments:", error)
-		showError(error.message || __("Failed to load partial payments"))
+		showError(friendlyError(error, __("Failed to load partial payments")))
 	} finally {
 		loading.value = false
 	}
@@ -349,7 +350,7 @@ async function handlePaymentCompleted(paymentData) {
 		selectedInvoice.value = null
 	} catch (error) {
 		console.error("[PartialPayments] Error adding payment:", error)
-		showError(error.message || __("Failed to add payment"))
+		showError(friendlyError(error, __("Failed to add payment")))
 	}
 }
 

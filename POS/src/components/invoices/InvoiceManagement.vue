@@ -577,6 +577,7 @@ import {
 	getCachedUnpaidSummary,
 } from "@/utils/offline/sync"
 import { logger } from "@/utils/logger"
+import { friendlyError } from "@/utils/errorHandler"
 
 const log = logger.create("InvoiceManagement")
 const { showSuccess, showError } = useToast()
@@ -877,7 +878,7 @@ async function loadUnpaidInvoices() {
 
 		// If we already have cached data, don't show error
 		if (unpaidInvoices.value.length === 0) {
-			showError(error.message || __("Failed to load unpaid invoices"))
+			showError(friendlyError(error, __("Failed to load unpaid invoices")))
 		}
 	} finally {
 		loading.value = false
@@ -977,7 +978,7 @@ async function handlePaymentCompleted(paymentData) {
 		selectedInvoice.value = null
 	} catch (error) {
 		console.error("Error adding payment:", error)
-		showError(error.message || __("Failed to add payment"))
+		showError(friendlyError(error, __("Failed to add payment")))
 	}
 }
 

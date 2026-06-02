@@ -270,6 +270,51 @@ export function formatErrorReport(errorContext, additionalInfo = {}) {
 }
 
 /**
+ * Convert an API error to a human-readable string safe to show to end users.
+ * Falls back to `defaultMsg` when the raw message looks technical.
+ *
+ * @param {Error|Object} error - Error from createResource onError / catch block
+ * @param {string} defaultMsg  - Fallback message if error is unreadable
+ * @returns {string}
+ */
+export function friendlyError(error, defaultMsg) {
+	const fallback = defaultMsg || __("An error occurred. Please try again.")
+
+	const excType = (error?.exc_type || "").toLowerCase()
+
+	// DB-level uniqueness constraint — always replace with something readable
+	if (excType === "uniquevalidationerror" || excType.includes("integrity")) {
+		return __("Data already exists. Please use a different value.")
+	}
+
+	// Permission / auth errors
+	if (excType === "permissionerror" || error?.httpStatus === 403) {
+		return __("You do not have permission to perform this action.")
+	}
+	if (excType === "authenticationerror" || error?.httpStatus === 401) {
+		return __("Your session has expired. Please log in again.")
+	}
+
+	// Use parseError to extract a cleaned message
+	const parsed = parseError(error)
+	const msg = parsed.message || ""
+
+	// If the cleaned message still looks technical, use fallback
+	const TECHNICAL_PATTERNS = [
+		"traceback", "exception", "stacktrace",
+		"uniquevalidationerror", "integrityerror",
+		"attributeerror", "typeerror", "keyerror",
+		"file \"/", "line \\d+",
+	]
+	const isTechnical = TECHNICAL_PATTERNS.some((p) =>
+		msg.toLowerCase().includes(p),
+	)
+
+	if (!msg || isTechnical) return fallback
+	return msg
+}
+
+/**
  * Get toast icon class based on error type
  * @param {string} errorType - error, warning, or validation
  * @returns {string} - Tailwind CSS class

@@ -1,5 +1,7 @@
 import { createResource } from "frappe-ui"
 import { computed, ref } from "vue"
+import { friendlyError } from "@/utils/errorHandler"
+import { useToast } from "@/composables/useToast"
 
 export const shiftState = ref({
 	pos_opening_shift: null,
@@ -13,6 +15,7 @@ export const shiftState = ref({
 })
 
 export function useShift() {
+	const { showError } = useToast()
 	// Check for existing open shift
 	const checkOpeningShift = createResource({
 		url: "pos_next.api.shifts.check_opening_shift",
@@ -117,6 +120,7 @@ export function useShift() {
 		},
 		onError(error) {
 			console.error("Error creating opening shift:", error)
+			showError(friendlyError(error, __("Failed to open shift. Please try again.")))
 		},
 	})
 
@@ -148,6 +152,7 @@ export function useShift() {
 		},
 		onError(error) {
 			console.error("Error submitting closing shift:", error)
+			showError(friendlyError(error, __("Failed to close shift. Please try again.")))
 		},
 	})
 
