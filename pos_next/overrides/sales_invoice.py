@@ -462,6 +462,22 @@ class CustomSalesInvoice(SalesInvoice):
 		if not cint(self.is_pos) or not self.pos_profile:
 			return
 
+		# For return invoices, copy debit_to from the original invoice so
+		# ERPNext's validate_return_against_account passes
+		if cint(self.is_return) and self.return_against:
+			try:
+				original_debit_to = frappe.db.get_value(
+					"Sales Invoice", self.return_against, "debit_to"
+				)
+				if original_debit_to:
+					self.debit_to = original_debit_to
+			except Exception as e:
+				frappe.log_error(
+					f"POS Next: failed to copy debit_to from {self.return_against}: {e}",
+					"POS Return Debit To"
+				)
+			return
+
 		if flt(self.outstanding_amount) <= 0:
 			return
 
