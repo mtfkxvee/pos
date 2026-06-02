@@ -365,7 +365,12 @@ const createCustomerResource = createResource({
 	},
 	onError: (error) => {
 		log.error("Error creating customer", error)
-		showError(error.message || __("Failed to create customer"))
+		const msg = error.message || ""
+		if (msg.includes("UniqueValidationError") || msg.includes("Duplicate entry")) {
+			showError(__("Kode pelanggan {0} sudah digunakan. Gunakan kode lain.", [customerData.value.custom_kode_pelanggan]))
+		} else {
+			showError(msg || __("Failed to create customer"))
+		}
 	},
 })
 
