@@ -363,27 +363,68 @@ def get_cashiers(doctype, txt, searchfield, start, page_len, filters):
 @frappe.whitelist()
 def get_pos_invoices(pos_opening_shift, doctype=None):
     if not doctype:
-        pos_profile = frappe.db.get_value("POS Opening Shift", pos_opening_shift, "pos_profile")
-        use_pos_invoice = False
-        doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
+        doctype = "Sales Invoice"
     submit_printed_invoices(pos_opening_shift, doctype)
     cond = " and ifnull(consolidated_invoice,'') = ''" if doctype == "POS Invoice" else ""
-    data = frappe.db.sql(
+
+    # Fetch only the header fields needed for closing shift calculations
+    invoices = frappe.db.sql(
         f"""
-	select
-		name
-	from
-		`tab{doctype}`
-	where
-		docstatus = 1 and posa_pos_opening_shift = %s{cond}
-	""",
-        (pos_opening_shift),
+        SELECT
+            name, customer, posting_date, posting_time, currency, conversion_rate,
+            grand_total, base_grand_total, net_total, base_net_total,
+            total_qty, is_return, return_against,
+            change_amount, base_change_amount
+        FROM `tab{doctype}`
+        WHERE docstatus = 1 AND posa_pos_opening_shift = %s{cond}
+        ORDER BY posting_date, posting_time
+        """,
+        (pos_opening_shift,),
         as_dict=1,
     )
 
-    data = [frappe.get_doc(doctype, d.name).as_dict() for d in data]
+    if not invoices:
+        return []
 
-    return data
+    invoice_names = [inv.name for inv in invoices]
+    invoice_map = {inv.name: inv for inv in invoices}
+
+    # Fetch taxes in one query
+    taxes_rows = frappe.db.sql(
+        f"""
+        SELECT parent, account_head, rate, tax_amount, base_tax_amount
+        FROM `tabSales Taxes and Charges`
+        WHERE parent IN ({", ".join(["%s"] * len(invoice_names))})
+        """,
+        invoice_names,
+        as_dict=1,
+    ) if invoice_names else []
+
+    # Fetch payments in one query
+    payments_rows = frappe.db.sql(
+        f"""
+        SELECT parent, mode_of_payment, amount, base_amount
+        FROM `tabSales Invoice Payment`
+        WHERE parent IN ({", ".join(["%s"] * len(invoice_names))})
+        """,
+        invoice_names,
+        as_dict=1,
+    ) if invoice_names else []
+
+    # Attach taxes and payments to their respective invoices
+    for inv in invoices:
+        inv.taxes = []
+        inv.payments = []
+
+    for row in taxes_rows:
+        if row.parent in invoice_map:
+            invoice_map[row.parent].taxes.append(row)
+
+    for row in payments_rows:
+        if row.parent in invoice_map:
+            invoice_map[row.parent].payments.append(row)
+
+    return invoices
 
 
 @frappe.whitelist()
@@ -405,6 +446,7 @@ def get_payments_entries(pos_opening_shift):
             "posting_date",
             "party",
         ],
+        limit_page_length=0,
     )
 
 
@@ -609,6 +651,7 @@ def submit_printed_invoices(pos_opening_shift, doctype):
             "docstatus": 0,
             "posa_is_printed": 1,
         },
+        limit_page_length=0,
     )
     for invoice in invoices_list:
         invoice_doc = frappe.get_doc(doctype, invoice.name)

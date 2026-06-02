@@ -60,6 +60,11 @@
             </div>
           </div>
 
+          <!-- Reconciliation tip: how to match Sales Invoice report -->
+          <div v-if="shouldShowSummary && invoiceCount > 0" class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+            {{ __('Tip: to verify in ERPNext, filter Sales Invoice by field "POS Opening Shift" = {0}', [openingShift]) }}
+          </div>
+
           <!-- No Sales Warning (hidden in entry mode when hideExpectedAmount is enabled) -->
           <div v-if="shouldShowSummary && invoiceCount === 0" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
             <div class="flex items-start gap-2 md:gap-3">
@@ -87,10 +92,12 @@
             >
               <div class="text-start">
                 <h3 class="text-sm md:text-lg font-medium text-gray-900">{{ __('Invoice Details') }}</h3>
-                <p class="text-xs md:text-sm text-gray-500">{{ __('{0} transactions • {1}', [
-                  invoiceCount,
-                  formatCurrency(closingData.grand_total)
-                ]) }}</p>
+                <p class="text-xs md:text-sm text-gray-500">
+                  {{ __('{0} transactions', [invoiceCount]) }}
+                  <span v-if="closingData.sales_count > 0" class="text-green-600">+{{ closingData.sales_count }} {{ __('sales') }}</span>
+                  <span v-if="closingData.returns_count > 0" class="text-red-500 ml-1">-{{ closingData.returns_count }} {{ __('returns') }}</span>
+                  &bull; {{ __('Net:') }} {{ formatCurrency(closingData.grand_total) }}
+                </p>
               </div>
               <svg
                 :class="['h-4 w-4 md:h-5 md:w-5 text-gray-400 transition-transform', showInvoiceDetails ? 'transform rotate-180' : '']"
