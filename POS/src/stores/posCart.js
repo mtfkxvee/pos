@@ -728,12 +728,15 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					items: responseItems,
 					freeItems,
 					appliedRules,
+					transactionDiscountAmount: tda,
 				} = parseOfferResponse(response)
 
 				suppressOfferReapply.value = true
 				applyDiscountsFromServer(responseItems)
 				processFreeItems(freeItems)
 				filterActiveOffers(appliedRules)
+				promoTransactionDiscount.value = tda > 0 ? tda : 0
+				rebuildIncrementalCache()
 
 				const offerApplied = appliedRules.includes(offerCode)
 
@@ -749,11 +752,14 @@ export const usePOSCartStore = defineStore("posCart", () => {
 								items: rollbackItems,
 								freeItems: rollbackFreeItems,
 								appliedRules: rollbackRules,
+								transactionDiscountAmount: rollbackTda,
 							} = parseOfferResponse(rollbackResponse)
 
 							applyDiscountsFromServer(rollbackItems)
 							processFreeItems(rollbackFreeItems)
 							filterActiveOffers(rollbackRules)
+							promoTransactionDiscount.value = rollbackTda > 0 ? rollbackTda : 0
+							rebuildIncrementalCache()
 						} catch (rollbackError) {
 							console.error("Error rolling back offers:", rollbackError)
 						}
