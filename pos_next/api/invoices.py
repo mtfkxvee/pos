@@ -699,6 +699,16 @@ def update_invoice(data):
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
 
+        # Round grand total to nearest 100 when a discount is applied
+        if not invoice_doc.get("is_return") and _discount_amount > 0:
+            gt = flt(invoice_doc.grand_total)
+            rounded_gt = round(gt / 100) * 100
+            if rounded_gt != gt:
+                rounding_diff = gt - rounded_gt  # positive = round down, negative = round up
+                invoice_doc.discount_amount = flt(invoice_doc.discount_amount) + rounding_diff
+                invoice_doc.grand_total = rounded_gt
+                invoice_doc.base_grand_total = rounded_gt
+
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:
             mode_of_payment = payment.get("mode_of_payment")

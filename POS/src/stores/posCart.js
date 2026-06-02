@@ -2057,9 +2057,16 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	// Grand total adjusted for transaction-level promo discounts (for UI display only).
 	// promoTransactionDiscount is NOT sent at submission — ERPNext applies it via
 	// apply_pricing_rule_on_transaction during invoice validate.
-	const adjustedGrandTotal = computed(() =>
-		Math.max(0, (grandTotal.value || 0) - (promoTransactionDiscount.value || 0)),
-	)
+	const adjustedGrandTotal = computed(() => {
+		const base = Math.max(0, (grandTotal.value || 0) - (promoTransactionDiscount.value || 0))
+		const hasDiscount =
+			(totalDiscount.value || 0) > 0 ||
+			(promoTransactionDiscount.value || 0) > 0 ||
+			(manualDiscountAmount.value || 0) > 0 ||
+			(complimentDiscountAmount.value || 0) > 0
+		if (!hasDiscount || base <= 0) return base
+		return Math.round(base / 100) * 100
+	})
 
 	return {
 		// State
