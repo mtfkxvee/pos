@@ -2780,6 +2780,14 @@ def apply_offers(invoice_data, selected_offers=None):
         index_map = []
         prepared_items = [frappe._dict(row) for row in items]
 
+        # Reset any existing discounts on prepared_items so apply_offers always
+        # recalculates from scratch. The frontend may send stale discount values
+        # (e.g. from a loaded draft), causing the fallback path to double-add.
+        for _pi in prepared_items:
+            _pi.discount_percentage = 0
+            _pi.discount_amount = 0
+            _pi.pricing_rules = ""
+
         for idx, item in enumerate(prepared_items):
             item_code = item.get("item_code")
             qty = flt(item.get("qty") or item.get("quantity") or 0)
