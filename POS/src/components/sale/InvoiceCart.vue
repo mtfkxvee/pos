@@ -397,13 +397,19 @@
 						/>
 					</svg>
 					<span class="text-[11px] font-bold text-green-700">{{ __("Offers") }}</span>
-					<!-- Badge shows ONLY applied offers count - NOT eligible/pending offers -->
-					<!-- This prevents confusion where offers show as "applied" before backend validation -->
+					<!-- Green badge: applied offers count -->
 					<span
 						v-if="appliedOfferCount > 0"
 						class="bg-green-600 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 flex-shrink-0 min-w-[16px] text-center"
 					>
 						{{ appliedOfferCount }}
+					</span>
+					<!-- Orange badge: manual offers waiting to be activated -->
+					<span
+						v-if="pendingManualOfferCount > 0"
+						class="bg-orange-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 flex-shrink-0 min-w-[16px] text-center animate-pulse"
+					>
+						{{ pendingManualOfferCount }}
 					</span>
 				</button>
 
@@ -1368,6 +1374,14 @@ watch(
  * @returns {Number} Count of applied offers
  */
 const appliedOfferCount = computed(() => (props.appliedOffers || []).length)
+
+// Count eligible manual-activation offers not yet applied by the cashier
+const pendingManualOfferCount = computed(() => {
+	const appliedCodes = new Set((props.appliedOffers || []).map((o) => o.code))
+	return offersStore.allEligibleOffers.filter(
+		(o) => o.validate_applied_rule && !appliedCodes.has(o.name),
+	).length
+})
 
 /**
  * Pre-computed customer lookup map for O(1) access by ID.
