@@ -495,6 +495,7 @@
 			:items="cartStore.invoiceItems"
 			:tax-amount="cartStore.totalTax"
 			:discount-amount="cartStore.totalDiscount + (cartStore.promoTransactionDiscount || 0)"
+			:rounding-adjustment="cartStore.roundingAdjustment"
 			:target-doctype="cartStore.targetDoctype"
 			:is-submitting="cartStore.isSubmitting"
 			@payment-completed="handlePaymentCompleted"

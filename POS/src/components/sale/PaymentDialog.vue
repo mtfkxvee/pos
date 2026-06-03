@@ -391,6 +391,13 @@
 								<span class="text-gray-600 text-start">{{ __('Discount') }}</span>
 								<span class="font-medium text-red-600 text-end">-{{ formatCurrency(discountAmount) }}</span>
 							</div>
+							<!-- Pembulatan (rounding adjustment) -->
+							<div v-if="roundingAdjustment !== 0" class="flex items-center justify-between text-sm">
+								<span class="text-gray-500 text-start italic">{{ __('Pembulatan') }}</span>
+								<span :class="['font-medium text-end italic', roundingAdjustment > 0 ? 'text-blue-600' : 'text-red-500']">
+									{{ roundingAdjustment > 0 ? '+' : '' }}{{ formatCurrency(roundingAdjustment) }}
+								</span>
+							</div>
 							<!-- Grand Total -->
 							<div class="flex items-center justify-between pt-2 mt-1 border-t border-gray-300">
 								<span :class="['font-bold text-gray-900 text-start', isCompactMode ? 'text-sm' : 'text-base']">{{ __('Grand Total') }}</span>
@@ -1062,6 +1069,10 @@ const props = defineProps({
 	allowWriteOff: {
 		type: Boolean,
 		default: false,
+	},
+	roundingAdjustment: {
+		type: Number,
+		default: 0,
 	},
 })
 

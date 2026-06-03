@@ -378,6 +378,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				toRaw(loyaltyData.value),
 				auditRules,
 				promoTransactionDiscount.value || 0,
+				adjustedGrandTotal.value,
 			)
 		} finally {
 			// Always restore — even on error — so cart state is consistent
@@ -2075,6 +2076,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		return Math.round(base / 100) * 100
 	})
 
+	// Difference between rounded grand total and pre-rounding base.
+	// Positive = rounded up, negative = rounded down.
+	const roundingAdjustment = computed(() => {
+		const base = Math.max(0, (grandTotal.value || 0) - (promoTransactionDiscount.value || 0))
+		return adjustedGrandTotal.value - base
+	})
+
 	return {
 		// State
 		invoiceItems,
@@ -2083,6 +2091,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		totalTax,
 		totalDiscount,
 		grandTotal: adjustedGrandTotal, // override: includes promo transaction discount
+		roundingAdjustment,
 		posProfile,
 		posOpeningShift,
 		payments,
