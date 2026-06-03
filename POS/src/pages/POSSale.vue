@@ -3043,10 +3043,14 @@ function handleViewInvoice(invoice) {
 async function handlePrintInvoice(invoiceData) {
 	try {
 		const paperSize = getPaperSize()
-		const printFmt = getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER"
+		const printFmt = paperSize === "80mm" ? "80 PRINTER" : "58 PRINTER"
 		if (posSettingsStore.silentPrint) {
-			// Silent mode: always use custom HTML template → QZ Tray
-			await printInvoiceCustom(invoiceData, printFmt, { silent: true });
+			// Silent mode: need full invoice data (with items) for custom HTML template
+			let fullData = invoiceData
+			if (!fullData.items || !Array.isArray(fullData.items) || fullData.items.length === 0) {
+				fullData = await call("pos_next.api.invoices.get_invoice", { invoice_name: invoiceData.name || invoiceData })
+			}
+			await printInvoiceCustom(fullData, printFmt, { silent: true });
 		} else if (invoiceData.items && Array.isArray(invoiceData.items)) {
 			await printInvoice(invoiceData, null, null, paperSize);
 		} else {

@@ -251,16 +251,11 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 </body>
 </html>`
 
-	// --- Silent print via QZ Tray ---
+	// --- Silent print via QZ Tray (no fallback — throw so caller can show toast) ---
 	if (options.silent) {
 		const printerName = options.printerName || getStoredPrinterName()
-		try {
-			await printHtml(printContent, printerName, is80mm ? 80 : 58)
-			return
-		} catch (err) {
-			log.warn("QZ Tray silent print failed, falling back to window.open:", err)
-			// fall through to popup fallback below
-		}
+		await printHtml(printContent, printerName, is80mm ? 80 : 58)
+		return
 	}
 
 	// --- Fallback: popup window ---
