@@ -361,8 +361,30 @@
 											<CheckboxField
 												v-model="settings.silent_print"
 												:label="__('Silent Print')"
-												:description="__('Print without confirmation')"
+												:description="__('Print langsung ke thermal printer tanpa dialog browser (butuh QZ Tray)')"
 											/>
+											<!-- Thermal Printer Name — shown when Silent Print is ON -->
+											<div v-if="settings.silent_print" class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+												<label class="block text-xs font-semibold text-blue-700 mb-1">
+													{{ __('Thermal Printer Name') }}
+													<span class="text-red-500">*</span>
+												</label>
+												<input
+													type="text"
+													:value="thermalPrinterName"
+													@input="thermalPrinterName = $event.target.value"
+													:placeholder="__('e.g. XPrinter-80, EPSON TM-T82')"
+													class="w-full h-8 px-2 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+												/>
+												<p class="text-xs text-blue-600 mt-1">{{ __('Nama printer harus sama persis dengan nama di Windows Devices & Printers. Tersimpan lokal per-komputer.') }}</p>
+												<button
+													@click="testQzPrint"
+													:disabled="!thermalPrinterName || isTestingPrint"
+													class="mt-2 px-3 py-1 text-xs rounded border border-blue-400 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+												>
+													{{ isTestingPrint ? __('Testing...') : __('Test Print') }}
+												</button>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -402,6 +424,7 @@ import { offlineWorker } from "@/utils/offline/workerClient"
 import { logger } from "@/utils/logger"
 import { usePOSEvents } from "@/composables/usePOSEvents"
 import TranslatedHTML from "../common/TranslatedHTML.vue"
+import { getStoredPrinterName, setStoredPrinterName, printHtml } from "@/utils/qzPrint"
 
 const log = logger.create("POSSettings")
 const {
@@ -410,6 +433,30 @@ const {
 	emitStockSyncConfigured,
 } = usePOSEvents()
 const { showSuccess, showError } = useToast()
+
+// Thermal Printer Name — stored in localStorage (per-machine, not per-site)
+const thermalPrinterName = ref(getStoredPrinterName())
+watch(thermalPrinterName, (val) => setStoredPrinterName(val))
+
+const isTestingPrint = ref(false)
+async function testQzPrint() {
+	if (!thermalPrinterName.value) return
+	isTestingPrint.value = true
+	try {
+		await printHtml(
+			`<!DOCTYPE html><html><head><meta charset="UTF-8">
+			<style>body{font-family:monospace;font-size:12px;width:58mm;}hr{border-top:1px dashed #333;}</style>
+			</head><body><p style="text-align:center;font-weight:bold;">TEST PRINT</p><hr><p>Printer: ${thermalPrinterName.value}</p><p>Status: OK</p><hr></body></html>`,
+			thermalPrinterName.value,
+			58,
+		)
+		showSuccess(__("Test print berhasil dikirim ke printer"))
+	} catch (e) {
+		showError(e.message || __("Test print gagal. Pastikan QZ Tray sudah berjalan."))
+	} finally {
+		isTestingPrint.value = false
+	}
+}
 
 const props = defineProps({
 	modelValue: Boolean,

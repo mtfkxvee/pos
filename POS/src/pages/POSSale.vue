@@ -2137,7 +2137,7 @@ async function handlePaymentCompleted(paymentData) {
 			// No auto-print: show success dialog (has its own Print button)
 			if (shiftStore.autoPrintEnabled) {
 				try {
-					printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
+					await printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER", { silent: posSettingsStore.silentPrint });
 					showSuccess(__("Invoice saved offline and sent to printer"));
 				} catch (printError) {
 					log.warn("Offline print failed:", printError);
@@ -2769,9 +2769,9 @@ async function handleDeleteOfflineInvoice(invoiceId) {
 	}
 }
 
-function handlePrintOfflineInvoice(invoiceData) {
+async function handlePrintOfflineInvoice(invoiceData) {
 	try {
-		printInvoiceCustom(invoiceData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
+		await printInvoiceCustom(invoiceData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER", { silent: posSettingsStore.silentPrint });
 	} catch (error) {
 		log.error("Error printing offline invoice:", error);
 	}
@@ -3043,7 +3043,11 @@ function handleViewInvoice(invoice) {
 async function handlePrintInvoice(invoiceData) {
 	try {
 		const paperSize = getPaperSize()
-		if (invoiceData.items && Array.isArray(invoiceData.items)) {
+		const printFmt = getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER"
+		if (posSettingsStore.silentPrint) {
+			// Silent mode: always use custom HTML template → QZ Tray
+			await printInvoiceCustom(invoiceData, printFmt, { silent: true });
+		} else if (invoiceData.items && Array.isArray(invoiceData.items)) {
 			await printInvoice(invoiceData, null, null, paperSize);
 		} else {
 			await printInvoiceByName(invoiceData.name, null, null, paperSize);
