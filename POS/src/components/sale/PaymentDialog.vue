@@ -674,6 +674,15 @@
 
 						<!-- Mobile Action Buttons - Always visible at bottom -->
 						<div :class="['flex-shrink-0', isSmallMobile ? 'space-y-1' : 'space-y-1.5']">
+							<!-- Pay on Account warning banner (mobile) -->
+							<div v-if="payOnAccountWarningActive" class="bg-orange-50 border border-orange-300 rounded-lg p-2 flex items-start gap-2">
+								<svg class="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+								</svg>
+								<p class="flex-1 text-xs font-medium text-orange-800">{{ __('Transaksi ini adalah piutang apakah kamu yakin untuk input piutang?') }}</p>
+								<button @click="_clearPayOnAccountWarning" class="text-orange-500 hover:text-orange-700 flex-shrink-0 font-bold leading-none">✕</button>
+							</div>
+
 							<!-- Two buttons side by side when both needed -->
 							<div v-if="lastSelectedMethod && remainingAmount > 0 && allowCreditSale && paymentEntries.length === 0"
 								class="grid grid-cols-2" :class="isSmallMobile ? 'gap-1' : 'gap-1.5'">
@@ -690,15 +699,17 @@
 									</svg>
 									<span class="truncate">{{ formatCurrency(remainingAmount) }}</span>
 								</button>
-								<!-- Pay on Account Button -->
+								<!-- Pay on Account Button (with warning + countdown) -->
 								<button
-									@click="addCreditAccountPayment"
-									:disabled="isSubmitting"
+									@click="startPayOnAccountWarning"
+									:disabled="isSubmitting || (payOnAccountWarningActive && payOnAccountCountdown > 0)"
 									:class="[
 										'font-semibold rounded-lg flex items-center justify-center',
-										isSubmitting
+										isSubmitting || (payOnAccountWarningActive && payOnAccountCountdown > 0)
 											? 'bg-orange-300 text-white cursor-not-allowed'
-											: 'bg-orange-500 text-white active:bg-orange-600',
+											: payOnAccountWarningActive
+												? 'bg-orange-700 text-white active:bg-orange-800 ring-2 ring-orange-400'
+												: 'bg-orange-500 text-white active:bg-orange-600',
 										mobileButtonSize.height, mobileButtonSize.text, mobileButtonSize.gap
 									]"
 								>
@@ -706,10 +717,12 @@
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
-									<svg v-else :class="mobileButtonSize.icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-									</svg>
-									<span class="truncate">{{ isSubmitting ? __('Processing...') : __('On Account') }}</span>
+									<span class="truncate">
+										<template v-if="isSubmitting">{{ __('Processing...') }}</template>
+										<template v-else-if="payOnAccountWarningActive && payOnAccountCountdown > 0">{{ payOnAccountCountdown }}s...</template>
+										<template v-else-if="payOnAccountWarningActive">{{ __('Yakin?') }}</template>
+										<template v-else>{{ __('On Account') }}</template>
+									</span>
 								</button>
 							</div>
 
@@ -734,7 +747,7 @@
 
 							<!-- Complete Payment Button -->
 							<button
-								v-if="(remainingAmount === 0 || (applyWriteOff && canWriteOff)) && (totalPaid > 0 || grandTotal <= 0)"
+								v-if="(remainingAmount === 0 || (applyWriteOff && canWriteOff)) && (totalPaid > 0 || grandTotal <= 0 || redeemedLoyaltyAmount > 0)"
 								@click="completePayment"
 								:disabled="isSubmitting || !canComplete"
 								:class="[
@@ -854,19 +867,30 @@
 							</div>
 						</div>
 
+					<!-- Pay on Account warning banner (desktop) -->
+					<div v-if="payOnAccountWarningActive" class="hidden lg:flex bg-orange-50 border border-orange-300 rounded-lg px-4 py-2.5 items-start gap-3" :class="isCompactMode ? 'mt-2' : 'mt-3'">
+						<svg class="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+						</svg>
+						<p class="flex-1 text-sm font-medium text-orange-800">{{ __('Transaksi ini adalah piutang apakah kamu yakin untuk input piutang?') }}</p>
+						<button @click="_clearPayOnAccountWarning" class="text-orange-500 hover:text-orange-700 font-bold text-lg leading-none">✕</button>
+					</div>
+
 					<!-- Action Buttons - Below Keypad (Desktop only) -->
 					<div :class="['hidden lg:flex items-center gap-2', isCompactMode ? 'mt-2' : 'mt-4']">
-						<!-- Pay on Account Button (if credit sales enabled) -->
+						<!-- Pay on Account Button (with warning + countdown) -->
 						<button
 							v-if="allowCreditSale"
-							@click="addCreditAccountPayment"
-							:disabled="paymentEntries.length > 0 || isSubmitting"
+							@click="startPayOnAccountWarning"
+							:disabled="paymentEntries.length > 0 || isSubmitting || (payOnAccountWarningActive && payOnAccountCountdown > 0)"
 							:class="[
 								'flex-1 inline-flex items-center justify-center gap-2 transition-colors focus:outline-none',
 								dynamicButtonHeight, 'text-sm font-semibold px-4 rounded-lg',
-								paymentEntries.length > 0 || isSubmitting
+								paymentEntries.length > 0 || isSubmitting || (payOnAccountWarningActive && payOnAccountCountdown > 0)
 									? 'bg-orange-300 text-white cursor-not-allowed'
-									: 'bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 focus-visible:ring-2 focus-visible:ring-orange-400'
+									: payOnAccountWarningActive
+										? 'bg-orange-700 text-white hover:bg-orange-800 active:bg-orange-900 ring-2 ring-orange-400 focus-visible:ring-2 focus-visible:ring-orange-400'
+										: 'bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 focus-visible:ring-2 focus-visible:ring-orange-400'
 							]"
 						>
 							<svg v-if="isSubmitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -876,7 +900,12 @@
 							<svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
 							</svg>
-							<span>{{ isSubmitting ? __('Processing...') : __('Pay on Account') }}</span>
+							<span>
+								<template v-if="isSubmitting">{{ __('Processing...') }}</template>
+								<template v-else-if="payOnAccountWarningActive && payOnAccountCountdown > 0">{{ __('Tunggu {0}s...', [payOnAccountCountdown]) }}</template>
+								<template v-else-if="payOnAccountWarningActive">{{ __('Konfirmasi Piutang') }}</template>
+								<template v-else>{{ __('Pay on Account') }}</template>
+							</span>
 						</button>
 
 						<!-- Complete/Partial Payment Button -->
@@ -1080,6 +1109,41 @@ const loyaltyPointInfo = ref({ loyalty_points: 0 })
 const loadingLoyalty = ref(false)
 const pointsToRedeem = ref(0)
 const isPointsRedemptionActive = ref(false)
+
+// Pay on Account warning state
+const payOnAccountWarningActive = ref(false)
+const payOnAccountCountdown = ref(0)
+let _payOnAccountTimer = null
+
+function startPayOnAccountWarning() {
+	if (payOnAccountWarningActive.value && payOnAccountCountdown.value === 0) {
+		// Warning shown and countdown done — confirm
+		_clearPayOnAccountWarning()
+		addCreditAccountPayment()
+		return
+	}
+	if (payOnAccountWarningActive.value) return // already counting down
+
+	payOnAccountWarningActive.value = true
+	payOnAccountCountdown.value = 3
+
+	_payOnAccountTimer = setInterval(() => {
+		payOnAccountCountdown.value--
+		if (payOnAccountCountdown.value <= 0) {
+			clearInterval(_payOnAccountTimer)
+			_payOnAccountTimer = null
+		}
+	}, 1000)
+}
+
+function _clearPayOnAccountWarning() {
+	payOnAccountWarningActive.value = false
+	payOnAccountCountdown.value = 0
+	if (_payOnAccountTimer) {
+		clearInterval(_payOnAccountTimer)
+		_payOnAccountTimer = null
+	}
+}
 
 const redeemedLoyaltyAmount = computed(() => {
 	if (!isPointsRedemptionActive.value || !loyaltyPointInfo.value) return 0
@@ -1753,7 +1817,8 @@ const canComplete = computed(() => {
 	}
 
 	// Otherwise require full payment
-	return remainingAmount.value === 0 && paymentEntries.value.length > 0
+	// Also allow completing when loyalty points cover the entire amount (no cash payment entries needed)
+	return remainingAmount.value === 0 && (paymentEntries.value.length > 0 || redeemedLoyaltyAmount.value > 0)
 })
 
 const paymentButtonText = computed(() => {
@@ -1846,6 +1911,7 @@ watch(show, (newVal) => {
 		// Reset loyalty state
 		isPointsRedemptionActive.value = false
 		pointsToRedeem.value = 0
+		_clearPayOnAccountWarning()
 
 		// Set default delivery date to today for Sales Orders
 		deliveryDate.value = isSalesOrder.value ? today : ""
