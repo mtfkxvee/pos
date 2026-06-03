@@ -1806,6 +1806,11 @@ const canComplete = computed(() => {
 		return true
 	}
 
+	// If loyalty points cover the full remaining amount, allow completing without payment entries
+	if (redeemedLoyaltyAmount.value > 0 && remainingAmount.value === 0) {
+		return true
+	}
+
 	// If partial payment is allowed, can complete with any amount > 0
 	if (props.allowPartialPayment) {
 		return totalPaid.value > 0 && paymentEntries.value.length > 0
@@ -1817,8 +1822,7 @@ const canComplete = computed(() => {
 	}
 
 	// Otherwise require full payment
-	// Also allow completing when loyalty points cover the entire amount (no cash payment entries needed)
-	return remainingAmount.value === 0 && (paymentEntries.value.length > 0 || redeemedLoyaltyAmount.value > 0)
+	return remainingAmount.value === 0 && paymentEntries.value.length > 0
 })
 
 const paymentButtonText = computed(() => {
