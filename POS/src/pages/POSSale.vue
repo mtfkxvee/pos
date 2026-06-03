@@ -2137,7 +2137,7 @@ async function handlePaymentCompleted(paymentData) {
 			// No auto-print: show success dialog (has its own Print button)
 			if (shiftStore.autoPrintEnabled) {
 				try {
-					await printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER", { silent: posSettingsStore.silentPrint });
+					printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
 					showSuccess(__("Invoice saved offline and sent to printer"));
 				} catch (printError) {
 					log.warn("Offline print failed:", printError);
@@ -2769,9 +2769,9 @@ async function handleDeleteOfflineInvoice(invoiceId) {
 	}
 }
 
-async function handlePrintOfflineInvoice(invoiceData) {
+function handlePrintOfflineInvoice(invoiceData) {
 	try {
-		await printInvoiceCustom(invoiceData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER", { silent: posSettingsStore.silentPrint });
+		printInvoiceCustom(invoiceData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
 	} catch (error) {
 		log.error("Error printing offline invoice:", error);
 	}
@@ -3043,18 +3043,10 @@ function handleViewInvoice(invoice) {
 async function handlePrintInvoice(invoiceData) {
 	try {
 		const paperSize = getPaperSize()
-		const printFmt = paperSize === "80mm" ? "80 PRINTER" : "58 PRINTER"
-		if (posSettingsStore.silentPrint) {
-			// Silent mode: need full invoice data (with items) for custom HTML template
-			let fullData = invoiceData
-			if (!fullData.items || !Array.isArray(fullData.items) || fullData.items.length === 0) {
-				fullData = await call("pos_next.api.invoices.get_invoice", { invoice_name: invoiceData.name || invoiceData })
-			}
-			await printInvoiceCustom(fullData, printFmt, { silent: true });
-		} else if (invoiceData.items && Array.isArray(invoiceData.items)) {
+		if (invoiceData.items && Array.isArray(invoiceData.items)) {
 			await printInvoice(invoiceData, null, null, paperSize);
 		} else {
-			await printInvoiceByName(invoiceData.name, null, null, paperSize);
+			await printInvoiceByName(invoiceData.name, null, null, paperSize)
 		}
 	} catch (error) {
 		log.error("Error printing invoice:", error);

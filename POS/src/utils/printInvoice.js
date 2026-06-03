@@ -2,7 +2,6 @@ import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
-import { printHtml, getStoredPrinterName } from "@/utils/qzPrint"
 
 const log = logger.create("PrintInvoice")
 
@@ -111,11 +110,8 @@ export async function printInvoice(
  * Uses one template for both 58mm and 80mm — only CSS width changes.
  * @param {Object} invoiceData
  * @param {string} printFormat - "58 PRINTER" or "80 PRINTER"
- * @param {Object} [options]
- * @param {boolean} [options.silent=false] - Use QZ Tray silent print (no browser dialog)
- * @param {string}  [options.printerName]  - Override printer name (defaults to localStorage)
  */
-export async function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER", options = {}) {
+export function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
 	const is80mm = printFormat && printFormat.includes("80")
 	const paperWidth = is80mm ? "80mm" : "58mm"
 	const windowWidth = is80mm ? "350" : "220"
@@ -251,18 +247,8 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 </body>
 </html>`
 
-	// --- Silent print via QZ Tray (no fallback — throw so caller can show toast) ---
-	if (options.silent) {
-		const printerName = options.printerName || getStoredPrinterName()
-		await printHtml(printContent, printerName, is80mm ? 80 : 58)
-		return
-	}
-
-	// --- Fallback: popup window ---
 	const printWindow = window.open("", "_blank", `width=${windowWidth},height=600`)
-	if (!printWindow) {
-		throw new Error("Failed to open print window. Please check your popup blocker settings.")
-	}
+
 	printWindow.document.write(printContent)
 	printWindow.document.close()
 
