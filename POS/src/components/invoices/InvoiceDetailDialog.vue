@@ -312,6 +312,13 @@ const invoiceData = ref(null)
 // Computed: Check if this is a credit sale (Pay on Account - no payments, full outstanding)
 const isCreditSale = computed(() => {
 	if (!invoiceData.value) return false
+
+	// If invoice is fully settled (outstanding = 0) or status is Paid, it is NOT a credit sale
+	// even if there are no payment entries (e.g. paid via loyalty point redemption)
+	const outstanding = Math.abs(invoiceData.value.outstanding_amount || 0)
+	const status = invoiceData.value.status || ""
+	if (outstanding < 0.01 || status === "Paid" || status === "Return") return false
+
 	const hasNoPayments =
 		!invoiceData.value.payments || invoiceData.value.payments.length === 0
 	const totalPaid =
@@ -320,7 +327,7 @@ const isCreditSale = computed(() => {
 			0,
 		) || 0
 	const grandTotal = Math.abs(invoiceData.value.grand_total || 0)
-	const outstanding = Math.abs(invoiceData.value.outstanding_amount || 0)
+
 	// Credit sale if no payments and outstanding equals grand total
 	return (
 		hasNoPayments ||
