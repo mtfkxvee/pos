@@ -1542,29 +1542,57 @@ def submit_invoice(invoice=None, data=None):
         # NOTE: invoice.grand_total comes from update_invoice (already ERPNext-
         # computed) so it cannot serve as the "UI" reference — use ui_grand_total
         # from submitData instead.
+        from pos_next import __version__ as _app_version
         ui_grand_total = flt(data.get("ui_grand_total") or 0)
         sys_grand_total = flt(invoice_doc.grand_total or 0)
         ui_discount = flt(data.get("discount_amount") or 0)
         sys_discount = flt(invoice_doc.discount_amount or 0)
 
         if ui_grand_total and abs(ui_grand_total - sys_grand_total) > 1:
-            frappe.log_error(
-                title="POS Grand Total Mismatch",
-                message=(
-                    f"Invoice     : {invoice_doc.name}\n"
-                    f"Customer    : {invoice_doc.customer}\n"
-                    f"POS Profile : {invoice_doc.pos_profile}\n\n"
-                    f"UI showed   : {ui_grand_total:,.0f}   ← what cashier saw\n"
-                    f"System has  : {sys_grand_total:,.0f}   ← what was recorded\n"
-                    f"Difference  : {sys_grand_total - ui_grand_total:+,.0f}\n\n"
-                    f"UI discount_amount   : {ui_discount:,.0f}\n"
-                    f"System discount_amount: {sys_discount:,.0f}\n"
-                    f"Net total   : {flt(invoice_doc.net_total):,.0f}\n"
-                    f"Paid amount : {flt(getattr(invoice_doc, 'paid_amount', 0)):,.0f}\n"
-                    f"Outstanding : {flt(getattr(invoice_doc, 'outstanding_amount', 0)):,.0f}\n"
-                    f"Additional discount %: {flt(invoice_doc.additional_discount_percentage)}\n"
-                )
+            diff = sys_grand_total - ui_grand_total
+            _mismatch_log = (
+                f"App v{_app_version}\n\n"
+                f"Invoice     : {invoice_doc.name}\n"
+                f"Customer    : {invoice_doc.customer}\n"
+                f"POS Profile : {invoice_doc.pos_profile}\n\n"
+                f"UI showed   : {ui_grand_total:,.0f}   ← what cashier saw\n"
+                f"System has  : {sys_grand_total:,.0f}   ← what was recorded\n"
+                f"Difference  : {diff:+,.0f}\n\n"
+                f"UI discount_amount   : {ui_discount:,.0f}\n"
+                f"System discount_amount: {sys_discount:,.0f}\n"
+                f"Net total   : {flt(invoice_doc.net_total):,.0f}\n"
+                f"Paid amount : {flt(getattr(invoice_doc, 'paid_amount', 0)):,.0f}\n"
+                f"Outstanding : {flt(getattr(invoice_doc, 'outstanding_amount', 0)):,.0f}\n"
+                f"Additional discount %: {flt(invoice_doc.additional_discount_percentage)}\n"
             )
+
+            if abs(diff) <= 100:
+                # Small delta (≤ Rp 100) — caused by frontend rounding item-level
+                # discounts to nearest 100 while backend skips rounding when
+                # discount_amount is zero.  Auto-correct to what the cashier showed.
+                invoice_doc.grand_total = ui_grand_total
+                invoice_doc.base_grand_total = ui_grand_total
+                # Absorb the rounding difference into discount_amount so GL balances.
+                invoice_doc.discount_amount = flt(invoice_doc.discount_amount) - diff
+                frappe.db.set_value(
+                    "Sales Invoice", invoice_doc.name,
+                    {
+                        "grand_total": ui_grand_total,
+                        "base_grand_total": ui_grand_total,
+                        "discount_amount": invoice_doc.discount_amount,
+                    },
+                    update_modified=False,
+                )
+                frappe.log_error(
+                    title="POS Grand Total Auto-Corrected",
+                    message=_mismatch_log + "\n[AUTO-CORRECTED] grand_total adjusted to match UI value.\n",
+                )
+            else:
+                # Large delta — real mismatch, cashier may have collected wrong amount.
+                frappe.log_error(
+                    title="POS Grand Total Mismatch",
+                    message=_mismatch_log,
+                )
 
         # Complete the offline sync record
         if sync_record_name:
