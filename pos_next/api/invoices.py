@@ -434,6 +434,20 @@ def update_invoice(data):
         # Normalize pricing_rules before document creation
         standardize_pricing_rules(data.get("items"))
 
+        # Validate opening shift is still open
+        posa_opening_shift = data.get("posa_pos_opening_shift")
+        if posa_opening_shift:
+            shift_status = frappe.db.get_value(
+                "POS Opening Shift", posa_opening_shift, "status"
+            )
+            if shift_status == "Closed":
+                frappe.throw(
+                    _("Shift POS {0} sudah ditutup. Harap refresh halaman dan buka shift baru.").format(
+                        posa_opening_shift
+                    ),
+                    title=_("Shift Sudah Ditutup")
+                )
+
         # Create or update invoice
         if data.get("name") and frappe.db.exists(doctype, data.get("name")):
             # Fetch and update existing draft
@@ -1121,6 +1135,24 @@ def submit_invoice(invoice=None, data=None):
 
     # Normalize pricing_rules before processing
     standardize_pricing_rules(invoice.get("items"))
+
+    # ========================================================================
+    # VALIDATE OPENING SHIFT IS STILL OPEN
+    # ========================================================================
+    # Prevents invoices from being submitted after the shift has been closed
+    # on another terminal or browser tab.
+    posa_pos_opening_shift = invoice.get("posa_pos_opening_shift")
+    if posa_pos_opening_shift:
+        shift_status = frappe.db.get_value(
+            "POS Opening Shift", posa_pos_opening_shift, "status"
+        )
+        if shift_status == "Closed":
+            frappe.throw(
+                _("Shift POS {0} sudah ditutup. Harap refresh halaman dan buka shift baru.").format(
+                    posa_pos_opening_shift
+                ),
+                title=_("Shift Sudah Ditutup")
+            )
 
     # ========================================================================
     # OFFLINE INVOICE DEDUPLICATION
