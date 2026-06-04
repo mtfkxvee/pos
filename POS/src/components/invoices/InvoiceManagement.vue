@@ -436,6 +436,7 @@
 								</div>
 								</div>
 							</div>
+						</div>
 
 							<!-- Draft Invoices Tab -->
 							<div v-if="activeTab === 'drafts'">
