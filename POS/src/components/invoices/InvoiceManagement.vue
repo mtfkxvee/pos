@@ -303,8 +303,19 @@
 									/>
 								</div>
 
+								<!-- Initial loading skeleton -->
+								<div v-if="historyInitialLoading" class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+									<div v-for="n in 6" :key="n" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden animate-pulse">
+										<div class="bg-gray-100 h-20 px-5 py-4"></div>
+										<div class="p-4 space-y-2">
+											<div class="h-3 bg-gray-200 rounded w-3/4"></div>
+											<div class="h-3 bg-gray-200 rounded w-1/2"></div>
+										</div>
+									</div>
+								</div>
+
 								<!-- Empty State -->
-								<div v-if="filteredHistoryInvoices.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+								<div v-else-if="filteredHistoryInvoices.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
 									<svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
 									</svg>
@@ -312,7 +323,8 @@
 								</div>
 
 								<!-- Invoices Grid - 2 columns on large screens -->
-								<div v-else class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+								<div v-else class="space-y-4">
+								<div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
 									<div
 										v-for="invoice in filteredHistoryInvoices"
 										:key="invoice.name"
@@ -405,6 +417,23 @@
 											</button>
 										</div>
 									</div>
+
+								<!-- Load More -->
+								<div class="flex justify-center pt-2 pb-4">
+									<button
+										v-if="historyHasMore"
+										@click="loadHistoryPage(false)"
+										:disabled="historyLoadingMore"
+										class="flex items-center gap-2 px-5 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-60 rounded-lg border border-indigo-200 transition-colors"
+									>
+										<svg v-if="historyLoadingMore" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+										</svg>
+										{{ historyLoadingMore ? __('Loading...') : __('Load More') }}
+									</button>
+									<p v-else-if="localHistoryInvoices.length > 0" class="text-xs text-gray-400">{{ __('Semua invoice sudah ditampilkan ({0} total)', [localHistoryInvoices.length]) }}</p>
+								</div>
 								</div>
 							</div>
 
@@ -614,11 +643,47 @@ const show = ref(props.modelValue)
 const loading = ref(false)
 const activeTab = ref("partial")
 
+// --- Invoice History: self-managed pagination ---
+const PAGE_SIZE = 50
+const localHistoryInvoices = ref([])
+const historyOffset = ref(0)
+const historyHasMore = ref(true)
+const historyLoadingMore = ref(false)
+const historyInitialLoading = ref(false)
+
+async function loadHistoryPage(reset = false) {
+	if (reset) {
+		localHistoryInvoices.value = []
+		historyOffset.value = 0
+		historyHasMore.value = true
+		historyInitialLoading.value = true
+	} else {
+		if (!historyHasMore.value || historyLoadingMore.value) return
+		historyLoadingMore.value = true
+	}
+	try {
+		const result = await call("pos_next.api.invoices.get_invoices", {
+			pos_profile: props.posProfile,
+			limit: PAGE_SIZE,
+			offset: historyOffset.value,
+		})
+		const rows = result || []
+		localHistoryInvoices.value = [...localHistoryInvoices.value, ...rows]
+		historyOffset.value += rows.length
+		historyHasMore.value = rows.length === PAGE_SIZE
+	} catch (e) {
+		showError(friendlyError(e, __("Failed to load invoice history")))
+	} finally {
+		historyInitialLoading.value = false
+		historyLoadingMore.value = false
+	}
+}
+
 // Initialize filter store and composable
 const filterStore = useInvoiceFiltersStore()
 
-// Create a computed ref for history invoices to use with filter composable
-const historyInvoicesRef = computed(() => props.historyInvoices)
+// Use local history invoices (self-fetched) instead of props
+const historyInvoicesRef = computed(() => localHistoryInvoices.value)
 const invoiceFilters = useInvoiceFilters(historyInvoicesRef)
 
 // Unpaid invoices data
@@ -663,26 +728,16 @@ const filteredUnpaidSummary = computed(() => {
 	}
 })
 
-// Return invoices (filtered from history)
-const returnInvoices = computed(() => {
-	const allInvoices = Array.isArray(props.historyInvoices)
-		? props.historyInvoices
-		: []
-	return allInvoices.filter((inv) => inv.is_return)
-})
+// Return invoices (filtered from local history)
+const returnInvoices = computed(() =>
+	localHistoryInvoices.value.filter((inv) => inv.is_return)
+)
 
-// Filtered history using the composable (exclude returns, show in separate tab)
+// Filtered history (exclude returns, apply store filters)
 const filteredHistoryInvoices = computed(() => {
-	// Filter out return invoices, then apply all filters from the store
-	const allInvoices = Array.isArray(props.historyInvoices)
-		? props.historyInvoices
-		: []
-	const nonReturnInvoices = allInvoices.filter((inv) => !inv.is_return)
-
-	// Use the filter composable with non-return invoices
+	const nonReturnInvoices = localHistoryInvoices.value.filter((inv) => !inv.is_return)
 	const tempInvoicesRef = computed(() => nonReturnInvoices)
 	const tempFilters = useInvoiceFilters(tempInvoicesRef)
-
 	return tempFilters.filteredInvoices.value
 })
 
@@ -781,10 +836,7 @@ watch(
 		if (val) {
 			loadUnpaidInvoices()
 			loadUnpaidSummary()
-			// Also request history refresh if we don't have data
-			if (props.historyInvoices.length === 0) {
-				emit("refresh-history")
-			}
+			loadHistoryPage(true)
 		}
 	},
 )
@@ -793,14 +845,14 @@ watch(show, (val) => {
 	emit("update:modelValue", val)
 })
 
-// Watch for tab changes to emit refresh event for history/returns tabs
+// Watch for tab changes
 watch(activeTab, (newTab) => {
-	// Always emit refresh event when switching to history or returns tabs
-	// This ensures up-to-date outstanding amounts and invoice data
 	if (newTab === "history" || newTab === "returns") {
-		emit("refresh-history")
+		// Reload from scratch when switching to history/returns tab
+		if (localHistoryInvoices.value.length === 0) {
+			loadHistoryPage(true)
+		}
 	} else if (newTab === "partial") {
-		// Refresh unpaid invoices when switching to partial tab
 		loadUnpaidInvoices()
 		loadUnpaidSummary()
 	}
@@ -814,13 +866,11 @@ function handleClose() {
 async function refreshCurrentTab() {
 	if (activeTab.value === "partial") {
 		await Promise.all([loadUnpaidInvoices(), loadUnpaidSummary()])
-	} else if (activeTab.value === "history") {
-		// Request parent to refresh history data
-		emit("refresh-history")
+	} else if (activeTab.value === "history" || activeTab.value === "returns") {
+		loadHistoryPage(true)
 	} else if (activeTab.value === "drafts") {
-		// Drafts are passed from parent, emit event if needed
 		emit("refresh-history")
-	} else if (activeTab.value === "returns") {
+	} else if (false) {
 		// Returns would also need a refresh
 		emit("refresh-history")
 	}

@@ -1653,13 +1653,14 @@ def get_invoice_loyalty_points(invoice_name):
 
 
 @frappe.whitelist()
-def get_invoices(pos_profile, limit=100):
+def get_invoices(pos_profile, limit=50, offset=0):
 	"""
-	Get list of invoices for a POS Profile.
+	Get list of invoices for a POS Profile with pagination support.
 
 	Args:
 		pos_profile: POS Profile name
-		limit: Maximum number of invoices to return (default 100)
+		limit: Page size (default 50)
+		offset: Number of rows to skip (default 0)
 
 	Returns:
 		List of invoices with details
@@ -1700,10 +1701,11 @@ def get_invoices(pos_profile, limit=100):
 		ORDER BY
 			posting_date DESC,
 			posting_time DESC
-		LIMIT %(limit)s
+		LIMIT %(limit)s OFFSET %(offset)s
 	""", {
 		"pos_profile": pos_profile,
-		"limit": limit
+		"limit": cint(limit),
+		"offset": cint(offset),
 	}, as_dict=True)
 
 	# Load items for all invoices in a single batch query

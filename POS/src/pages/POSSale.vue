@@ -674,13 +674,12 @@
 				v-model="showInvoiceManagement"
 				:pos-profile="shiftStore.profileName"
 				:currency="shiftStore.profileCurrency"
-				:history-invoices="invoiceHistoryData"
 				:draft-invoices="draftsStore.drafts"
 				@view-invoice="handleViewInvoice"
 				@print-invoice="handlePrintInvoice"
 				@load-draft="handleLoadDraftFromManagement"
 				@delete-draft="handleDeleteDraft"
-				@refresh-history="loadInvoiceHistoryData"
+				@refresh-history="draftsStore.loadDrafts"
 			/>
 
 			<!-- Invoice Detail Dialog -->
