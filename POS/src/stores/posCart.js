@@ -282,6 +282,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		// Sync the empty snapshot
 		syncOfferSnapshot()
+
+		// Re-apply default customer from POS Profile after clearing cart
+		setDefaultCustomer()
 	}
 
 	function setTargetDoctype(doctype) {
@@ -1792,6 +1795,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				itemQuantities: cachedItemQuantities,
 				itemGroupQuantities: cachedItemGroupQuantities,
 				brandQuantities: cachedBrandQuantities,
+				customerGroup: customer.value?.customer_group || null,
 			})
 		}
 	}
@@ -2060,6 +2064,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				syncOfferSnapshot()
 			}
 		},
+	)
+
+	// When customer changes, re-sync snapshot so customer_group restriction is re-evaluated
+	watch(
+		() => customer.value?.customer_group,
+		() => { syncOfferSnapshot() },
 	)
 
 	// Grand total adjusted for transaction-level promo discounts (for UI display only).

@@ -87,6 +87,9 @@ class Offer:
 	recurse_for: float = 0  # Give free item for every N quantity (used when is_recursive=1)
 	apply_recursion_over: float = 0  # Qty for which recursion isn't applicable
 	validate_applied_rule: int = 0  # 1 = must be manually activated by cashier, no auto-apply
+	# Customer group restriction
+	applicable_for: Optional[str] = None   # "Customer Group", "Customer", etc. — blank = all
+	customer_group: Optional[str] = None   # required group when applicable_for = "Customer Group"
 
 	def to_dict(self) -> Dict:
 		"""Convert to dictionary for API response"""
@@ -394,7 +397,9 @@ class OfferBuilder:
 			same_item=1 if slab.get("same_item") and not is_price_discount else 0,
 			is_recursive=1 if slab.get("is_recursive") and not is_price_discount else 0,
 			recurse_for=flt(slab.get("recurse_for", 0)) if not is_price_discount else 0,
-			apply_recursion_over=flt(slab.get("apply_recursion_over", 0)) if not is_price_discount else 0
+			apply_recursion_over=flt(slab.get("apply_recursion_over", 0)) if not is_price_discount else 0,
+			applicable_for=rule.get("applicable_for") or None,
+			customer_group=rule.get("customer_group") or None,
 		)
 
 	@staticmethod
@@ -450,6 +455,8 @@ class OfferBuilder:
 			free_item_uom=rule.get("free_item_uom") if not is_price_discount else None,
 			same_item=1 if rule.get("same_item") and not is_price_discount else 0,
 			validate_applied_rule=1 if rule.get("validate_applied_rule") else 0,
+			applicable_for=rule.get("applicable_for") or None,
+			customer_group=rule.get("customer_group") or None,
 		)
 
 
@@ -500,7 +507,8 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 		SELECT
 			pr.name, pr.title, pr.apply_on, pr.selling, pr.promotional_scheme,
 			pr.promotional_scheme_id, pr.coupon_code_based,
-			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto
+			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto,
+			pr.applicable_for, pr.customer_group
 		FROM `tabPricing Rule` pr
 		LEFT JOIN `tabPromotional Scheme` ps ON ps.name = pr.promotional_scheme
 		WHERE
@@ -563,7 +571,8 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			min_qty, max_qty, min_amt, max_amt,
 			free_item, free_qty, free_item_uom, same_item,
 			priority, valid_from, valid_upto,
-			validate_applied_rule
+			validate_applied_rule,
+			applicable_for, customer_group
 		FROM `tabPricing Rule`
 		WHERE
 			disable = 0

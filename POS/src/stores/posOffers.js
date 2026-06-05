@@ -67,6 +67,7 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 			itemQuantities,
 			itemGroupQuantities,
 			brandQuantities,
+			customerGroup: snapshot.customerGroup || null,
 		}
 	}
 
@@ -140,12 +141,23 @@ export const usePOSOffersStore = defineStore("posOffers", () => {
 		const cartItemCodes = cartSnapshot.value.itemCodes || []
 		const cartItemGroups = cartSnapshot.value.itemGroups || []
 		const cartBrands = cartSnapshot.value.brands || []
+		const cartCustomerGroup = cartSnapshot.value.customerGroup || null
 
 		// Check if cart is empty
 		if (itemCount === 0) {
 			return {
 				eligible: false,
 				reason: "Cart is empty",
+			}
+		}
+
+		// Check customer group restriction
+		if (offer?.applicable_for === "Customer Group" && offer?.customer_group) {
+			if (!cartCustomerGroup || cartCustomerGroup !== offer.customer_group) {
+				return {
+					eligible: false,
+					reason: __("This offer is only for {0} customers", [offer.customer_group]),
+				}
 			}
 		}
 
