@@ -1280,6 +1280,10 @@ def submit_invoice(invoice=None, data=None):
         # The correct amounts live in data.payments (sent by frontend as backup).
         # Build a map of {mode_of_payment: amount} from data.payments, then rebuild
         # invoice_doc.payments so validate() inside save() computes the right paid_amount.
+        #
+        # For return invoices the frontend sends negative amounts (e.g. -100000).
+        # We store abs(amt) here; the "ensure payments are negative" block below will
+        # flip them back to negative AFTER save so the sign is correct in the DB.
         if doctype == "Sales Invoice":
             # data.payments is the authoritative source (cart state from frontend)
             fb_src = data.get("payments") or invoice.get("payments") or []
@@ -1287,8 +1291,8 @@ def submit_invoice(invoice=None, data=None):
             for p in fb_src:
                 mop = p.get("mode_of_payment") if isinstance(p, dict) else getattr(p, "mode_of_payment", None)
                 amt = flt(p.get("amount", 0) if isinstance(p, dict) else getattr(p, "amount", 0))
-                if mop and amt > 0:
-                    fb_map[mop] = fb_map.get(mop, 0) + amt
+                if mop and abs(amt) > 0:
+                    fb_map[mop] = fb_map.get(mop, 0) + abs(amt)
 
             if fb_map:
                 invoice_doc.set("payments", [])
