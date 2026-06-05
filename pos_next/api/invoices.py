@@ -1281,18 +1281,19 @@ def submit_invoice(invoice=None, data=None):
         # Build a map of {mode_of_payment: amount} from data.payments, then rebuild
         # invoice_doc.payments so validate() inside save() computes the right paid_amount.
         #
-        # For return invoices the frontend sends negative amounts (e.g. -100000).
-        # We store abs(amt) here; the "ensure payments are negative" block below will
-        # flip them back to negative AFTER save so the sign is correct in the DB.
-        if doctype == "Sales Invoice":
+        # For return invoices: SKIP this block entirely. ERPNext requires payment amounts
+        # to be negative for returns, but set_pos_fields() resets them during validate().
+        # Payment records are written directly to DB after submission instead.
+        _is_return_inv = bool(invoice_doc.get("is_return"))
+        if doctype == "Sales Invoice" and not _is_return_inv:
             # data.payments is the authoritative source (cart state from frontend)
             fb_src = data.get("payments") or invoice.get("payments") or []
             fb_map = {}
             for p in fb_src:
                 mop = p.get("mode_of_payment") if isinstance(p, dict) else getattr(p, "mode_of_payment", None)
                 amt = flt(p.get("amount", 0) if isinstance(p, dict) else getattr(p, "amount", 0))
-                if mop and abs(amt) > 0:
-                    fb_map[mop] = fb_map.get(mop, 0) + abs(amt)
+                if mop and amt > 0:
+                    fb_map[mop] = fb_map.get(mop, 0) + amt
 
             if fb_map:
                 invoice_doc.set("payments", [])
@@ -1556,6 +1557,7 @@ def submit_invoice(invoice=None, data=None):
             if _return_payments:
                 try:
                     frappe.db.delete("Sales Invoice Payment", {"parent": invoice_doc.name})
+                    _refund_total = 0
                     for _i, _p in enumerate(_return_payments):
                         _mop = _p.get("mode_of_payment") if isinstance(_p, dict) else getattr(_p, "mode_of_payment", None)
                         _amt = flt(_p.get("amount", 0) if isinstance(_p, dict) else getattr(_p, "amount", 0))
@@ -1580,12 +1582,8 @@ def submit_invoice(invoice=None, data=None):
                             "owner": frappe.session.user,
                             "docstatus": 1,
                         })
-                    # Sync paid_amount so outstanding = 0 (refund fully settled)
-                    _refund_total = sum(
-                        abs(flt(_p.get("amount", 0) if isinstance(_p, dict) else getattr(_p, "amount", 0)))
-                        for _p in _return_payments
-                        if (_p.get("mode_of_payment") if isinstance(_p, dict) else getattr(_p, "mode_of_payment", None))
-                    )
+                        _refund_total += abs(_amt)
+
                     if _refund_total > 0:
                         frappe.db.set_value(
                             "Sales Invoice", invoice_doc.name,
@@ -1601,7 +1599,7 @@ def submit_invoice(invoice=None, data=None):
                         invoice_doc.outstanding_amount = 0
                 except Exception as _re:
                     frappe.log_error(
-                        f"Failed to write return payment records for {invoice_doc.name}: {_re}",
+                        f"POS Return {invoice_doc.name}: {_re}\n{frappe.get_traceback()}",
                         "POS Return Payment Fix"
                     )
 
