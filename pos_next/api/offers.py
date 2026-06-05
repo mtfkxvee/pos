@@ -507,8 +507,7 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 		SELECT
 			pr.name, pr.title, pr.apply_on, pr.selling, pr.promotional_scheme,
 			pr.promotional_scheme_id, pr.coupon_code_based,
-			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto,
-			pr.applicable_for, pr.customer_group
+			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto
 		FROM `tabPricing Rule` pr
 		LEFT JOIN `tabPromotional Scheme` ps ON ps.name = pr.promotional_scheme
 		WHERE
@@ -529,6 +528,18 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 	# Get unique scheme names and rule names
 	scheme_names = list({rule["promotional_scheme"] for rule in pricing_rules})
 	rule_names = [rule["name"] for rule in pricing_rules]
+
+	# Fetch applicable_for / customer_group via ORM (safe, version-independent)
+	applicability_map = {}
+	try:
+		rows = frappe.get_all(
+			"Pricing Rule",
+			filters=[["name", "in", rule_names]],
+			fields=["name", "applicable_for", "customer_group"],
+		)
+		applicability_map = {r.name: r for r in rows}
+	except Exception:
+		pass  # Non-critical; defaults to None (all customers)
 
 	# Fetch all slabs (keyed by scheme name) and eligibility (keyed by rule name).
 	# Slabs live on the Promotional Scheme; eligible items live on the Pricing Rule
@@ -553,6 +564,10 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 
 		# Eligibility is stored on the pricing rule, not the scheme
 		eligibility = eligibility_map.get(rule["name"], OfferEligibility([], [], []))
+		applicability = applicability_map.get(rule["name"])
+		if applicability:
+			rule["applicable_for"] = applicability.get("applicable_for") or None
+			rule["customer_group"] = applicability.get("customer_group") or None
 		offer = OfferBuilder.build_from_scheme_rule(rule, slab, eligibility)
 		offers.append(offer)
 
@@ -571,8 +586,7 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			min_qty, max_qty, min_amt, max_amt,
 			free_item, free_qty, free_item_uom, same_item,
 			priority, valid_from, valid_upto,
-			validate_applied_rule,
-			applicable_for, customer_group
+			validate_applied_rule
 		FROM `tabPricing Rule`
 		WHERE
 			disable = 0
@@ -590,6 +604,18 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 	# Get rule names
 	rule_names = [rule["name"] for rule in pricing_rules]
 
+	# Fetch applicable_for / customer_group via ORM (safe, version-independent)
+	applicability_map = {}
+	try:
+		rows = frappe.get_all(
+			"Pricing Rule",
+			filters=[["name", "in", rule_names]],
+			fields=["name", "applicable_for", "customer_group"],
+		)
+		applicability_map = {r.name: r for r in rows}
+	except Exception:
+		pass
+
 	# Fetch eligibility in batch
 	eligibility_map = EligibilityFetcher.fetch_all(rule_names)
 
@@ -597,6 +623,10 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 	offers = []
 	for rule in pricing_rules:
 		eligibility = eligibility_map.get(rule["name"], OfferEligibility([], [], []))
+		applicability = applicability_map.get(rule["name"])
+		if applicability:
+			rule["applicable_for"] = applicability.get("applicable_for") or None
+			rule["customer_group"] = applicability.get("customer_group") or None
 		offer = OfferBuilder.build_from_standalone_rule(rule, eligibility)
 		offers.append(offer)
 

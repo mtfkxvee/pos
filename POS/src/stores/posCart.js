@@ -1527,6 +1527,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			itemQuantities,
 			itemGroupQuantities,
 			brandQuantities,
+			customerGroup: customer.value?.customer_group || null,
 		}
 	}
 
