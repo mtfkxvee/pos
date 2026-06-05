@@ -713,8 +713,14 @@ def update_invoice(data):
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
 
-        # Round grand total to nearest 100 when a discount is applied
-        if not invoice_doc.get("is_return") and _discount_amount > 0:
+        # Round grand total to nearest 100 when a discount is applied.
+        # Check both invoice-level discount AND item-level discounts so that
+        # backend rounding matches the frontend (which rounds when totalDiscount > 0).
+        _has_item_discount = any(
+            flt(item.discount_amount) > 0 or flt(item.discount_percentage) > 0
+            for item in invoice_doc.items
+        )
+        if not invoice_doc.get("is_return") and (_discount_amount > 0 or _has_item_discount):
             gt = flt(invoice_doc.grand_total)
             rounded_gt = round(gt / 100) * 100
             if rounded_gt != gt:
@@ -1570,8 +1576,13 @@ def submit_invoice(invoice=None, data=None):
                 # Small delta (≤ Rp 100) — caused by frontend rounding item-level
                 # discounts to nearest 100 while backend skips rounding when
                 # discount_amount is zero.  Auto-correct to what the cashier showed.
+                paid_amount = flt(getattr(invoice_doc, "paid_amount", 0))
+                new_outstanding = max(0.0, ui_grand_total - paid_amount)
+
                 invoice_doc.grand_total = ui_grand_total
                 invoice_doc.base_grand_total = ui_grand_total
+                invoice_doc.outstanding_amount = new_outstanding
+                invoice_doc.base_outstanding_amount = new_outstanding
                 # Absorb the rounding difference into discount_amount so GL balances.
                 invoice_doc.discount_amount = flt(invoice_doc.discount_amount) - diff
                 frappe.db.set_value(
@@ -1580,12 +1591,18 @@ def submit_invoice(invoice=None, data=None):
                         "grand_total": ui_grand_total,
                         "base_grand_total": ui_grand_total,
                         "discount_amount": invoice_doc.discount_amount,
+                        "outstanding_amount": new_outstanding,
+                        "base_outstanding_amount": new_outstanding,
                     },
                     update_modified=False,
                 )
                 frappe.log_error(
                     title="POS Grand Total Auto-Corrected",
-                    message=_mismatch_log + "\n[AUTO-CORRECTED] grand_total adjusted to match UI value.\n",
+                    message=(
+                        _mismatch_log
+                        + f"\n[AUTO-CORRECTED] grand_total → {ui_grand_total:,.0f}"
+                        + f" | outstanding → {new_outstanding:,.0f}\n"
+                    ),
                 )
             else:
                 # Large delta — real mismatch, cashier may have collected wrong amount.
