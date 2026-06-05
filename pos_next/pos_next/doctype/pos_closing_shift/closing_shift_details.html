@@ -41,6 +41,11 @@
 										<td class="text-left font-bold">{{ _('Total Quantity') }}</td>
 										<td class='text-right'>{{ data.total_quantity or '' }}</td>
 									</tr>
+									{% set total_txn = (data.pos_transactions | length) if data.pos_transactions else 0 %}
+									<tr>
+										<td class="text-left font-bold">{{ _('Total Transactions') }}</td>
+										<td class='text-right'>{{ total_txn }}</td>
+									</tr>
 
 							</tbody>
 						</table>

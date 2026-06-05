@@ -463,6 +463,10 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
                     <span>${__("NET SALES:")}</span>
                     <span>${formatCurrency(closingData.grand_total, "IDR", "id-ID")}</span>
                 </div>
+                <div class="row" style="margin-top: 3px; border-top: 1px dashed #000; padding-top: 2px;">
+                    <span>${__("Transactions:")}</span>
+                    <span>${(closingData.sales_count || 0) + (closingData.returns_count || 0)} (${closingData.sales_count || 0} ${__("sales")}, ${closingData.returns_count || 0} ${__("returns")})</span>
+                </div>
             </div>
 
              <div class="section">
@@ -513,8 +517,6 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
 
             <div class="footer">
                 ${__("Printed on")} ${new Date().toLocaleString()}
-                <br>
-                Powered by BrainWise
             </div>
 
 			<div class="no-print" style="text-align: center; margin-top: 20px;">
