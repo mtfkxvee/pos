@@ -1545,6 +1545,66 @@ def submit_invoice(invoice=None, data=None):
         except Exception:
             pass
 
+        # ── Return Invoice: Force-Write Payment Records ───────────────────────
+        # ERPNext's set_pos_fields() (called on every validate/save) reloads all
+        # payment methods from POS Profile with amount=0, wiping whatever the
+        # frontend sent.  For return invoices we must write refund payment records
+        # directly to DB after submission so the closing shift can deduct the
+        # correct expected_amount per payment method.
+        if invoice_doc.get("is_return") and doctype == "Sales Invoice":
+            _return_payments = invoice.get("payments") or []
+            if _return_payments:
+                try:
+                    frappe.db.delete("Sales Invoice Payment", {"parent": invoice_doc.name})
+                    for _i, _p in enumerate(_return_payments):
+                        _mop = _p.get("mode_of_payment") if isinstance(_p, dict) else getattr(_p, "mode_of_payment", None)
+                        _amt = flt(_p.get("amount", 0) if isinstance(_p, dict) else getattr(_p, "amount", 0))
+                        if not _mop or abs(_amt) < 0.01:
+                            continue
+                        _acct_info = get_payment_account(_mop, invoice_doc.company)
+                        frappe.db.insert("Sales Invoice Payment", {
+                            "name": frappe.generate_hash(length=10),
+                            "parent": invoice_doc.name,
+                            "parenttype": "Sales Invoice",
+                            "parentfield": "payments",
+                            "idx": _i + 1,
+                            "mode_of_payment": _mop,
+                            "amount": -abs(_amt),
+                            "base_amount": -abs(_amt),
+                            "account": _acct_info.get("account") if _acct_info else "",
+                            "type": "Cash",
+                            "default": 0,
+                            "creation": frappe.utils.now(),
+                            "modified": frappe.utils.now(),
+                            "modified_by": frappe.session.user,
+                            "owner": frappe.session.user,
+                            "docstatus": 1,
+                        })
+                    # Sync paid_amount so outstanding = 0 (refund fully settled)
+                    _refund_total = sum(
+                        abs(flt(_p.get("amount", 0) if isinstance(_p, dict) else getattr(_p, "amount", 0)))
+                        for _p in _return_payments
+                        if (_p.get("mode_of_payment") if isinstance(_p, dict) else getattr(_p, "mode_of_payment", None))
+                    )
+                    if _refund_total > 0:
+                        frappe.db.set_value(
+                            "Sales Invoice", invoice_doc.name,
+                            {
+                                "paid_amount": -_refund_total,
+                                "base_paid_amount": -_refund_total,
+                                "outstanding_amount": 0,
+                                "base_outstanding_amount": 0,
+                            },
+                            update_modified=False,
+                        )
+                        invoice_doc.paid_amount = -_refund_total
+                        invoice_doc.outstanding_amount = 0
+                except Exception as _re:
+                    frappe.log_error(
+                        f"Failed to write return payment records for {invoice_doc.name}: {_re}",
+                        "POS Return Payment Fix"
+                    )
+
         # ── Grand Total Integrity Check ──────────────────────────────────────
         # Compare the grand_total the UI displayed (sent by frontend as
         # data.ui_grand_total) with the grand_total ERPNext actually recorded
