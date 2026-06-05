@@ -168,6 +168,17 @@ def save_journal_entry(pos_profile, posting_date, user_remark, expense_rows, cre
 
 
 @frappe.whitelist()
+def get_account_balance(account, pos_profile, date=None):
+	"""Return current ledger balance for a Cash/Bank account."""
+	from frappe.utils import nowdate
+	from erpnext.accounts.utils import get_balance_on
+
+	company = frappe.db.get_value("POS Profile", pos_profile, "company")
+	balance = get_balance_on(account=account, date=date or nowdate(), company=company)
+	return {"balance": flt(balance)}
+
+
+@frappe.whitelist()
 def cancel_journal_entry(name):
 	"""Cancel a submitted Journal Entry."""
 	je = frappe.get_doc("Journal Entry", name)

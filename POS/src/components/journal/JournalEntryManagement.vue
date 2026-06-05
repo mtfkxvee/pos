@@ -232,6 +232,14 @@
 										<option value="">{{ __('Select account...') }}</option>
 										<option v-for="acc in paymentAccounts" :key="acc.name" :value="acc.name">{{ acc.name }}</option>
 									</select>
+									<!-- Account balance -->
+									<div class="mt-1.5 min-h-[20px]">
+										<span v-if="loadingBalance" class="text-xs text-gray-400 italic">{{ __('Loading balance...') }}</span>
+										<span v-else-if="form.credit_account && creditAccountBalance !== null" class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full" :class="creditAccountBalance >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'">
+											<span class="w-1.5 h-1.5 rounded-full" :class="creditAccountBalance >= 0 ? 'bg-green-500' : 'bg-red-500'"></span>
+											{{ __('Saldo') }}: {{ formatCurrency(creditAccountBalance) }}
+										</span>
+									</div>
 								</div>
 							</div>
 
@@ -348,6 +356,8 @@ const page = ref(1)
 const PAGE_SIZE = 20
 const hasMore = ref(false)
 const form = ref(defaultForm())
+const creditAccountBalance = ref(null)
+const loadingBalance = ref(false)
 
 // ── Sync v-model ──────────────────────────────────────────────────────────────
 watch(() => props.modelValue, (val) => { show.value = val })
@@ -356,6 +366,49 @@ watch(show, (val) => { emit("update:modelValue", val) })
 // ── Computed ──────────────────────────────────────────────────────────────────
 const formTotal = computed(() =>
 	form.value.expense_rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+)
+
+// Watch credit account selection → fetch balance
+watch(
+	() => form.value.credit_account,
+	async (account) => {
+		creditAccountBalance.value = null
+		if (!account || !props.posProfile) return
+		loadingBalance.value = true
+		try {
+			const res = await call("pos_next.api.journal_entry.get_account_balance", {
+				account,
+				pos_profile: props.posProfile,
+				date: form.value.posting_date || null,
+			})
+			creditAccountBalance.value = res?.balance ?? null
+		} catch {
+			creditAccountBalance.value = null
+		} finally {
+			loadingBalance.value = false
+		}
+	},
+)
+
+// Refresh balance when date changes (balance is date-sensitive)
+watch(
+	() => form.value.posting_date,
+	async (date) => {
+		if (!form.value.credit_account || !props.posProfile) return
+		loadingBalance.value = true
+		try {
+			const res = await call("pos_next.api.journal_entry.get_account_balance", {
+				account: form.value.credit_account,
+				pos_profile: props.posProfile,
+				date: date || null,
+			})
+			creditAccountBalance.value = res?.balance ?? null
+		} catch {
+			creditAccountBalance.value = null
+		} finally {
+			loadingBalance.value = false
+		}
+	},
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -442,6 +495,7 @@ async function openDetail(name) {
 function openCreateForm() {
 	editingName.value = null
 	form.value = defaultForm()
+	creditAccountBalance.value = null
 	view.value = "form"
 }
 
