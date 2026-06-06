@@ -482,19 +482,19 @@ def get_offers(pos_profile: str) -> List[Dict]:
 	try:
 		profile = frappe.get_doc("POS Profile", pos_profile)
 		date = nowdate()
-		# Warehouse from POS Profile — pricing rules restricted to a specific warehouse
-		# are excluded if they don't match this profile's warehouse.
 		pos_warehouse = profile.warehouse or None
+
+		frappe.log_error(f"get_offers called: profile={pos_profile}, warehouse={pos_warehouse}, company={profile.company}", "Offers Debug")
 
 		offers = []
 
-		# Get offers from promotional schemes
 		scheme_offers = _get_promotional_scheme_offers(profile.company, date, pos_warehouse)
 		offers.extend(scheme_offers)
 
-		# Get standalone pricing rule offers
 		standalone_offers = _get_standalone_pricing_rule_offers(profile.company, date, pos_warehouse)
 		offers.extend(standalone_offers)
+
+		frappe.log_error(f"get_offers result: {len(offers)} offers found — {[o.name for o in offers]}", "Offers Debug")
 
 		return [offer.to_dict() for offer in offers]
 
