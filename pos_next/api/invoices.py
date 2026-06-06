@@ -1572,25 +1572,30 @@ def submit_invoice(invoice=None, data=None):
                 f"Additional discount %: {flt(invoice_doc.additional_discount_percentage)}\n"
             )
 
-            if abs(diff) <= 100:
-                # Small delta (≤ Rp 100) — caused by frontend rounding item-level
-                # discounts to nearest 100 while backend skips rounding when
-                # discount_amount is zero.  Auto-correct to what the cashier showed.
+            # Auto-correct when:
+            # 1. diff > 0 (system is higher, meaning discount wasn't fully applied)
+            # 2. diff ≤ sys_discount + 100 tolerance (covers both "discount not applied"
+            #    and rounding-to-nearest-100 cases — all legitimate rounding scenarios)
+            # 3. OR diff ≤ 100 (tiny negative rounding, e.g. system slightly lower)
+            _max_correctable = max(100, flt(sys_discount) + 100)
+            if diff > 0 and diff <= _max_correctable:
+                # Rounding / discount-not-applied: diff is within expected range.
+                # Trust ui_grand_total — it's what the cashier saw and charged.
                 paid_amount = flt(getattr(invoice_doc, "paid_amount", 0))
                 new_outstanding = max(0.0, ui_grand_total - paid_amount)
+                new_discount = flt(invoice_doc.discount_amount) + diff  # absorb diff
 
                 invoice_doc.grand_total = ui_grand_total
                 invoice_doc.base_grand_total = ui_grand_total
                 invoice_doc.outstanding_amount = new_outstanding
                 invoice_doc.base_outstanding_amount = new_outstanding
-                # Absorb the rounding difference into discount_amount so GL balances.
-                invoice_doc.discount_amount = flt(invoice_doc.discount_amount) - diff
+                invoice_doc.discount_amount = new_discount
                 frappe.db.set_value(
                     "Sales Invoice", invoice_doc.name,
                     {
                         "grand_total": ui_grand_total,
                         "base_grand_total": ui_grand_total,
-                        "discount_amount": invoice_doc.discount_amount,
+                        "discount_amount": new_discount,
                         "outstanding_amount": new_outstanding,
                         "base_outstanding_amount": new_outstanding,
                     },
@@ -1601,11 +1606,42 @@ def submit_invoice(invoice=None, data=None):
                     message=(
                         _mismatch_log
                         + f"\n[AUTO-CORRECTED] grand_total → {ui_grand_total:,.0f}"
+                        + f" | discount_amount → {new_discount:,.0f}"
+                        + f" | outstanding → {new_outstanding:,.0f}\n"
+                    ),
+                )
+            elif abs(diff) <= 100:
+                # Tiny negative delta (system slightly lower than UI) — rare rounding edge.
+                paid_amount = flt(getattr(invoice_doc, "paid_amount", 0))
+                new_outstanding = max(0.0, ui_grand_total - paid_amount)
+                new_discount = flt(invoice_doc.discount_amount) + diff
+
+                invoice_doc.grand_total = ui_grand_total
+                invoice_doc.base_grand_total = ui_grand_total
+                invoice_doc.outstanding_amount = new_outstanding
+                invoice_doc.discount_amount = new_discount
+                frappe.db.set_value(
+                    "Sales Invoice", invoice_doc.name,
+                    {
+                        "grand_total": ui_grand_total,
+                        "base_grand_total": ui_grand_total,
+                        "discount_amount": new_discount,
+                        "outstanding_amount": new_outstanding,
+                        "base_outstanding_amount": new_outstanding,
+                    },
+                    update_modified=False,
+                )
+                frappe.log_error(
+                    title="POS Grand Total Auto-Corrected",
+                    message=(
+                        _mismatch_log
+                        + f"\n[AUTO-CORRECTED small] grand_total → {ui_grand_total:,.0f}"
                         + f" | outstanding → {new_outstanding:,.0f}\n"
                     ),
                 )
             else:
-                # Large delta — real mismatch, cashier may have collected wrong amount.
+                # diff > max_correctable: genuinely large mismatch that exceeds the
+                # entire discount. Cashier may have charged the wrong amount — log only.
                 frappe.log_error(
                     title="POS Grand Total Mismatch",
                     message=_mismatch_log,
