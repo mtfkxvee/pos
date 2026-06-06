@@ -478,9 +478,10 @@ class CustomSalesInvoice(SalesInvoice):
 				)
 			return
 
-		if flt(self.outstanding_amount) <= 0:
-			return
-
+		# Apply custom_receiveable for ALL POS invoices (paid or credit).
+		# Even fully-paid invoices create a receivable GL entry temporarily
+		# (DR receivable → CR revenue, then CR receivable → DR cash), so the
+		# correct account must be used regardless of outstanding_amount.
 		try:
 			custom_receiveable = frappe.db.get_value(
 				"POS Profile", self.pos_profile, "custom_receiveable"

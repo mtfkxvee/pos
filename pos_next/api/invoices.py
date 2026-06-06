@@ -1564,24 +1564,27 @@ def submit_invoice(invoice=None, data=None):
                         if not _mop or abs(_amt) < 0.01:
                             continue
                         _acct_info = get_payment_account(_mop, invoice_doc.company)
-                        frappe.db.insert("Sales Invoice Payment", {
-                            "name": frappe.generate_hash(length=10),
-                            "parent": invoice_doc.name,
-                            "parenttype": "Sales Invoice",
-                            "parentfield": "payments",
-                            "idx": _i + 1,
-                            "mode_of_payment": _mop,
-                            "amount": -abs(_amt),
-                            "base_amount": -abs(_amt),
-                            "account": _acct_info.get("account") if _acct_info else "",
-                            "type": "Cash",
-                            "default": 0,
-                            "creation": frappe.utils.now(),
-                            "modified": frappe.utils.now(),
-                            "modified_by": frappe.session.user,
-                            "owner": frappe.session.user,
-                            "docstatus": 1,
-                        })
+                        _acct = _acct_info.get("account") if _acct_info else ""
+                        _now = frappe.utils.now()
+                        _user = frappe.session.user
+                        frappe.db.sql(
+                            """INSERT INTO `tabSales Invoice Payment`
+                               (name, parent, parenttype, parentfield, idx,
+                                mode_of_payment, amount, base_amount, account,
+                                `type`, `default`, docstatus,
+                                creation, modified, modified_by, owner)
+                               VALUES (%s, %s, %s, %s, %s,
+                                       %s, %s, %s, %s,
+                                       %s, %s, %s,
+                                       %s, %s, %s, %s)""",
+                            (
+                                frappe.generate_hash(length=10),
+                                invoice_doc.name, "Sales Invoice", "payments", _i + 1,
+                                _mop, -abs(_amt), -abs(_amt), _acct,
+                                "Cash", 0, 1,
+                                _now, _now, _user, _user,
+                            )
+                        )
                         _refund_total += abs(_amt)
 
                     if _refund_total > 0:
