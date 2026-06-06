@@ -453,46 +453,41 @@ class CustomSalesInvoice(SalesInvoice):
 	def before_submit(self):
 		"""
 		Override debit_to with custom_receiveable from POS Profile (Pay-on-Account only).
+		Must set debit_to BEFORE calling super().before_submit() so ERPNext's
+		validate_return_against_account sees the correct account.
 		"""
+		if cint(self.is_pos) and self.pos_profile:
+			if cint(self.is_return) and self.return_against:
+				# Copy debit_to from original invoice before ERPNext validates it
+				try:
+					original_debit_to = frappe.db.get_value(
+						"Sales Invoice", self.return_against, "debit_to"
+					)
+					if original_debit_to:
+						self.debit_to = original_debit_to
+				except Exception as e:
+					frappe.log_error(
+						f"POS Next: failed to copy debit_to from {self.return_against}: {e}",
+						"POS Return Debit To"
+					)
+			else:
+				# Apply custom_receiveable for ALL regular POS invoices (paid or credit)
+				try:
+					custom_receiveable = frappe.db.get_value(
+						"POS Profile", self.pos_profile, "custom_receiveable"
+					)
+					if custom_receiveable:
+						self.debit_to = custom_receiveable
+				except Exception as e:
+					frappe.log_error(
+						f"POS Next: failed to set custom_receiveable on {self.name}: {e}",
+						"POS Custom Receivable"
+					)
+
 		try:
 			super().before_submit()
 		except AttributeError:
 			pass
-
-		if not cint(self.is_pos) or not self.pos_profile:
-			return
-
-		# For return invoices, copy debit_to from the original invoice so
-		# ERPNext's validate_return_against_account passes
-		if cint(self.is_return) and self.return_against:
-			try:
-				original_debit_to = frappe.db.get_value(
-					"Sales Invoice", self.return_against, "debit_to"
-				)
-				if original_debit_to:
-					self.debit_to = original_debit_to
-			except Exception as e:
-				frappe.log_error(
-					f"POS Next: failed to copy debit_to from {self.return_against}: {e}",
-					"POS Return Debit To"
-				)
-			return
-
-		# Apply custom_receiveable for ALL POS invoices (paid or credit).
-		# Even fully-paid invoices create a receivable GL entry temporarily
-		# (DR receivable → CR revenue, then CR receivable → DR cash), so the
-		# correct account must be used regardless of outstanding_amount.
-		try:
-			custom_receiveable = frappe.db.get_value(
-				"POS Profile", self.pos_profile, "custom_receiveable"
-			)
-			if custom_receiveable:
-				self.debit_to = custom_receiveable
-		except Exception as e:
-			frappe.log_error(
-				f"POS Next: failed to set custom_receiveable on {self.name}: {e}",
-				"POS Custom Receivable"
-			)
 
 	def get_party_and_party_type_for_pos_gl_entry(self, mode_of_payment, account):
 		"""
