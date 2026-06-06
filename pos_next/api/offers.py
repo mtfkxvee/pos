@@ -465,6 +465,23 @@ class OfferBuilder:
 
 
 # ============================================================================
+# Helpers
+# ============================================================================
+
+def _resolve_customer_group_restriction(applicable_for, customer_group):
+	"""
+	If customer_group is the ERPNext root group (no parent), the rule applies to
+	all customers — treat it as no restriction by returning (None, None).
+	"""
+	if applicable_for != "Customer Group" or not customer_group:
+		return applicable_for, customer_group
+	parent = frappe.db.get_value("Customer Group", customer_group, "parent_customer_group")
+	if not parent or parent == customer_group:
+		return None, None  # root group = no restriction
+	return applicable_for, customer_group
+
+
+# ============================================================================
 # Main API Functions
 # ============================================================================
 
@@ -484,8 +501,6 @@ def get_offers(pos_profile: str) -> List[Dict]:
 		date = nowdate()
 		pos_warehouse = profile.warehouse or None
 
-		frappe.log_error(f"get_offers called: profile={pos_profile}, warehouse={pos_warehouse}, company={profile.company}", "Offers Debug")
-
 		offers = []
 
 		scheme_offers = _get_promotional_scheme_offers(profile.company, date, pos_warehouse)
@@ -493,9 +508,6 @@ def get_offers(pos_profile: str) -> List[Dict]:
 
 		standalone_offers = _get_standalone_pricing_rule_offers(profile.company, date, pos_warehouse)
 		offers.extend(standalone_offers)
-
-		offer_debug = [(o.name, o.applicable_for, o.customer_group, o.warehouse) for o in offers]
-		frappe.log_error(f"get_offers result: {len(offers)} offers found — {offer_debug}", "Offers Debug")
 
 		return [offer.to_dict() for offer in offers]
 
@@ -585,8 +597,12 @@ def _get_promotional_scheme_offers(company: str, date: str, pos_warehouse: Optio
 		eligibility = eligibility_map.get(rule["name"], OfferEligibility([], [], []))
 		applicability = applicability_map.get(rule["name"])
 		if applicability:
-			rule["applicable_for"] = applicability.get("applicable_for") or None
-			rule["customer_group"] = applicability.get("customer_group") or None
+			af, cg = _resolve_customer_group_restriction(
+				applicability.get("applicable_for") or None,
+				applicability.get("customer_group") or None,
+			)
+			rule["applicable_for"] = af
+			rule["customer_group"] = cg
 		offer = OfferBuilder.build_from_scheme_rule(rule, slab, eligibility)
 		offers.append(offer)
 
@@ -652,8 +668,12 @@ def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: 
 		eligibility = eligibility_map.get(rule["name"], OfferEligibility([], [], []))
 		applicability = applicability_map.get(rule["name"])
 		if applicability:
-			rule["applicable_for"] = applicability.get("applicable_for") or None
-			rule["customer_group"] = applicability.get("customer_group") or None
+			af, cg = _resolve_customer_group_restriction(
+				applicability.get("applicable_for") or None,
+				applicability.get("customer_group") or None,
+			)
+			rule["applicable_for"] = af
+			rule["customer_group"] = cg
 		offer = OfferBuilder.build_from_standalone_rule(rule, eligibility)
 		offers.append(offer)
 
