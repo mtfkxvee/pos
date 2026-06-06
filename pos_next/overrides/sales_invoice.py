@@ -112,6 +112,21 @@ class CustomSalesInvoice(SalesInvoice):
 			except Exception:
 				pass
 
+		# For return invoices: copy debit_to from original invoice BEFORE super().validate()
+		# so ERPNext's validate_return_against_account() sees the correct account.
+		if cint(self.is_return) and self.return_against and cint(self.is_pos):
+			try:
+				original_debit_to = frappe.db.get_value(
+					"Sales Invoice", self.return_against, "debit_to"
+				)
+				if original_debit_to:
+					self.debit_to = original_debit_to
+			except Exception as e:
+				frappe.log_error(
+					f"POS Next: failed to copy debit_to in validate from {self.return_against}: {e}",
+					"POS Return Debit To"
+				)
+
 		super().validate()
 
 		# Restore item rates after super().validate() — uses item.name as stable key
