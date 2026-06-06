@@ -90,6 +90,8 @@ class Offer:
 	# Customer group restriction
 	applicable_for: Optional[str] = None   # "Customer Group", "Customer", etc. — blank = all
 	customer_group: Optional[str] = None   # required group when applicable_for = "Customer Group"
+	# Warehouse restriction (None = applies to all warehouses)
+	warehouse: Optional[str] = None
 
 	def to_dict(self) -> Dict:
 		"""Convert to dictionary for API response"""
@@ -400,6 +402,7 @@ class OfferBuilder:
 			apply_recursion_over=flt(slab.get("apply_recursion_over", 0)) if not is_price_discount else 0,
 			applicable_for=rule.get("applicable_for") or None,
 			customer_group=rule.get("customer_group") or None,
+			warehouse=rule.get("warehouse") or None,
 		)
 
 	@staticmethod
@@ -457,6 +460,7 @@ class OfferBuilder:
 			validate_applied_rule=1 if rule.get("validate_applied_rule") else 0,
 			applicable_for=rule.get("applicable_for") or None,
 			customer_group=rule.get("customer_group") or None,
+			warehouse=rule.get("warehouse") or None,
 		)
 
 
@@ -478,15 +482,18 @@ def get_offers(pos_profile: str) -> List[Dict]:
 	try:
 		profile = frappe.get_doc("POS Profile", pos_profile)
 		date = nowdate()
+		# Warehouse from POS Profile — pricing rules restricted to a specific warehouse
+		# are excluded if they don't match this profile's warehouse.
+		pos_warehouse = profile.warehouse or None
 
 		offers = []
 
 		# Get offers from promotional schemes
-		scheme_offers = _get_promotional_scheme_offers(profile.company, date)
+		scheme_offers = _get_promotional_scheme_offers(profile.company, date, pos_warehouse)
 		offers.extend(scheme_offers)
 
 		# Get standalone pricing rule offers
-		standalone_offers = _get_standalone_pricing_rule_offers(profile.company, date)
+		standalone_offers = _get_standalone_pricing_rule_offers(profile.company, date, pos_warehouse)
 		offers.extend(standalone_offers)
 
 		return [offer.to_dict() for offer in offers]
@@ -496,18 +503,20 @@ def get_offers(pos_profile: str) -> List[Dict]:
 		return []
 
 
-def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
+def _get_promotional_scheme_offers(company: str, date: str, pos_warehouse: Optional[str] = None) -> List[Offer]:
 	"""Fetch offers from promotional schemes"""
 
 	# Fetch pricing rules linked to promotional schemes.
 	# Also JOIN the Promotional Scheme to enforce its own valid_from/valid_upto —
 	# ERPNext auto-creates Pricing Rules with NULL dates when a Scheme has dates,
 	# so the rule's own date filter is not enough.
+	# Warehouse filter: rules with a specific warehouse only apply to that warehouse's POS profile.
 	pricing_rules = frappe.db.sql("""
 		SELECT
 			pr.name, pr.title, pr.apply_on, pr.selling, pr.promotional_scheme,
 			pr.promotional_scheme_id, pr.coupon_code_based,
-			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto
+			pr.price_or_product_discount, pr.priority, pr.valid_from, pr.valid_upto,
+			pr.warehouse
 		FROM `tabPricing Rule` pr
 		LEFT JOIN `tabPromotional Scheme` ps ON ps.name = pr.promotional_scheme
 		WHERE
@@ -519,8 +528,9 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 			AND (pr.valid_upto IS NULL OR pr.valid_upto >= %(date)s)
 			AND (ps.valid_from IS NULL OR ps.valid_from <= %(date)s)
 			AND (ps.valid_upto IS NULL OR ps.valid_upto >= %(date)s)
+			AND (pr.warehouse IS NULL OR pr.warehouse = '' OR pr.warehouse = %(warehouse)s)
 		ORDER BY pr.priority DESC, pr.name
-	""", {"company": company, "date": date}, as_dict=1)
+	""", {"company": company, "date": date, "warehouse": pos_warehouse or ""}, as_dict=1)
 
 	if not pricing_rules:
 		return []
@@ -574,10 +584,11 @@ def _get_promotional_scheme_offers(company: str, date: str) -> List[Offer]:
 	return offers
 
 
-def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
+def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: Optional[str] = None) -> List[Offer]:
 	"""Fetch offers from standalone pricing rules (both Price and Product discount types)"""
 
-	# Fetch standalone pricing rules (not linked to schemes)
+	# Fetch standalone pricing rules (not linked to schemes).
+	# Warehouse filter: rules with a specific warehouse only apply to that warehouse's POS profile.
 	pricing_rules = frappe.db.sql("""
 		SELECT
 			name, title, apply_on, selling,
@@ -586,7 +597,7 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			min_qty, max_qty, min_amt, max_amt,
 			free_item, free_qty, free_item_uom, same_item,
 			priority, valid_from, valid_upto,
-			validate_applied_rule
+			validate_applied_rule, warehouse
 		FROM `tabPricing Rule`
 		WHERE
 			disable = 0
@@ -595,8 +606,9 @@ def _get_standalone_pricing_rule_offers(company: str, date: str) -> List[Offer]:
 			AND company = %(company)s
 			AND (valid_from IS NULL OR valid_from <= %(date)s)
 			AND (valid_upto IS NULL OR valid_upto >= %(date)s)
+			AND (warehouse IS NULL OR warehouse = '' OR warehouse = %(warehouse)s)
 		ORDER BY priority DESC, name
-	""", {"company": company, "date": date}, as_dict=1)
+	""", {"company": company, "date": date, "warehouse": pos_warehouse or ""}, as_dict=1)
 
 	if not pricing_rules:
 		return []
