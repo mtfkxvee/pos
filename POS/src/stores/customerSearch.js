@@ -198,6 +198,8 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 	})
 
 	// Actions
+	const CUSTOMER_LOAD_BATCH = 500
+
 	async function loadAllCustomers(posProfile, forceReload = false) {
 		if (!posProfile) {
 			return
@@ -210,28 +212,36 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 
 		loading.value = true
 		try {
-			// Try to get from worker cache first
-			const cachedCustomers = await offlineWorker.searchCachedCustomers("", 0)
+			// Try to get from worker cache first (use large limit to get all cached)
+			const cachedCustomers = await offlineWorker.searchCachedCustomers("", 5000)
 
 			if (cachedCustomers && cachedCustomers.length > 0) {
 				allCustomers.value = cachedCustomers
 				log.debug(`Loaded ${cachedCustomers.length} customers from cache`)
 			} else if (!isOffline()) {
-				// Fetch from server if cache is empty and online
-				const response = await call("pos_next.api.customers.get_customers", {
-					pos_profile: posProfile,
-					search_term: "",
-					start: 0,
-					limit: 0,
-				})
-				const list = response?.message || response || []
-				allCustomers.value = list
+				// Fetch from server with pagination to avoid overwhelming the server
+				let start = 0
+				const allFetched = []
+				while (true) {
+					const response = await call("pos_next.api.customers.get_customers", {
+						pos_profile: posProfile,
+						search_term: "",
+						start,
+						limit: CUSTOMER_LOAD_BATCH,
+					})
+					const batch = response?.message || response || []
+					if (!Array.isArray(batch) || batch.length === 0) break
+					allFetched.push(...batch)
+					if (batch.length < CUSTOMER_LOAD_BATCH) break
+					start += CUSTOMER_LOAD_BATCH
+				}
+				allCustomers.value = allFetched
 
 				// Cache for future use
-				if (list.length) {
-					await offlineWorker.cacheCustomers(list)
+				if (allFetched.length) {
+					await offlineWorker.cacheCustomers(allFetched)
 				}
-				log.debug(`Loaded ${list.length} customers from server`)
+				log.debug(`Loaded ${allFetched.length} customers from server`)
 			} else {
 				// Offline and cache is empty
 				log.warn("Offline mode: No cached customers available")

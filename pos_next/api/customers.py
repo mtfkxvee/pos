@@ -55,16 +55,19 @@ def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=No
 
         filters["disabled"] = 0
         start = int(start or 0)
-        limit = int(limit) if limit not in (None, 0, "0", "") else None
+        # Safety net: never allow unlimited fetch — default to 500 if limit is 0/None
+        MAX_LIMIT = 1000
+        if limit in (None, 0, "0", ""):
+            limit = MAX_LIMIT
+        limit = min(int(limit), MAX_LIMIT)
 
         get_all_kwargs = dict(
             filters=filters,
             fields=fetch_fields,
             order_by="customer_name asc",
+            limit=limit,
+            limit_start=start,
         )
-        if limit:
-            get_all_kwargs["limit"] = limit
-            get_all_kwargs["limit_start"] = start
 
         result = frappe.get_all("Customer", **get_all_kwargs)
 
