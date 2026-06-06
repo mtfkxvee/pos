@@ -510,7 +510,6 @@ def _get_promotional_scheme_offers(company: str, date: str, pos_warehouse: Optio
 	# Also JOIN the Promotional Scheme to enforce its own valid_from/valid_upto —
 	# ERPNext auto-creates Pricing Rules with NULL dates when a Scheme has dates,
 	# so the rule's own date filter is not enough.
-	# Warehouse filter: rules with a specific warehouse only apply to that warehouse's POS profile.
 	pricing_rules = frappe.db.sql("""
 		SELECT
 			pr.name, pr.title, pr.apply_on, pr.selling, pr.promotional_scheme,
@@ -528,9 +527,18 @@ def _get_promotional_scheme_offers(company: str, date: str, pos_warehouse: Optio
 			AND (pr.valid_upto IS NULL OR pr.valid_upto >= %(date)s)
 			AND (ps.valid_from IS NULL OR ps.valid_from <= %(date)s)
 			AND (ps.valid_upto IS NULL OR ps.valid_upto >= %(date)s)
-			AND (pr.warehouse IS NULL OR pr.warehouse = '' OR pr.warehouse = %(warehouse)s)
 		ORDER BY pr.priority DESC, pr.name
-	""", {"company": company, "date": date, "warehouse": pos_warehouse or ""}, as_dict=1)
+	""", {"company": company, "date": date}, as_dict=1)
+
+	# Warehouse filter in Python: only exclude when BOTH the rule and the POS profile
+	# have a specific warehouse set AND they don't match.
+	# - rule.warehouse blank/None → applies to all profiles (never excluded)
+	# - pos_warehouse blank/None → profile has no warehouse restriction (never excluded)
+	if pos_warehouse:
+		pricing_rules = [
+			r for r in pricing_rules
+			if not r.get("warehouse") or r["warehouse"] == pos_warehouse
+		]
 
 	if not pricing_rules:
 		return []
@@ -588,7 +596,6 @@ def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: 
 	"""Fetch offers from standalone pricing rules (both Price and Product discount types)"""
 
 	# Fetch standalone pricing rules (not linked to schemes).
-	# Warehouse filter: rules with a specific warehouse only apply to that warehouse's POS profile.
 	pricing_rules = frappe.db.sql("""
 		SELECT
 			name, title, apply_on, selling,
@@ -606,9 +613,16 @@ def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: 
 			AND company = %(company)s
 			AND (valid_from IS NULL OR valid_from <= %(date)s)
 			AND (valid_upto IS NULL OR valid_upto >= %(date)s)
-			AND (warehouse IS NULL OR warehouse = '' OR warehouse = %(warehouse)s)
 		ORDER BY priority DESC, name
-	""", {"company": company, "date": date, "warehouse": pos_warehouse or ""}, as_dict=1)
+	""", {"company": company, "date": date}, as_dict=1)
+
+	# Warehouse filter in Python: only exclude when BOTH the rule and the POS profile
+	# have a specific warehouse set AND they don't match.
+	if pos_warehouse:
+		pricing_rules = [
+			r for r in pricing_rules
+			if not r.get("warehouse") or r["warehouse"] == pos_warehouse
+		]
 
 	if not pricing_rules:
 		return []
