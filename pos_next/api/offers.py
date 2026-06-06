@@ -481,6 +481,26 @@ def _resolve_customer_group_restriction(applicable_for, customer_group):
 	return applicable_for, customer_group
 
 
+def _warehouse_matches(rule_warehouse, pos_warehouse):
+	"""
+	Returns True if rule_warehouse applies to pos_warehouse.
+	Uses Frappe's Nested Set lft/rgt to support parent/group warehouses:
+	a rule with warehouse = "All Warehouses" applies to every child warehouse.
+	"""
+	if not rule_warehouse:
+		return True
+	if rule_warehouse == pos_warehouse:
+		return True
+	try:
+		rule_wh = frappe.db.get_value("Warehouse", rule_warehouse, ["lft", "rgt"], as_dict=True)
+		pos_wh = frappe.db.get_value("Warehouse", pos_warehouse, ["lft", "rgt"], as_dict=True)
+		if rule_wh and pos_wh:
+			return rule_wh.lft <= pos_wh.lft and rule_wh.rgt >= pos_wh.rgt
+	except Exception:
+		pass
+	return False
+
+
 # ============================================================================
 # Main API Functions
 # ============================================================================
@@ -550,7 +570,7 @@ def _get_promotional_scheme_offers(company: str, date: str, pos_warehouse: Optio
 	if pos_warehouse:
 		pricing_rules = [
 			r for r in pricing_rules
-			if not r.get("warehouse") or r["warehouse"] == pos_warehouse
+			if _warehouse_matches(r.get("warehouse"), pos_warehouse)
 		]
 
 	if not pricing_rules:
@@ -638,7 +658,7 @@ def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: 
 	if pos_warehouse:
 		pricing_rules = [
 			r for r in pricing_rules
-			if not r.get("warehouse") or r["warehouse"] == pos_warehouse
+			if _warehouse_matches(r.get("warehouse"), pos_warehouse)
 		]
 
 	if not pricing_rules:
