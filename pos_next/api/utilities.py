@@ -40,6 +40,24 @@ def get_csrf_token():
 	}
 
 
+@frappe.whitelist()
+def get_app_build_info():
+	"""
+	Return the build version of the currently deployed frontend assets.
+
+	The frontend bakes its own build version into the bundle at compile time
+	(__BUILD_VERSION__) and compares it against this value to detect when a
+	newer build has been deployed to the server — prompting the cashier to
+	hard-refresh before continuing transactions.
+	"""
+	from pos_next.utils import get_app_version, get_build_version
+
+	return {
+		"build_version": get_build_version(),
+		"app_version": get_app_version(),
+	}
+
+
 def _parse_list_parameter(value, param_name="parameter"):
 	"""
 	Parse a list parameter that may come as JSON string or list.

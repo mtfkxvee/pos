@@ -1008,6 +1008,12 @@
 				@confirm="confirmClearCache"
 			/>
 
+			<!-- Update Required Overlay -->
+			<UpdateRequiredOverlay
+				:show="versionCheck.updateRequired.value"
+				@confirm="versionCheck.performHardRefresh"
+			/>
+
 			<!-- Footer -->
 			<POSFooter />
 		</template>
@@ -1026,6 +1032,7 @@ const _posInitPromise = null
 import ShiftClosingDialog from "@/components/ShiftClosingDialog.vue";
 import ShiftOpeningDialog from "@/components/ShiftOpeningDialog.vue";
 import ClearCacheOverlay from "@/components/common/ClearCacheOverlay.vue";
+import UpdateRequiredOverlay from "@/components/common/UpdateRequiredOverlay.vue";
 import LoadingSpinner from "@/components/common/LoadingSpinner.vue";
 import POSFooter from "@/components/common/POSFooter.vue";
 import ManagementSlider from "@/components/pos/ManagementSlider.vue";
@@ -1062,6 +1069,7 @@ import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sy
 import { generateOfflineInvoiceId } from "@/utils/offline/invoiceId";
 import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
 import { usePrintFormat } from "@/composables/usePrintFormat";
+import { useVersionCheck } from "@/composables/useVersionCheck";
 import PrintFormatDialog from "@/components/pos/PrintFormatDialog.vue";
 import { Button, Dialog, createResource, frappeRequest } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
@@ -1111,6 +1119,7 @@ const {
 
 // Initialize toast
 const { showSuccess, showError, showWarning } = useToast();
+const versionCheck = useVersionCheck();
 
 // Initialize logger
 const log = logger.create("POSSale");
@@ -1979,6 +1988,11 @@ function handleEditCustomer(customer) {
 }
 
 function handleProceedToPayment() {
+	if (versionCheck.updateRequired.value) {
+		showWarning(__("Sistem perlu diperbarui sebelum dapat melanjutkan transaksi. Silakan refresh halaman."));
+		return;
+	}
+
 	if (cartStore.isEmpty) {
 		showWarning(__("Please add items to cart before proceeding to payment"));
 		return;
