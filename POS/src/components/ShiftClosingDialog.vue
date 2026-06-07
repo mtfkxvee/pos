@@ -57,6 +57,13 @@
                 <div class="text-lg md:text-2xl font-bold text-gray-900 mb-0.5 md:mb-1 truncate">{{ formatCurrency(totalTax) }}</div>
                 <div class="text-gray-600 text-xs">{{ __('Net tax') }}</div>
               </div>
+
+              <!-- Loyalty Points Redeemed -->
+              <div v-if="hasLoyaltyRedemption" class="text-start bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4">
+                <div class="text-purple-600 text-xs uppercase font-medium mb-1">{{ __('Loyalty Redeemed') }}</div>
+                <div class="text-lg md:text-2xl font-bold text-purple-900 mb-0.5 md:mb-1 truncate">{{ formatCurrency(loyaltyRedemptionTotal) }}</div>
+                <div class="text-purple-600 text-xs">{{ __('Excluded from gross sales') }}</div>
+              </div>
             </div>
           </div>
 
@@ -802,6 +809,13 @@ const grossSales = computed(() => {
 	if (!closingData.value) return 0
 	return closingData.value.sales_total ?? closingData.value.grand_total ?? 0
 })
+
+const loyaltyRedemptionTotal = computed(() => {
+	if (!closingData.value) return 0
+	return closingData.value.loyalty_redemption_total || 0
+})
+
+const hasLoyaltyRedemption = computed(() => loyaltyRedemptionTotal.value > 0)
 const getTotalExpected = computed(() => {
 	if (!closingData.value || !closingData.value.payment_reconciliation) return 0
 	return closingData.value.payment_reconciliation.reduce(

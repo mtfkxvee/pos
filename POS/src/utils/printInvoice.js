@@ -455,6 +455,10 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
                     <span>${__("Returns:")}</span>
                     <span>${formatCurrency(closingData.returns_total, "IDR", "id-ID")}</span>
                 </div>
+                ${closingData.loyalty_redemption_total ? `<div class="row">
+                    <span>${__("Loyalty Redeemed:")}</span>
+                    <span>-${formatCurrency(closingData.loyalty_redemption_total, "IDR", "id-ID")}</span>
+                </div>` : ""}
                 <div class="row">
                     <span>${__("Tax Collected:")}</span>
                     <span>${formatCurrency(taxesTotal, "IDR", "id-ID")}</span>

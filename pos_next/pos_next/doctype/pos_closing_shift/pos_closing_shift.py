@@ -373,7 +373,7 @@ def get_pos_invoices(pos_opening_shift, doctype=None):
         SELECT
             name, customer, posting_date, posting_time, currency, conversion_rate,
             grand_total, base_grand_total, net_total, base_net_total,
-            total_qty, is_return, return_against,
+            total_qty, is_return, return_against, loyalty_amount,
             change_amount, base_change_amount
         FROM `tab{doctype}`
         WHERE docstatus = 1 AND posa_pos_opening_shift = %s{cond}
@@ -490,6 +490,12 @@ def _process_invoice(invoice, invoice_field, company_currency, cash_mode, paymen
     base_grand_total = get_base_value(invoice, "grand_total", "base_grand_total", conversion_rate)
     base_net_total = get_base_value(invoice, "net_total", "base_net_total", conversion_rate)
 
+    # A "full redeem" transaction is entirely paid via loyalty points
+    # (loyalty_amount == grand_total) and contributes no real revenue,
+    # so it must be excluded from the gross sales total.
+    loyalty_amount = flt(invoice.get("loyalty_amount"))
+    is_full_redeem = loyalty_amount > 0 and abs(loyalty_amount - flt(invoice.get("grand_total"))) < 0.005
+
     # Build transaction record
     transaction = frappe._dict({
         invoice_field: invoice.name,
@@ -511,8 +517,11 @@ def _process_invoice(invoice, invoice_field, company_currency, cash_mode, paymen
         summary["returns_total"] += abs(base_grand_total)
         summary["returns_count"] += 1
     else:
-        summary["sales_total"] += base_grand_total
         summary["sales_count"] += 1
+        if not is_full_redeem:
+            summary["sales_total"] += base_grand_total
+        if loyalty_amount > 0:
+            summary["loyalty_redemption_total"] += loyalty_amount * flt(conversion_rate or 1)
 
     # Process taxes
     for t in invoice.taxes:
@@ -561,6 +570,7 @@ def make_closing_shift_from_opening(opening_shift):
         "grand_total": 0, "net_total": 0, "total_quantity": 0,
         "returns_total": 0, "returns_count": 0,
         "sales_total": 0, "sales_count": 0,
+        "loyalty_redemption_total": 0,
     }
 
     # Add opening balances to payments
@@ -612,6 +622,7 @@ def make_closing_shift_from_opening(opening_shift):
         "returns_count": summary["returns_count"],
         "sales_total": summary["sales_total"],
         "sales_count": summary["sales_count"],
+        "loyalty_redemption_total": summary["loyalty_redemption_total"],
         "pos_transactions": pos_transactions,  # Include return info for display
     })
 
