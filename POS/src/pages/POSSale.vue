@@ -1198,6 +1198,20 @@ watch(
 	}
 );
 
+// Freeze promo/offer recalculation while the payment dialog is open so the
+// grand total the cashier sees and confirms cannot silently drift (via async
+// debounced offer re-evaluation) before it is captured for submission.
+watch(
+	() => uiStore.showPaymentDialog,
+	(isOpen) => {
+		if (isOpen) {
+			cartStore.lockOffersForCheckout();
+		} else {
+			cartStore.unlockOffersForCheckout();
+		}
+	}
+);
+
 // Stock sync status
 const isStockSyncActive = ref(false);
 

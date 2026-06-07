@@ -134,6 +134,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const promoTransactionDiscount = ref(0)
 	const selectionMode = ref("uom") // 'uom' or 'variant'
 	const suppressOfferReapply = ref(false)
+	// When true, offer/promo recalculation is frozen — set while the payment
+	// dialog is open so the totals the cashier sees and confirms cannot drift
+	// (asynchronously, via debounced offer re-evaluation) before submission.
+	// Without this, promoTransactionDiscount could change between the moment
+	// the cashier sees/confirms the grand total and the moment submitInvoice
+	// captures it, causing a mismatch (e.g. displayed 95,000 vs submitted 94,100).
+	const checkoutLocked = ref(false)
 	const currentDraftId = ref(null)
 	const currentDraftIsServer = ref(false)
 	const targetDoctype = ref("Sales Invoice")
@@ -276,6 +283,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		// Reset offer processing state
 		suppressOfferReapply.value = false
+		checkoutLocked.value = false
 		offerProcessingState.value.lastCartHash = ""
 		offerProcessingState.value.error = null
 		offerProcessingState.value.retryCount = 0
@@ -1913,6 +1921,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 * @param {boolean} force - If true, bypass hash check and force processing
 	 */
 	function triggerOfferProcessing(force = false) {
+		// Frozen for checkout — don't let totals drift while the cashier is
+		// looking at / confirming the payment dialog (see checkoutLocked).
+		if (checkoutLocked.value) return
+
 		// Increment generation to invalidate any in-flight operations
 		const currentGen = ++cartGeneration
 
@@ -1984,6 +1996,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 */
 	let debounceTimeoutId = null
 	function debouncedProcessOffers() {
+		// Frozen for checkout — see checkoutLocked / triggerOfferProcessing
+		if (checkoutLocked.value) return
+
 		if (debounceTimeoutId) {
 			clearTimeout(debounceTimeoutId)
 		}
@@ -1991,6 +2006,27 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			debounceTimeoutId = null
 			triggerOfferProcessing(false)
 		}, getDynamicDebounceDelay())
+	}
+
+	/**
+	 * Freezes offer/promo recalculation for checkout.
+	 * Cancels any pending/in-flight offer evaluation so promoTransactionDiscount
+	 * (and therefore adjustedGrandTotal) cannot change between the moment the
+	 * cashier sees the total in the payment dialog and the moment it is
+	 * captured for submission.
+	 */
+	function lockOffersForCheckout() {
+		debouncedProcessOffers.cancel()
+		offerQueue.cancel()
+		checkoutLocked.value = true
+	}
+
+	/**
+	 * Resumes normal offer/promo recalculation (e.g. payment dialog closed
+	 * without completing the sale).
+	 */
+	function unlockOffersForCheckout() {
+		checkoutLocked.value = false
 	}
 
 	// Add cancel and flush methods for compatibility
@@ -2119,6 +2155,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		promoTransactionDiscount,
 		selectionMode,
 		suppressOfferReapply,
+		checkoutLocked,
 		currentDraftId,
 		currentDraftIsServer,
 		offerProcessingState, // Offer processing state for UI feedback
@@ -2148,6 +2185,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		removeOffer,
 		reapplyOffer,
 		autoApplyEligibleOffers,
+		lockOffersForCheckout,
+		unlockOffersForCheckout,
 		changeItemUOM,
 		updateItemDetails,
 		getItemDetailsResource,
