@@ -849,7 +849,6 @@ export function useInvoice() {
 		loyaltyData = {},
 		appliedTransactionRules = [],
 		promoDiscountAmount = 0,
-		uiGrandTotal = null,
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -951,9 +950,6 @@ export function useInvoice() {
 					// validate() resets discount_amount via set_pos_fields()
 					discount_amount: additionalDiscount.value || 0,
 					apply_discount_on: "Grand Total",
-					// Grand total as displayed to the cashier — used server-side to
-					// detect any mismatch between UI and what ERPNext actually records
-					ui_grand_total: uiGrandTotal != null ? uiGrandTotal : (grandTotal.value || 0),
 					// Applied pricing rules for audit trail [{rule, item_code}]
 					applied_audit_rules: appliedTransactionRules,
 					// Transaction-level promo discount amount (member/promo rules only)
