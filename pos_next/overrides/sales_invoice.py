@@ -507,6 +507,49 @@ class CustomSalesInvoice(SalesInvoice):
 		except AttributeError:
 			pass
 
+	def delete_loyalty_point_entry(self):
+		"""
+		Skip ERPNext's native delete+recreate of the original invoice's
+		Loyalty Point Entry when a POS return is submitted.
+
+		ERPNext's Sales Invoice.on_submit(), for return invoices, calls
+		`against_si_doc.delete_loyalty_point_entry()` followed by
+		`against_si_doc.make_loyalty_point_entry()` to adjust the original
+		invoice's earned points to the post-return total. When those points
+		have already been redeemed elsewhere, ERPNext throws
+		"Sales Invoice can't be cancelled since the Loyalty Points earned
+		has been redeemed..." — which blocks the ENTIRE return submission.
+
+		pos_next handles loyalty point reversal for POS returns itself via
+		a proportional adjustment (see
+		pos_next.api.invoices._reverse_loyalty_points_for_return), which
+		creates a separate negative entry instead of deleting/recreating
+		the original — so it works even when points were redeemed. Skip
+		ERPNext's native handling for POS invoices entirely; flag so the
+		paired make_loyalty_point_entry() call (on this same instance, right
+		after, in ERPNext's on_submit) is skipped too — avoiding a duplicate
+		earn entry.
+		"""
+		if cint(self.is_pos):
+			self.flags.pos_next_skip_loyalty_recreate = True
+			return
+
+		return super().delete_loyalty_point_entry()
+
+	def make_loyalty_point_entry(self):
+		"""
+		Paired with delete_loyalty_point_entry() above — see its docstring.
+		Skip ERPNext's native re-creation of the earn entry when this is
+		being called as part of a POS return's post-return adjustment
+		(flag set by our delete_loyalty_point_entry override on this same
+		document instance). Normal POS invoice submission (which never
+		calls delete_loyalty_point_entry first) is unaffected.
+		"""
+		if self.flags.get("pos_next_skip_loyalty_recreate"):
+			return
+
+		return super().make_loyalty_point_entry()
+
 	def get_party_and_party_type_for_pos_gl_entry(self, mode_of_payment, account):
 		"""
 		Get party type and party for wallet payment GL entries.
