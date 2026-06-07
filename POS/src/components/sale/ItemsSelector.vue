@@ -4,7 +4,7 @@
 		<div class="px-1.5 sm:px-3 pt-1.5 sm:pt-3 pb-1.5 sm:pb-2 bg-white border-b border-gray-200">
 			<div class="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory">
 				<!-- Pin Category Button + Dropdown -->
-				<div class="relative z-50 flex-shrink-0">
+				<div class="relative z-50 flex-shrink-0 ms-1">
 					<button
 						@click="togglePinCategoryDropdown"
 						data-pin-category-button
