@@ -1618,7 +1618,16 @@ def submit_invoice(invoice=None, data=None):
         ui_discount = flt(data.get("discount_amount") or 0)
         sys_discount = flt(invoice_doc.discount_amount or 0)
 
-        if ui_grand_total and abs(ui_grand_total - sys_grand_total) > 1:
+        _paid_amount_check = flt(getattr(invoice_doc, "paid_amount", 0))
+
+        # If what was actually paid already reconciles with the system's grand_total,
+        # the system's number is proven correct (it's what the cashier really collected) —
+        # never let a possibly-rounded ui_grand_total override a balanced invoice.
+        if (
+            ui_grand_total
+            and abs(ui_grand_total - sys_grand_total) > 1
+            and abs(_paid_amount_check - sys_grand_total) > 1
+        ):
             diff = sys_grand_total - ui_grand_total
             _mismatch_log = (
                 f"App v{_app_version}\n\n"
