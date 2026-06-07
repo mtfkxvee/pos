@@ -2575,11 +2575,19 @@ async function handleLoadDraft(draft) {
 		// Rebuild incremental cache to recalculate totals
 		cartStore.rebuildIncrementalCache();
 
-		// Restore applied offers if they were saved
-		if (draftData.applied_offers && draftData.applied_offers.length > 0) {
-			cartStore.appliedOffers = draftData.applied_offers;
-			// Trigger offer reapplication to ensure they apply to all items
-			await cartStore.reapplyOffer(shiftStore.currentProfile);
+		// Restore applied offer codes if they were saved (local drafts only —
+		// server drafts don't carry this, so start from empty and let the
+		// recalculation below rediscover eligible offers from the cart itself)
+		cartStore.appliedOffers = draftData.applied_offers || [];
+
+		// Force a full recalculation of item-level and transaction-level promo
+		// discounts against the restored cart. The draft snapshot does not
+		// capture promoTransactionDiscount, and reapplyOffer() is a no-op when
+		// the restored offers are still eligible (it only acts on invalid
+		// offers) — so without this, promo discounts stay inactive until the
+		// cart is touched again (e.g. removing/re-adding the customer or item).
+		if (cartStore.invoiceItems.length > 0) {
+			cartStore.forceRefreshOffers();
 		}
 
 		// Initialize cart hash for the loaded cart so watchers work correctly
