@@ -849,6 +849,7 @@ export function useInvoice() {
 		loyaltyData = {},
 		appliedTransactionRules = [],
 		promoDiscountAmount = 0,
+		uiGrandTotal = null,
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -950,6 +951,11 @@ export function useInvoice() {
 					// validate() resets discount_amount via set_pos_fields()
 					discount_amount: additionalDiscount.value || 0,
 					apply_discount_on: "Grand Total",
+					// Grand total as displayed to / confirmed by the cashier — used
+					// server-side ONLY to log a mismatch for investigation. It must
+					// NEVER be used to overwrite invoice.grand_total (see git history
+					// for why the previous auto-correction was removed).
+					ui_grand_total: uiGrandTotal != null ? uiGrandTotal : (grandTotal.value || 0),
 					// Applied pricing rules for audit trail [{rule, item_code}]
 					applied_audit_rules: appliedTransactionRules,
 					// Transaction-level promo discount amount (member/promo rules only)

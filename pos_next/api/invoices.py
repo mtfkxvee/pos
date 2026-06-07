@@ -1605,6 +1605,47 @@ def submit_invoice(invoice=None, data=None):
                         "POS Return Payment Fix"
                     )
 
+        # ── Grand Total Mismatch Log (read-only — NO auto-correction) ────────
+        # Compare the grand_total the UI displayed/confirmed (sent by frontend
+        # as data.ui_grand_total) with the grand_total ERPNext actually
+        # recorded after submit, purely for investigation/audit purposes.
+        # IMPORTANT: this must never write to the invoice — a previous
+        # auto-correction here ended up overwriting CORRECT, balanced invoices
+        # with a wrong total (race condition between the cashier-confirmed
+        # total and async promo recalculation — now fixed at the source via
+        # lockOffersForCheckout in posCart.js). Log only; do not touch data.
+        try:
+            from pos_next import __version__ as _app_version
+            ui_grand_total = flt(data.get("ui_grand_total") or 0)
+            sys_grand_total = flt(invoice_doc.grand_total or 0)
+
+            if ui_grand_total and abs(ui_grand_total - sys_grand_total) > 1:
+                frappe.log_error(
+                    title="POS Grand Total Mismatch",
+                    message=(
+                        f"App v{_app_version}\n\n"
+                        f"Invoice     : {invoice_doc.name}\n"
+                        f"Customer    : {invoice_doc.customer}\n"
+                        f"POS Profile : {invoice_doc.pos_profile}\n\n"
+                        f"UI showed   : {ui_grand_total:,.0f}   ← what cashier saw/confirmed\n"
+                        f"System has  : {sys_grand_total:,.0f}   ← what was recorded\n"
+                        f"Difference  : {sys_grand_total - ui_grand_total:+,.0f}\n\n"
+                        f"UI discount_amount    : {flt(data.get('discount_amount') or 0):,.0f}\n"
+                        f"System discount_amount: {flt(invoice_doc.discount_amount):,.0f}\n"
+                        f"Net total   : {flt(invoice_doc.net_total):,.0f}\n"
+                        f"Paid amount : {flt(getattr(invoice_doc, 'paid_amount', 0)):,.0f}\n"
+                        f"Outstanding : {flt(getattr(invoice_doc, 'outstanding_amount', 0)):,.0f}\n"
+                        f"Additional discount %: {flt(invoice_doc.additional_discount_percentage)}\n"
+                        f"\n[LOG ONLY — invoice was NOT modified]\n"
+                    ),
+                )
+        except Exception:
+            # Never let logging break invoice submission
+            frappe.log_error(
+                f"POS Grand Total Mismatch Log failed: {frappe.get_traceback()}",
+                "POS Grand Total Mismatch Log Error",
+            )
+
         # Complete the offline sync record
         if sync_record_name:
             _complete_offline_sync(sync_record_name, invoice_doc.name)

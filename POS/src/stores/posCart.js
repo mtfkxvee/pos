@@ -389,6 +389,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				toRaw(loyaltyData.value),
 				auditRules,
 				promoTransactionDiscount.value || 0,
+				adjustedGrandTotal.value,
 			)
 		} finally {
 			// Always restore — even on error — so cart state is consistent
