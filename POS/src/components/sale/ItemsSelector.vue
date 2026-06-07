@@ -3,8 +3,23 @@
 		<!-- Item Groups Filter Tabs -->
 		<div class="px-1.5 sm:px-3 pt-1.5 sm:pt-3 pb-1.5 sm:pb-2 bg-white border-b border-gray-200">
 			<div class="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory">
+				<button
+					@click="itemStore.setSelectedItemGroup(null)"
+					:class="[
+						'flex items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium whitespace-nowrap transition-[background-color,border-color] duration-75 touch-manipulation snap-start flex-shrink-0',
+						!selectedItemGroup
+							? 'bg-blue-50 text-blue-600 border-2 border-blue-500 shadow-sm'
+							: 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 active:bg-gray-100',
+					]"
+				>
+					<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+					</svg>
+					<span>{{ __('All Items') }}</span>
+				</button>
+
 				<!-- Pin Category Button + Dropdown -->
-				<div class="relative z-50 flex-shrink-0 ms-1">
+				<div class="relative z-50 flex-shrink-0">
 					<button
 						@click="togglePinCategoryDropdown"
 						data-pin-category-button
@@ -54,21 +69,6 @@
 						</div>
 					</div>
 				</div>
-
-				<button
-					@click="itemStore.setSelectedItemGroup(null)"
-					:class="[
-						'flex items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium whitespace-nowrap transition-[background-color,border-color] duration-75 touch-manipulation snap-start flex-shrink-0',
-						!selectedItemGroup
-							? 'bg-blue-50 text-blue-600 border-2 border-blue-500 shadow-sm'
-							: 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 active:bg-gray-100',
-					]"
-				>
-					<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-					</svg>
-					<span>{{ __('All Items') }}</span>
-				</button>
 				<button
 					v-for="group in sortedItemGroups"
 					:key="group.item_group"
