@@ -174,6 +174,7 @@ class CustomSalesInvoice(SalesInvoice):
 						0,
 						flt(self.grand_total) - total_paid - loyalty_amt - write_off_amt,
 					)
+					self.set_status()
 			except Exception as e:
 				frappe.log_error(
 					f"POS Next: failed to restore payments for {self.name}: {e}",
@@ -191,6 +192,7 @@ class CustomSalesInvoice(SalesInvoice):
 			_expected = max(0, flt(self.grand_total) - _paid - _loyalty - _write_off)
 			if flt(self.outstanding_amount) != _expected:
 				self.outstanding_amount = _expected
+				self.set_status()
 
 		# Restore fixed discount if pricing rule recalculated it from percentage
 		if intended_da is not None and (
@@ -214,6 +216,7 @@ class CustomSalesInvoice(SalesInvoice):
 				0,
 				flt(self.grand_total) - total_paid - loyalty_amt - write_off_amt,
 			)
+			self.set_status()
 
 	def get_gl_entries(self, warehouse_account=None):
 		"""

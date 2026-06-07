@@ -1599,6 +1599,8 @@ def submit_invoice(invoice=None, data=None):
                         )
                         invoice_doc.paid_amount = -_refund_total
                         invoice_doc.outstanding_amount = 0
+                        # Recompute & persist status (bypassed by the raw db_set above)
+                        invoice_doc.set_status(update=True)
                 except Exception as _re:
                     frappe.log_error(
                         f"POS Return {invoice_doc.name}: {_re}\n{frappe.get_traceback()}",
