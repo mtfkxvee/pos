@@ -340,6 +340,15 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
+		// Snapshot the grand total EXACTLY as the cashier sees/confirms it in the
+		// payment dialog (cartStore.grandTotal === adjustedGrandTotal), BEFORE any
+		// mutation below. adjustedGrandTotal is a computed that derives from
+		// additionalDiscount — mutating additionalDiscount first (as we do next)
+		// would cause promoTransactionDiscount to be subtracted twice when
+		// adjustedGrandTotal.value is read afterwards, silently deflating the
+		// captured "UI showed" value and producing false-positive mismatch logs.
+		const uiGrandTotalAtConfirm = adjustedGrandTotal.value
+
 		// Temporarily include promoTransactionDiscount in additionalDiscount so
 		// baseSubmitInvoice sends the full invoice-level discount to the backend.
 		// Item-level discounts (e.g. 3.000 pricing rule) are now correctly baked
@@ -389,7 +398,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				toRaw(loyaltyData.value),
 				auditRules,
 				promoTransactionDiscount.value || 0,
-				adjustedGrandTotal.value,
+				uiGrandTotalAtConfirm,
 			)
 		} finally {
 			// Always restore — even on error — so cart state is consistent
