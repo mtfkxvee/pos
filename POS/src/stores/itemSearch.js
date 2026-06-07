@@ -167,6 +167,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	const pinnedItems = ref(new Set())
 	const pinnedItemDetails = ref([]) // Full item objects for pinned codes
 
+	// Pinned categories (item groups) state - per POS Profile, persisted server-side
+	const pinnedCategories = ref(new Set())
+
 	// Sorting state - for user-triggered sorting filters
 	const sortBy = ref(null) // Options: 'name', 'quantity', 'item_group', null (no sorting)
 	const sortOrder = ref("asc") // Options: 'asc', 'desc'
@@ -1960,6 +1963,38 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		}
 	}
 
+	async function loadPinnedCategories(profile) {
+		if (!profile) {
+			pinnedCategories.value = new Set()
+			return
+		}
+		try {
+			const result = await call("pos_next.api.pinned_categories.get_pinned_categories", {
+				pos_profile: profile,
+			})
+			const list = result?.message || result || []
+			pinnedCategories.value = new Set(list)
+		} catch (e) {
+			log.warn("Failed to load pinned categories", e)
+		}
+	}
+
+	async function togglePinnedCategory(item_group) {
+		const profile = posProfile.value
+		if (!profile || !item_group) return
+		try {
+			const result = await call("pos_next.api.pinned_categories.toggle_pinned_category", {
+				pos_profile: profile,
+				item_group,
+			})
+			const data = result?.message || result || {}
+			const list = data.pinned_categories || []
+			pinnedCategories.value = new Set(list)
+		} catch (e) {
+			log.warn("Failed to toggle pinned category", e)
+		}
+	}
+
 	function cleanup() {
 		// Stop background sync when store is destroyed
 		stopBackgroundCacheSync()
@@ -2217,8 +2252,9 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			itemGroups.value = data?.item_groups_hierarchy || []
 			log.info(`Loaded ${itemGroups.value.length} item groups with hierarchy`)
 
-			// Load pinned items for this profile (non-blocking)
+			// Load pinned items and categories for this profile (non-blocking)
 			loadPinnedItems(profile)
+			loadPinnedCategories(profile)
 
 			// Cache profile data for offline use (survives component remount)
 			try {
@@ -2309,6 +2345,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		sortBy,
 		sortOrder,
 		pinnedItems,
+		pinnedCategories,
 
 		// ========================================================================
 		// COMPUTED PROPERTIES
@@ -2337,6 +2374,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		setSortFilter,
 		clearSortFilter,
 		togglePinnedItem,
+		togglePinnedCategory,
 
 		// ========================================================================
 		// STOCK ACTIONS - Delegates to stock store

@@ -3,6 +3,58 @@
 		<!-- Item Groups Filter Tabs -->
 		<div class="px-1.5 sm:px-3 pt-1.5 sm:pt-3 pb-1.5 sm:pb-2 bg-white border-b border-gray-200">
 			<div class="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory">
+				<!-- Pin Category Button + Dropdown -->
+				<div class="relative z-50 flex-shrink-0">
+					<button
+						@click="togglePinCategoryDropdown"
+						data-pin-category-button
+						:class="[
+							'flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-[background-color,box-shadow] duration-75 touch-manipulation border',
+							pinnedCategories.size > 0
+								? 'bg-yellow-50 border-yellow-400 text-yellow-700 shadow-sm'
+								: 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 active:bg-gray-100',
+						]"
+						:title="__('Pin categories')"
+						:aria-label="__('Pin categories')"
+					>
+						<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+						</svg>
+					</button>
+
+					<!-- Pin Category Dropdown -->
+					<div
+						v-if="showPinCategoryDropdown"
+						@click.stop
+						class="absolute start-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] max-h-80 overflow-y-auto"
+						style="box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);"
+					>
+						<div class="py-2">
+							<div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase border-b border-gray-100 sticky top-0 bg-white">
+								{{ __('Pin Categories') }}
+							</div>
+							<div class="py-1">
+								<button
+									v-for="group in itemGroups"
+									:key="group.item_group"
+									@click="togglePinCategory(group.item_group)"
+									class="w-full px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2.5 group text-gray-700 hover:bg-gray-50"
+								>
+									<span class="truncate text-start">{{ __(group.item_group) }}</span>
+									<svg
+										class="w-4 h-4 flex-shrink-0"
+										:class="pinnedCategories.has(group.item_group) ? 'text-yellow-400' : 'text-gray-300 group-hover:text-yellow-400'"
+										viewBox="0 0 24 24"
+										fill="currentColor"
+									>
+										<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+									</svg>
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+
 				<button
 					@click="itemStore.setSelectedItemGroup(null)"
 					:class="[
@@ -18,16 +70,26 @@
 					<span>{{ __('All Items') }}</span>
 				</button>
 				<button
-					v-for="group in itemGroups"
+					v-for="group in sortedItemGroups"
 					:key="group.item_group"
 					@click="itemStore.setSelectedItemGroup(group.item_group)"
 					:class="[
-						'flex items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium whitespace-nowrap transition-[background-color,border-color] duration-75 touch-manipulation snap-start flex-shrink-0',
+						'flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium whitespace-nowrap transition-[background-color,border-color] duration-75 touch-manipulation snap-start flex-shrink-0',
 						selectedItemGroup === group.item_group
 							? 'bg-blue-50 text-blue-600 border-2 border-blue-500 shadow-sm'
-							: 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 active:bg-gray-100',
+							: pinnedCategories.has(group.item_group)
+								? 'bg-yellow-50 text-yellow-800 border border-yellow-300 hover:bg-yellow-100'
+								: 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 active:bg-gray-100',
 					]"
 				>
+					<svg
+						v-if="pinnedCategories.has(group.item_group)"
+						class="w-3 h-3 text-yellow-500 flex-shrink-0"
+						viewBox="0 0 24 24"
+						fill="currentColor"
+					>
+						<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+					</svg>
 					<span>{{ __(group.item_group) }}</span>
 				</button>
 			</div>
@@ -800,10 +862,39 @@ const {
 	sortOrder,
 	totalServerItems,
 	pinnedItems,
+	pinnedCategories,
 } = storeToRefs(itemStore)
 
 function togglePin(item) {
 	itemStore.togglePinnedItem(item.item_code)
+}
+
+function togglePinCategory(itemGroup) {
+	itemStore.togglePinnedCategory(itemGroup)
+}
+
+// Pinned categories first (in pinned order), then the rest in original order
+const sortedItemGroups = computed(() => {
+	const pinned = []
+	const unpinned = []
+	for (const group of itemGroups.value) {
+		if (pinnedCategories.value.has(group.item_group)) {
+			pinned.push(group)
+		} else {
+			unpinned.push(group)
+		}
+	}
+	pinned.sort(
+		(a, b) =>
+			Array.from(pinnedCategories.value).indexOf(a.item_group) -
+			Array.from(pinnedCategories.value).indexOf(b.item_group),
+	)
+	return [...pinned, ...unpinned]
+})
+
+const showPinCategoryDropdown = ref(false)
+function togglePinCategoryDropdown() {
+	showPinCategoryDropdown.value = !showPinCategoryDropdown.value
 }
 
 // Local state
@@ -1488,6 +1579,18 @@ function handleClickOutside(event) {
 				?.contains(event.target)
 		) {
 			showSortDropdown.value = false
+		}
+	}
+
+	if (showPinCategoryDropdown.value) {
+		const dropdown = event.target.closest(".relative")
+		if (
+			!dropdown ||
+			!dropdown
+				.querySelector("button[data-pin-category-button]")
+				?.contains(event.target)
+		) {
+			showPinCategoryDropdown.value = false
 		}
 	}
 }
