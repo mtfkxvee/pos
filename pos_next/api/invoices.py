@@ -723,6 +723,15 @@ def update_invoice(data):
         if not invoice_doc.get("is_return") and (_discount_amount > 0 or _has_item_discount):
             gt = flt(invoice_doc.grand_total)
             rounded_gt = round(gt / 100) * 100
+            # Record rounding details (used by the grand total mismatch log to
+            # show exactly what value was rounded and by how much).
+            invoice_doc.flags.pos_next_rounding_info = {
+                "rule": "Round to nearest 100 when discount applied",
+                "before_rounding": gt,
+                "expected_rounded": rounded_gt,
+                "applied": rounded_gt != gt,
+                "difference": gt - rounded_gt,
+            }
             if rounded_gt != gt:
                 rounding_diff = gt - rounded_gt  # positive = round down, negative = round up
                 invoice_doc.discount_amount = flt(invoice_doc.discount_amount) + rounding_diff
@@ -1092,6 +1101,223 @@ def check_offline_invoice_synced(offline_id):
         return {"synced": False, "sales_invoice": None}
 
     return result
+
+
+# ==========================================
+# Grand Total Mismatch Log — breakdown helpers
+# ==========================================
+# These build a self-explanatory, human-readable explanation of *why* the
+# UI-shown grand_total differs from the grand_total ERPNext recorded, so the
+# root cause (missing promo, rounding, discount math, etc.) can be identified
+# from the log alone. Read-only: never modifies the invoice.
+
+
+def _mismatch_promo_breakdown(invoice_doc):
+    """Compare expected vs actual discount for each Pricing Rule applied to the invoice.
+
+    Returns a list of dicts: name, title, type, expected, actual, difference.
+    """
+    item_rules = {}
+    for item in invoice_doc.get("items") or []:
+        for rule_name in cstr(item.get("pricing_rules") or "").split(","):
+            rule_name = rule_name.strip()
+            if rule_name:
+                item_rules.setdefault(rule_name, []).append(item)
+
+    if not item_rules:
+        return []
+
+    rules = frappe.get_all(
+        "Pricing Rule",
+        filters={"name": ["in", list(item_rules.keys())]},
+        fields=[
+            "name", "title", "apply_on", "price_or_product_discount",
+            "discount_percentage", "discount_amount", "rate", "promotional_scheme",
+        ],
+    )
+    rule_map = {r.name: r for r in rules}
+
+    breakdown = []
+    for rule_name, items in item_rules.items():
+        rule = rule_map.get(rule_name)
+        is_transaction = bool(rule) and rule.get("apply_on") == "Transaction"
+
+        if is_transaction:
+            expected = 0.0
+            if rule.get("discount_percentage"):
+                expected = flt(invoice_doc.net_total) * flt(rule.discount_percentage) / 100
+            elif rule.get("discount_amount"):
+                expected = flt(rule.discount_amount)
+            actual = flt(getattr(invoice_doc, "custom_promo_discount_amount", 0) or 0) or flt(invoice_doc.discount_amount)
+            rule_type = "Transaction-level"
+        else:
+            expected = 0.0
+            actual = 0.0
+            for item in items:
+                qty = flt(item.qty)
+                price_list_rate = flt(item.price_list_rate)
+                if rule and rule.get("discount_percentage"):
+                    expected += price_list_rate * flt(rule.discount_percentage) / 100 * qty
+                elif rule and rule.get("discount_amount"):
+                    expected += flt(rule.discount_amount) * qty
+                actual += flt(item.discount_amount) * qty
+            rule_type = "Item-level"
+
+        breakdown.append(frappe._dict({
+            "name": rule_name,
+            "title": (rule.get("title") if rule else None) or rule_name,
+            "type": rule_type,
+            "expected": expected,
+            "actual": actual,
+            "difference": actual - expected,
+        }))
+
+    return breakdown
+
+
+def _mismatch_item_breakdown(invoice_doc):
+    """Per-item rate/discount snapshot for the mismatch log."""
+    rows = []
+    for item in invoice_doc.get("items") or []:
+        if item.get("is_free_item"):
+            continue
+        has_promo = bool(cstr(item.get("pricing_rules") or "").strip()) or bool(
+            item.get("applied_promotional_schemes")
+        )
+        rows.append(frappe._dict({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "price_list_rate": flt(item.price_list_rate),
+            "discount_percentage": flt(item.discount_percentage),
+            "discount_amount": flt(item.discount_amount),
+            "rate": flt(item.rate),
+            "promo_applied": has_promo,
+        }))
+    return rows
+
+
+def _mismatch_classify(invoice_doc, data, ui_grand_total, sys_grand_total, promo_rows, rounding_info):
+    """Best-effort classification of why the mismatch happened."""
+    difference = sys_grand_total - ui_grand_total
+
+    transaction_promo_gap = any(
+        r.type == "Transaction-level" and abs(r.difference) > 1 for r in promo_rows
+    )
+    item_promo_gap = any(
+        r.type == "Item-level" and abs(r.difference) > 1 for r in promo_rows
+    )
+
+    if transaction_promo_gap:
+        return "PROMO_TRANSACTION_NOT_APPLIED"
+
+    if item_promo_gap:
+        return "PROMO_ITEM_NOT_APPLIED"
+
+    if rounding_info and rounding_info.get("applied") and abs(difference) <= abs(rounding_info.get("difference") or 0) + 1:
+        return "ROUNDING_DIFFERENCE"
+
+    if abs(difference) <= 1:
+        return "ROUNDING_DIFFERENCE"
+
+    ui_discount = flt((data or {}).get("discount_amount") or 0)
+    sys_discount = flt(invoice_doc.discount_amount)
+    if abs(ui_discount - sys_discount) > 1:
+        return "DISCOUNT_CALCULATION_ERROR"
+
+    return "UNKNOWN"
+
+
+def _build_grand_total_mismatch_breakdown(invoice_doc, data, ui_grand_total, sys_grand_total):
+    """Build the full human-readable breakdown text + classification.
+
+    Returns (breakdown_text, classification).
+    """
+    lines = []
+
+    # ── 1. Promo / Price Rule Breakdown ──
+    promo_rows = _mismatch_promo_breakdown(invoice_doc)
+    lines.append("\n--- Promo / Price Rule Breakdown ---")
+    if promo_rows:
+        for r in promo_rows:
+            lines.append(
+                f"  [{r.type}] {r.title} ({r.name})\n"
+                f"      Expected discount : {r.expected:,.2f}\n"
+                f"      Actual discount   : {r.actual:,.2f}\n"
+                f"      Difference        : {r.difference:+,.2f}"
+            )
+    else:
+        lines.append("  (no Pricing Rules referenced on invoice items)")
+
+    promo_da = flt(getattr(invoice_doc, "custom_promo_discount_amount", 0) or 0)
+    if promo_da:
+        lines.append(f"  Promo transaction discount (custom_promo_discount_amount): {promo_da:,.2f}")
+
+    # ── 2. Item-level Discount Breakdown ──
+    item_rows = _mismatch_item_breakdown(invoice_doc)
+    lines.append("\n--- Item-level Discount Breakdown ---")
+    if item_rows:
+        for it in item_rows:
+            lines.append(
+                f"  {it.item_code} ({it.item_name})\n"
+                f"      Price list rate : {it.price_list_rate:,.2f}\n"
+                f"      Discount        : {it.discount_percentage:g}%  /  {it.discount_amount:,.2f} per unit\n"
+                f"      Final rate      : {it.rate:,.2f}\n"
+                f"      Promo applied   : {'Yes' if it.promo_applied else 'No'}"
+            )
+    else:
+        lines.append("  (no items)")
+
+    # ── 3. Transaction-level Discount Breakdown ──
+    lines.append("\n--- Transaction-level Discount Breakdown ---")
+    lines.append(f"  Additional discount %     : {flt(invoice_doc.additional_discount_percentage):g}")
+    lines.append(f"  Additional discount amount: {flt(invoice_doc.discount_amount):,.2f}")
+    lines.append(f"  Promo transaction discount: {promo_da:,.2f}")
+    rounding_info = (invoice_doc.flags or {}).get("pos_next_rounding_info")
+    if rounding_info and rounding_info.get("applied"):
+        lines.append(
+            "  Applied: BEFORE rounding (computed first, then rounding difference "
+            "was folded back into discount_amount — see Rounding Analysis below)"
+        )
+    else:
+        lines.append("  Applied: no rounding adjustment was folded into the discount")
+
+    # ── 4. Rounding Analysis ──
+    lines.append("\n--- Rounding Analysis ---")
+    if rounding_info:
+        lines.append(f"  Rounding rule active      : {rounding_info.get('rule')}")
+        lines.append(f"  Value before rounding     : {flt(rounding_info.get('before_rounding')):,.2f}")
+        lines.append(f"  Expected rounded value    : {flt(rounding_info.get('expected_rounded')):,.2f}")
+        lines.append(f"  Actual value recorded     : {flt(invoice_doc.grand_total):,.2f}")
+        lines.append(f"  Rounding difference       : {flt(rounding_info.get('difference')):+,.2f}")
+        lines.append(f"  Rounding was applied      : {'Yes' if rounding_info.get('applied') else 'No'}")
+    else:
+        lines.append("  (custom round-to-100 rule did not run for this invoice — no discount present)")
+    lines.append(f"  disable_rounded_total flag: {flt(getattr(invoice_doc, 'disable_rounded_total', ''))}")
+    lines.append(f"  rounding_adjustment field : {flt(getattr(invoice_doc, 'rounding_adjustment', 0)):,.2f}")
+    lines.append(f"  rounded_total field       : {flt(getattr(invoice_doc, 'rounded_total', 0)):,.2f}")
+
+    # ── 5. Payment Breakdown ──
+    lines.append("\n--- Payment Breakdown ---")
+    payments = invoice_doc.get("payments") or []
+    if payments:
+        for p in payments:
+            lines.append(f"  {p.mode_of_payment:<20}: {flt(p.amount):,.2f}")
+    else:
+        lines.append("  (no payment rows)")
+    loyalty_amount = flt(getattr(invoice_doc, "loyalty_amount", 0) or 0)
+    if loyalty_amount:
+        lines.append(f"  Loyalty redemption amount : {loyalty_amount:,.2f}")
+    change_amount = flt(getattr(invoice_doc, "change_amount", 0) or 0)
+    paid_amount = flt(getattr(invoice_doc, "paid_amount", 0) or 0)
+    lines.append(f"  Change amount             : {change_amount:,.2f}")
+    lines.append(f"  Effective paid (paid - change): {paid_amount - change_amount:,.2f}")
+
+    # ── 6. Mismatch Classification ──
+    classification = _mismatch_classify(invoice_doc, data, ui_grand_total, sys_grand_total, promo_rows, rounding_info)
+    lines.append("\n--- Mismatch Classification ---")
+    lines.append(f"  {classification}")
+
+    return "\n".join(lines), classification
 
 
 @frappe.whitelist()
@@ -1622,6 +1848,14 @@ def submit_invoice(invoice=None, data=None):
             sys_grand_total = flt(invoice_doc.grand_total or 0)
 
             if ui_grand_total and abs(ui_grand_total - sys_grand_total) > 1:
+                try:
+                    breakdown_text, classification = _build_grand_total_mismatch_breakdown(
+                        invoice_doc, data, ui_grand_total, sys_grand_total
+                    )
+                except Exception:
+                    breakdown_text = f"\n(breakdown unavailable: {frappe.get_traceback()})\n"
+                    classification = "UNKNOWN"
+
                 frappe.log_error(
                     title="POS Grand Total Mismatch",
                     message=(
@@ -1638,6 +1872,8 @@ def submit_invoice(invoice=None, data=None):
                         f"Paid amount : {flt(getattr(invoice_doc, 'paid_amount', 0)):,.0f}\n"
                         f"Outstanding : {flt(getattr(invoice_doc, 'outstanding_amount', 0)):,.0f}\n"
                         f"Additional discount %: {flt(invoice_doc.additional_discount_percentage)}\n"
+                        f"\nMismatch reason: {classification}\n"
+                        f"{breakdown_text}\n"
                         f"\n[LOG ONLY — invoice was NOT modified]\n"
                     ),
                 )
