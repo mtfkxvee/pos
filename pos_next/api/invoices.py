@@ -4,6 +4,7 @@
 
 from __future__ import unicode_literals
 import json
+import math
 import frappe
 from frappe import _
 from frappe.utils import flt, cint, nowdate, nowtime, get_datetime, cstr, getdate
@@ -1104,6 +1105,86 @@ def check_offline_invoice_synced(offline_id):
 
 
 # ==========================================
+# Return Loyalty Point Reversal
+# ==========================================
+
+
+def _reverse_loyalty_points_for_return(invoice_doc):
+    """Reverse loyalty points earned on the original invoice when a POS
+    return is submitted, proportional to the returned amount.
+
+    Rules:
+    - points_to_reverse = original_points_earned × (return_amount / original_grand_total)
+    - Rounded DOWN to the nearest integer
+    - Only *earned* points (loyalty_points > 0 entries) are reversed —
+      redeemed points stay consumed
+    - If the original invoice earned 0 points, do nothing
+    - Never blocks/errors the return — failures are logged only
+    """
+    if not invoice_doc.get("is_return") or not invoice_doc.get("return_against"):
+        return
+
+    original_name = invoice_doc.return_against
+
+    try:
+        original = frappe.db.get_value(
+            "Sales Invoice", original_name,
+            ["customer", "loyalty_program", "grand_total"],
+            as_dict=True,
+        )
+        if not original or not original.loyalty_program:
+            return
+
+        # Only earn entries (redemption entries are negative and must stay untouched)
+        earn_entries = frappe.get_all(
+            "Loyalty Point Entry",
+            filters={"invoice": original_name, "loyalty_points": [">", 0]},
+            fields=["name", "loyalty_points", "expiry_date", "loyalty_program_tier", "company"],
+            order_by="creation asc",
+        )
+        if not earn_entries:
+            # Original invoice earned 0 points — nothing to reverse.
+            return
+
+        original_points_earned = sum(flt(e.loyalty_points) for e in earn_entries)
+        original_grand_total = flt(original.grand_total)
+        return_amount = abs(flt(invoice_doc.grand_total))
+
+        if original_points_earned <= 0 or original_grand_total <= 0 or return_amount <= 0:
+            return
+
+        points_to_reverse = math.floor(original_points_earned * (return_amount / original_grand_total))
+        if points_to_reverse <= 0:
+            return
+
+        reference = earn_entries[0]
+        frappe.get_doc({
+            "doctype": "Loyalty Point Entry",
+            "customer": original.customer,
+            "loyalty_program": original.loyalty_program,
+            "loyalty_program_tier": reference.get("loyalty_program_tier"),
+            "loyalty_points": -points_to_reverse,
+            "purchase_amount": -return_amount,
+            "expiry_date": reference.get("expiry_date"),
+            "invoice_type": "Sales Invoice",
+            "invoice": invoice_doc.name,
+            "posting_date": invoice_doc.posting_date,
+            "company": reference.get("company") or invoice_doc.company,
+        }).insert(ignore_permissions=True)
+
+    except Exception:
+        # Never block the return — log for investigation only.
+        frappe.log_error(
+            title="POS Return Loyalty Point Reversal Error",
+            message=(
+                f"Return invoice  : {invoice_doc.name}\n"
+                f"Original invoice: {original_name}\n"
+                f"{frappe.get_traceback()}"
+            ),
+        )
+
+
+# ==========================================
 # Grand Total Mismatch Log — breakdown helpers
 # ==========================================
 # These build a self-explanatory, human-readable explanation of *why* the
@@ -1832,6 +1913,10 @@ def submit_invoice(invoice=None, data=None):
                         f"POS Return {invoice_doc.name}: {_re}\n{frappe.get_traceback()}",
                         "POS Return Payment Fix"
                     )
+
+            # Reverse loyalty points earned on the original invoice,
+            # proportional to the returned amount (never blocks the return).
+            _reverse_loyalty_points_for_return(invoice_doc)
 
         # ── Grand Total Mismatch Log (read-only — NO auto-correction) ────────
         # Compare the grand_total the UI displayed/confirmed (sent by frontend
