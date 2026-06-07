@@ -26,30 +26,43 @@
 					<div
 						v-if="showPinCategoryDropdown"
 						@click.stop
-						class="absolute start-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] max-h-80 overflow-y-auto"
+						class="absolute start-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] flex flex-col max-h-80"
 						style="box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);"
 					>
-						<div class="py-2">
-							<div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase border-b border-gray-100 sticky top-0 bg-white">
-								{{ __('Pin Categories') }}
-							</div>
-							<div class="py-1">
-								<button
-									v-for="group in itemGroups"
-									:key="group.item_group"
-									@click="togglePinCategory(group.item_group)"
-									class="w-full px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2.5 group text-gray-700 hover:bg-gray-50"
+						<div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase border-b border-gray-100 flex-shrink-0">
+							{{ __('Pin Categories') }}
+						</div>
+						<div class="px-2 pt-2 pb-1 flex-shrink-0">
+							<input
+								v-model="categorySearchTerm"
+								type="text"
+								:placeholder="__('Search categories...')"
+								class="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+								@click.stop
+							/>
+						</div>
+						<div class="py-1 overflow-y-auto">
+							<button
+								v-for="group in filteredAllItemGroups"
+								:key="group.item_group"
+								@click="togglePinCategory(group.item_group)"
+								class="w-full px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2.5 group text-gray-700 hover:bg-gray-50"
+							>
+								<span class="truncate text-start">{{ __(group.item_group) }}</span>
+								<svg
+									class="w-4 h-4 flex-shrink-0"
+									:class="pinnedCategories.has(group.item_group) ? 'text-yellow-400' : 'text-gray-300 group-hover:text-yellow-400'"
+									viewBox="0 0 24 24"
+									fill="currentColor"
 								>
-									<span class="truncate text-start">{{ __(group.item_group) }}</span>
-									<svg
-										class="w-4 h-4 flex-shrink-0"
-										:class="pinnedCategories.has(group.item_group) ? 'text-yellow-400' : 'text-gray-300 group-hover:text-yellow-400'"
-										viewBox="0 0 24 24"
-										fill="currentColor"
-									>
-										<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
-									</svg>
-								</button>
+									<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+								</svg>
+							</button>
+							<div
+								v-if="!filteredAllItemGroups.length"
+								class="px-3 py-4 text-sm text-gray-400 text-center"
+							>
+								{{ __('No categories found') }}
 							</div>
 						</div>
 					</div>
@@ -866,6 +879,7 @@ const {
 	totalServerItems,
 	pinnedItems,
 	pinnedCategories,
+	allItemGroups,
 } = storeToRefs(itemStore)
 
 function togglePin(item) {
@@ -876,29 +890,46 @@ function togglePinCategory(itemGroup) {
 	itemStore.togglePinnedCategory(itemGroup)
 }
 
-// Pinned categories first (in pinned order), then the rest in original order
+// Pinned categories first (in pinned order), then the configured groups in
+// original order. Pinned categories that aren't configured in the POS Profile
+// are still included (using allItemGroups for display info) so pinning makes
+// them filterable from the bar.
 const sortedItemGroups = computed(() => {
-	const pinned = []
-	const unpinned = []
-	for (const group of itemGroups.value) {
-		if (pinnedCategories.value.has(group.item_group)) {
-			pinned.push(group)
-		} else {
-			unpinned.push(group)
-		}
-	}
-	pinned.sort(
-		(a, b) =>
-			Array.from(pinnedCategories.value).indexOf(a.item_group) -
-			Array.from(pinnedCategories.value).indexOf(b.item_group),
+	const known = new Map(
+		itemGroups.value.map((group) => [group.item_group, group]),
 	)
+	const allKnown = new Map(
+		allItemGroups.value.map((group) => [group.item_group, group]),
+	)
+	const pinnedOrder = Array.from(pinnedCategories.value)
+
+	const pinned = pinnedOrder.map(
+		(name) => known.get(name) || allKnown.get(name) || { item_group: name },
+	)
+	const unpinned = itemGroups.value.filter(
+		(group) => !pinnedCategories.value.has(group.item_group),
+	)
+
 	return [...pinned, ...unpinned]
 })
 
 const showPinCategoryDropdown = ref(false)
+const categorySearchTerm = ref("")
 function togglePinCategoryDropdown() {
 	showPinCategoryDropdown.value = !showPinCategoryDropdown.value
+	if (showPinCategoryDropdown.value) {
+		categorySearchTerm.value = ""
+		itemStore.loadAllItemGroups()
+	}
 }
+
+const filteredAllItemGroups = computed(() => {
+	const term = categorySearchTerm.value.trim().toLowerCase()
+	if (!term) return allItemGroups.value
+	return allItemGroups.value.filter((group) =>
+		group.item_group.toLowerCase().includes(term),
+	)
+})
 
 // Local state
 const viewMode = ref("grid")

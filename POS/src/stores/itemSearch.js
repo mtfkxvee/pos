@@ -170,6 +170,10 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	// Pinned categories (item groups) state - per POS Profile, persisted server-side
 	const pinnedCategories = ref(new Set())
 
+	// All item groups in the system (for the Pin Category picker, independent of POS Profile config)
+	const allItemGroups = ref([])
+	let allItemGroupsLoaded = false
+
 	// Sorting state - for user-triggered sorting filters
 	const sortBy = ref(null) // Options: 'name', 'quantity', 'item_group', null (no sorting)
 	const sortOrder = ref("asc") // Options: 'asc', 'desc'
@@ -1963,6 +1967,17 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		}
 	}
 
+	async function loadAllItemGroups() {
+		if (allItemGroupsLoaded) return
+		try {
+			const result = await call("pos_next.api.pinned_categories.get_all_item_groups", {})
+			allItemGroups.value = result?.message || result || []
+			allItemGroupsLoaded = true
+		} catch (e) {
+			log.warn("Failed to load all item groups", e)
+		}
+	}
+
 	async function loadPinnedCategories(profile) {
 		if (!profile) {
 			pinnedCategories.value = new Set()
@@ -2346,6 +2361,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		sortOrder,
 		pinnedItems,
 		pinnedCategories,
+		allItemGroups,
 
 		// ========================================================================
 		// COMPUTED PROPERTIES
@@ -2375,6 +2391,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		clearSortFilter,
 		togglePinnedItem,
 		togglePinnedCategory,
+		loadAllItemGroups,
 
 		// ========================================================================
 		// STOCK ACTIONS - Delegates to stock store

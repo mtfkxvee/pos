@@ -3,6 +3,25 @@ import frappe
 
 
 @frappe.whitelist()
+def get_all_item_groups():
+    """Get all leaf item groups in the system, for the Pin Category picker."""
+    cache_key = "pos_all_item_groups"
+    cached = frappe.cache().get_value(cache_key)
+    if cached:
+        return cached
+
+    result = frappe.get_all(
+        "Item Group",
+        filters={"is_group": 0},
+        fields=["name as item_group"],
+        order_by="name",
+    )
+
+    frappe.cache().set_value(cache_key, result, expires_in_sec=300)
+    return result
+
+
+@frappe.whitelist()
 def get_pinned_categories(pos_profile):
     key = f"pos_pinned_categories_{pos_profile}"
     raw = frappe.db.get_value(
