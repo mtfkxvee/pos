@@ -1594,7 +1594,6 @@ def submit_invoice(invoice=None, data=None):
                                 "paid_amount": -_refund_total,
                                 "base_paid_amount": -_refund_total,
                                 "outstanding_amount": 0,
-                                "base_outstanding_amount": 0,
                             },
                             update_modified=False,
                         )
@@ -1653,7 +1652,6 @@ def submit_invoice(invoice=None, data=None):
                 invoice_doc.grand_total = ui_grand_total
                 invoice_doc.base_grand_total = ui_grand_total
                 invoice_doc.outstanding_amount = new_outstanding
-                invoice_doc.base_outstanding_amount = new_outstanding
                 invoice_doc.discount_amount = new_discount
                 frappe.db.set_value(
                     "Sales Invoice", invoice_doc.name,
@@ -1662,7 +1660,6 @@ def submit_invoice(invoice=None, data=None):
                         "base_grand_total": ui_grand_total,
                         "discount_amount": new_discount,
                         "outstanding_amount": new_outstanding,
-                        "base_outstanding_amount": new_outstanding,
                     },
                     update_modified=False,
                 )
@@ -1692,7 +1689,6 @@ def submit_invoice(invoice=None, data=None):
                         "base_grand_total": ui_grand_total,
                         "discount_amount": new_discount,
                         "outstanding_amount": new_outstanding,
-                        "base_outstanding_amount": new_outstanding,
                     },
                     update_modified=False,
                 )
