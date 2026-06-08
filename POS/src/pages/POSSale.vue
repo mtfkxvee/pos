@@ -2562,11 +2562,24 @@ async function handleLoadDraft(draft) {
 		// Customer is stored as a string ID on the invoice; reconstruct a minimal object.
 		const draftData = draft.is_server
 			? {
-				items: (draft.items || []).map(item => ({
-					...item,
-					quantity: Number(item.qty) || Number(item.quantity) || 0,
-					price_list_rate: item.price_list_rate || item.rate || 0,
-				})),
+				items: (draft.items || []).map(item => {
+					// Restore the ORIGINAL (pre-discount) price as both rate and
+					// price_list_rate, and clear any persisted item-level discount.
+					// The saved invoice's `rate`/`discount_amount` reflect a promo
+					// that was already applied — reusing them here would let
+					// forceRefreshOffers() apply the same promo again on top of
+					// the already-discounted rate (double discount).
+					const originalRate = Number(item.price_list_rate) || Number(item.rate) || 0
+					return {
+						...item,
+						quantity: Number(item.qty) || Number(item.quantity) || 0,
+						rate: originalRate,
+						price_list_rate: originalRate,
+						discount_percentage: 0,
+						discount_amount: 0,
+						pricing_rules: "",
+					}
+				}),
 				customer: draft.customer
 					? { name: draft.customer, customer_name: draft.customer_name || draft.customer }
 					: null,

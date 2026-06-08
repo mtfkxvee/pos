@@ -820,7 +820,11 @@ def get_pos_draft_invoices(pos_profile=None):
     invoices = frappe.get_all(
         "Sales Invoice",
         filters={"docstatus": 0, "is_pos": 1, "pos_profile": pos_profile},
-        fields=["name", "customer", "customer_name", "grand_total", "creation"]
+        fields=[
+            "name", "customer", "customer_name", "grand_total", "creation",
+            "discount_amount", "additional_discount_percentage", "apply_discount_on",
+            "coupon_code",
+        ]
     )
 
     if invoices:
@@ -828,7 +832,15 @@ def get_pos_draft_invoices(pos_profile=None):
         all_items = frappe.get_all(
             "Sales Invoice Item",
             filters={"parent": ["in", invoice_names]},
-            fields=["parent", "item_code", "item_name", "qty", "rate", "amount"]
+            fields=[
+                "parent", "item_code", "item_name", "qty", "rate", "amount",
+                # price_list_rate is the PRE-discount price — it must travel back
+                # to the cart so re-applied promos discount the original price,
+                # not the already-discounted `rate` (which would double-discount).
+                "price_list_rate", "discount_percentage", "discount_amount",
+                "pricing_rules", "uom", "conversion_factor", "warehouse",
+                "batch_no", "serial_no",
+            ]
         )
         items_by_invoice = {}
         for item in all_items:
