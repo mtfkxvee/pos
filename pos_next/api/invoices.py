@@ -815,6 +815,10 @@ def update_invoice(data):
 @frappe.whitelist()
 def get_pos_draft_invoices(pos_profile=None):
     """Fetch Draft Sales Invoices for a specific POS Profile including items."""
+    try:
+        frappe.log_error(f"called with pos_profile={pos_profile!r} user={frappe.session.user}", "Draft Invoices TRACE entry")
+    except Exception:
+        pass
     if not pos_profile:
         return []
     invoices = frappe.get_all(
@@ -3265,6 +3269,11 @@ def apply_offers(invoice_data, selected_offers=None):
                     When provided, results are filtered to only include these rules.
                     ERPNext handles all conflict resolution based on priority.
     """
+    try:
+        frappe.log_error(f"called user={frappe.session.user} selected_offers={selected_offers!r}", "Apply Offers TRACE entry")
+    except Exception:
+        pass
+
     try:
         if isinstance(invoice_data, str):
             invoice_data = json.loads(invoice_data or "{}")
