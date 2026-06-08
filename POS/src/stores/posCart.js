@@ -1131,11 +1131,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				filterActiveOffers(recalcRules)
 				if (recalcTda > 0) {
 					promoTransactionDiscount.value = recalcTda
-					rebuildIncrementalCache()
 				} else if (recalcRules.length === 0) {
 					promoTransactionDiscount.value = 0
-					rebuildIncrementalCache()
 				}
+				rebuildIncrementalCache()
 				return
 			}
 
@@ -1172,11 +1171,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			// for display — it is NOT included in the submission payload)
 			if (transactionDiscountAmount > 0) {
 				promoTransactionDiscount.value = transactionDiscountAmount
-				rebuildIncrementalCache()
 			} else if (appliedRules.length === 0) {
 				promoTransactionDiscount.value = 0
-				rebuildIncrementalCache()
 			}
+			rebuildIncrementalCache()
 
 			// Collect newly applied offers for notification
 			const newlyAppliedOffers = []

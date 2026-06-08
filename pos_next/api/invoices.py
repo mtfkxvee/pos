@@ -815,10 +815,6 @@ def update_invoice(data):
 @frappe.whitelist()
 def get_pos_draft_invoices(pos_profile=None):
     """Fetch Draft Sales Invoices for a specific POS Profile including items."""
-    try:
-        frappe.log_error(f"called with pos_profile={pos_profile!r} user={frappe.session.user}", "Draft Invoices TRACE entry")
-    except Exception:
-        pass
     if not pos_profile:
         return []
     invoices = frappe.get_all(
@@ -853,36 +849,6 @@ def get_pos_draft_invoices(pos_profile=None):
             inv.items = items_by_invoice.get(inv.name, [])
             inv.draft_id = inv.name
             inv.created_at = inv.creation
-
-        try:
-            frappe.log_error(
-                "Draft Invoices TRACE",
-                json.dumps({
-                    "pos_profile": pos_profile,
-                    "invoices": [
-                        {
-                            "name": inv.name,
-                            "discount_amount": inv.discount_amount,
-                            "additional_discount_percentage": inv.additional_discount_percentage,
-                            "apply_discount_on": inv.apply_discount_on,
-                            "items": [
-                                {
-                                    "item_code": it.get("item_code"),
-                                    "rate": it.get("rate"),
-                                    "price_list_rate": it.get("price_list_rate"),
-                                    "discount_percentage": it.get("discount_percentage"),
-                                    "discount_amount": it.get("discount_amount"),
-                                    "pricing_rules": it.get("pricing_rules"),
-                                }
-                                for it in inv.items
-                            ],
-                        }
-                        for inv in invoices
-                    ],
-                }, default=str)[:4000],
-            )
-        except Exception:
-            pass
 
     return invoices
 
@@ -3270,41 +3236,11 @@ def apply_offers(invoice_data, selected_offers=None):
                     ERPNext handles all conflict resolution based on priority.
     """
     try:
-        frappe.log_error(f"called user={frappe.session.user} selected_offers={selected_offers!r}", "Apply Offers TRACE entry")
-    except Exception:
-        pass
-
-    try:
         if isinstance(invoice_data, str):
             invoice_data = json.loads(invoice_data or "{}")
 
         invoice = frappe._dict(invoice_data or {})
         items = invoice.get("items") or []
-
-        try:
-            frappe.log_error(
-                "Apply Offers TRACE input",
-                json.dumps({
-                    "pos_profile": invoice.get("pos_profile"),
-                    "customer": invoice.get("customer"),
-                    "discount_amount": invoice.get("discount_amount"),
-                    "coupon_code": invoice.get("coupon_code"),
-                    "selected_offers_in": selected_offers,
-                    "items": [
-                        {
-                            "item_code": it.get("item_code"),
-                            "qty": it.get("qty") or it.get("quantity"),
-                            "rate": it.get("rate"),
-                            "price_list_rate": it.get("price_list_rate"),
-                            "discount_percentage": it.get("discount_percentage"),
-                            "discount_amount": it.get("discount_amount"),
-                        }
-                        for it in items
-                    ],
-                }, default=str)[:4000],
-            )
-        except Exception:
-            pass
 
         if isinstance(selected_offers, str):
             try:
@@ -3867,30 +3803,6 @@ def apply_offers(invoice_data, selected_offers=None):
             if key not in seen_free:
                 seen_free.add(key)
                 deduped_free_items.append(fi)
-
-        try:
-            frappe.log_error(
-                "Apply Offers TRACE output",
-                json.dumps({
-                    "applied_pricing_rules": sorted(applied_rules),
-                    "transaction_discount_amount": flt(transaction_discount_amount, 2),
-                    "rule_map_names": list(rule_map.keys()),
-                    "raw_rule_names": list(raw_rule_names),
-                    "items_out": [
-                        {
-                            "item_code": it.get("item_code"),
-                            "rate": it.get("rate"),
-                            "price_list_rate": it.get("price_list_rate"),
-                            "discount_percentage": it.get("discount_percentage"),
-                            "discount_amount": it.get("discount_amount"),
-                            "pricing_rules": it.get("pricing_rules"),
-                        }
-                        for it in prepared_items
-                    ],
-                }, default=str)[:4000],
-            )
-        except Exception:
-            pass
 
         return {
             "items": [dict(item) for item in prepared_items],
