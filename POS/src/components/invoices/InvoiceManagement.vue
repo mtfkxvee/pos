@@ -94,6 +94,11 @@
 						<div class="p-6">
 							<!-- Unpaid Tab -->
 							<div v-if="activeTab === 'partial'" class="flex flex-col gap-4">
+								<!-- Search Bar (same component/behavior as Invoice History) -->
+								<div class="mb-2">
+									<InvoiceFilters search-only />
+								</div>
+
 								<!-- Filter Buttons -->
 								<div class="flex items-center gap-2 mb-4 flex-wrap gap-2">
 									<button
@@ -167,17 +172,27 @@
 									</div>
 								</div>
 
+								<!-- Searching indicator -->
+								<div v-if="unpaidSearching && unpaidSearchResults === null" class="flex items-center justify-center py-8 gap-2 text-sm text-gray-500">
+									<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+									</svg>
+									{{ __('Searching...') }}
+								</div>
+
 								<!-- Empty State -->
-								<div v-if="filteredUnpaidInvoices.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+								<div v-else-if="filteredUnpaidInvoices.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
 									<svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
 									</svg>
-									<p class="text-gray-600 font-medium">{{ __('No Unpaid Invoices') }}</p>
-									<p class="text-gray-500 text-sm mt-1">{{ __('All invoices are fully paid') }}</p>
+									<p class="text-gray-600 font-medium">{{ isUnpaidSearchActive ? __('No matching invoices found') : __('No Unpaid Invoices') }}</p>
+									<p class="text-gray-500 text-sm mt-1">{{ isUnpaidSearchActive ? __('Try a different search term') : __('All invoices are fully paid') }}</p>
 								</div>
 
 								<!-- Invoices List -->
 								<div v-else class="flex flex-col gap-4">
+									<p v-if="isUnpaidSearchActive" class="text-xs text-gray-400">{{ __('{0} result(s) found for "{1}"', [filteredUnpaidInvoices.length, trimmedSearchTerm]) }}</p>
 									<div
 										v-for="invoice in filteredUnpaidInvoices"
 										:key="invoice.name"
@@ -304,7 +319,7 @@
 								</div>
 
 								<!-- Initial loading skeleton -->
-								<div v-if="historyInitialLoading" class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+								<div v-if="historyInitialLoading || (historySearching && historySearchResults === null)" class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
 									<div v-for="n in 6" :key="n" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden animate-pulse">
 										<div class="bg-gray-100 h-20 px-5 py-4"></div>
 										<div class="p-4 space-y-2">
@@ -418,8 +433,8 @@
 										</div>
 									</div>
 
-								<!-- Load More -->
-								<div class="flex justify-center pt-2 pb-4">
+								<!-- Load More (hidden while a server-side search is active - all matches are already loaded) -->
+								<div v-if="!isHistorySearchActive" class="flex justify-center pt-2 pb-4">
 									<button
 										v-if="historyHasMore"
 										@click="loadHistoryPage(false)"
@@ -434,6 +449,7 @@
 									</button>
 									<p v-else-if="localHistoryInvoices.length > 0" class="text-xs text-gray-400">{{ __('Semua invoice sudah ditampilkan ({0} total)', [localHistoryInvoices.length]) }}</p>
 								</div>
+								<p v-else class="text-xs text-gray-400 text-center pt-2 pb-4">{{ __('{0} result(s) found for "{1}"', [filteredHistoryInvoices.length, trimmedSearchTerm]) }}</p>
 								</div>
 							</div>
 						</div>
@@ -597,7 +613,7 @@ import {
 import { getInvoiceStatusColor } from "@/utils/invoice"
 import { useFormatters } from "@/composables/useFormatters"
 import { useToast } from "@/composables/useToast"
-import { Button, call, LoadingIndicator } from "frappe-ui"
+import { Button, call, debounce, LoadingIndicator } from "frappe-ui"
 import { computed, onMounted, ref, watch } from "vue"
 import { isOffline } from "@/utils/offline/offlineState"
 import {
@@ -683,8 +699,76 @@ async function loadHistoryPage(reset = false) {
 // Initialize filter store and composable
 const filterStore = useInvoiceFiltersStore()
 
-// Use local history invoices (self-fetched) instead of props
-const historyInvoicesRef = computed(() => localHistoryInvoices.value)
+// --- Server-side search (bypasses pagination, searches name + customer) ---
+const historySearchResults = ref(null)
+const historySearching = ref(false)
+const unpaidSearchResults = ref(null)
+const unpaidSearching = ref(false)
+
+const performHistorySearch = debounce(async (term) => {
+	if (!props.posProfile) return
+	historySearching.value = true
+	try {
+		const result = await call("pos_next.api.invoices.get_invoices", {
+			pos_profile: props.posProfile,
+			search: term,
+		})
+		historySearchResults.value = result || []
+	} catch (e) {
+		showError(friendlyError(e, __("Failed to search invoices")))
+		historySearchResults.value = []
+	} finally {
+		historySearching.value = false
+	}
+}, 350)
+
+const performUnpaidSearch = debounce(async (term) => {
+	if (!props.posProfile) return
+	unpaidSearching.value = true
+	try {
+		const result = await call("pos_next.api.partial_payments.get_unpaid_invoices", {
+			pos_profile: props.posProfile,
+			search: term,
+		})
+		unpaidSearchResults.value = result || []
+	} catch (e) {
+		showError(friendlyError(e, __("Failed to search unpaid invoices")))
+		unpaidSearchResults.value = []
+	} finally {
+		unpaidSearching.value = false
+	}
+}, 350)
+
+const trimmedSearchTerm = computed(() => (filterStore.searchTerm || "").trim())
+
+const isHistorySearchActive = computed(
+	() => !!trimmedSearchTerm.value && historySearchResults.value !== null,
+)
+const isUnpaidSearchActive = computed(
+	() => !!trimmedSearchTerm.value && unpaidSearchResults.value !== null,
+)
+
+// React to search term changes - query the server directly for the active tab
+// (and the other tab on switch) so results aren't limited to already-loaded pages
+watch(trimmedSearchTerm, (term) => {
+	if (!term) {
+		historySearchResults.value = null
+		unpaidSearchResults.value = null
+		return
+	}
+	if (activeTab.value === "partial") {
+		performUnpaidSearch(term)
+	} else if (activeTab.value === "history" || activeTab.value === "returns") {
+		performHistorySearch(term)
+	}
+})
+
+// Use local history invoices (self-fetched) instead of props, falling back to
+// server-side search results (covering ALL matches) while a search is active
+const historyBaseInvoices = computed(() =>
+	isHistorySearchActive.value ? historySearchResults.value : localHistoryInvoices.value,
+)
+const historyInvoicesRef = computed(() => historyBaseInvoices.value)
 const invoiceFilters = useInvoiceFilters(historyInvoicesRef)
 
 // Unpaid invoices data
@@ -698,21 +782,28 @@ const unpaidSummary = ref({
 const selectedInvoice = ref(null)
 const showPaymentDialog = ref(false)
 
+// Base unpaid invoices - server-side search results (ALL matches) when a
+// search is active, otherwise the regular paginated/cached list
+const unpaidBaseInvoices = computed(() =>
+	isUnpaidSearchActive.value ? unpaidSearchResults.value : unpaidInvoices.value,
+)
+
 // Filtered unpaid invoices based on payment amounts
 const filteredUnpaidInvoices = computed(() => {
+	const base = unpaidBaseInvoices.value
 	if (unpaidFilter.value === "partial") {
 		// Partially paid: status is 'Partly Paid' only
-		return unpaidInvoices.value.filter((inv) => inv.status === "Partly Paid")
+		return base.filter((inv) => inv.status === "Partly Paid")
 	}
 	if (unpaidFilter.value === "unpaid") {
 		// Totally unpaid: status is 'Unpaid'
-		return unpaidInvoices.value.filter((inv) => inv.status === "Unpaid")
+		return base.filter((inv) => inv.status === "Unpaid")
 	}
 	if (unpaidFilter.value === "overdue") {
 		// Overdue: invoice status is Overdue
-		return unpaidInvoices.value.filter((inv) => inv.status === "Overdue")
+		return base.filter((inv) => inv.status === "Overdue")
 	}
-	return unpaidInvoices.value // "all"
+	return base // "all"
 })
 
 // Filtered summary based on selected filter
@@ -729,14 +820,14 @@ const filteredUnpaidSummary = computed(() => {
 	}
 })
 
-// Return invoices (filtered from local history)
+// Return invoices (filtered from history base - search results when active)
 const returnInvoices = computed(() =>
-	localHistoryInvoices.value.filter((inv) => inv.is_return)
+	historyBaseInvoices.value.filter((inv) => inv.is_return)
 )
 
 // Filtered history (exclude returns, apply store filters)
 const filteredHistoryInvoices = computed(() => {
-	const nonReturnInvoices = localHistoryInvoices.value.filter((inv) => !inv.is_return)
+	const nonReturnInvoices = historyBaseInvoices.value.filter((inv) => !inv.is_return)
 	const tempInvoicesRef = computed(() => nonReturnInvoices)
 	const tempFilters = useInvoiceFilters(tempInvoicesRef)
 	return tempFilters.filteredInvoices.value
@@ -848,14 +939,21 @@ watch(show, (val) => {
 
 // Watch for tab changes
 watch(activeTab, (newTab) => {
+	const term = trimmedSearchTerm.value
 	if (newTab === "history" || newTab === "returns") {
 		// Reload from scratch when switching to history/returns tab
 		if (localHistoryInvoices.value.length === 0) {
 			loadHistoryPage(true)
 		}
+		if (term && historySearchResults.value === null) {
+			performHistorySearch(term)
+		}
 	} else if (newTab === "partial") {
 		loadUnpaidInvoices()
 		loadUnpaidSummary()
+		if (term && unpaidSearchResults.value === null) {
+			performUnpaidSearch(term)
+		}
 	}
 })
 

@@ -24,7 +24,7 @@
 			</div>
 
 			<!-- Quick Filter Chips -->
-			<div class="quick-filters">
+			<div v-if="!searchOnly" class="quick-filters">
 				<!-- Date Chips -->
 				<button
 					v-for="preset in quickDates"
@@ -75,7 +75,7 @@
 		</div>
 
 		<!-- Active Filters Summary -->
-		<Transition name="fade">
+		<Transition v-if="!searchOnly" name="fade">
 			<div v-if="store.hasActiveFilters" class="active-summary">
 				<div class="summary-content">
 					<TranslatedHTML 
@@ -104,7 +104,7 @@
 		</Transition>
 
 		<!-- Advanced Filters Panel (Collapsible) -->
-		<Transition name="expand">
+		<Transition v-if="!searchOnly" name="expand">
 			<div v-if="showAdvanced" class="advanced-panel">
 				<!-- Customer & Product in Row -->
 				<div class="filter-row">
@@ -235,6 +235,13 @@ const props = defineProps({
 	filterStats: {
 		type: Object,
 		default: null,
+	},
+	// When true, render only the search bar (no date/status chips, advanced
+	// panel, or active-filter summary) - used for tabs like Unpaid that don't
+	// support those filters but still want the same search input/behavior.
+	searchOnly: {
+		type: Boolean,
+		default: false,
 	},
 })
 

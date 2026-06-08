@@ -615,7 +615,7 @@ def get_partial_paid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIM
 
 
 @frappe.whitelist()
-def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT) -> List[Dict]:
+def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT, search: str = None) -> List[Dict]:
     """
     Get all unpaid invoices (partial + fully unpaid) for a POS Profile.
 
@@ -627,6 +627,9 @@ def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT) ->
     Args:
         pos_profile: POS Profile name
         limit: Maximum invoices to return (default 50, max 500)
+        search: Optional search term matched against invoice name and customer
+            (name/customer/customer_name). When provided, pagination is bypassed
+            and all matching invoices (up to MAX_INVOICE_LIMIT) are returned.
 
     Returns:
         List[dict]: Unpaid invoices with payment history
@@ -646,6 +649,8 @@ def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT) ->
     if not _has_pos_profile_access(pos_profile):
         frappe.throw(_("You don't have access to this POS Profile"))
 
+    search = (search or "").strip()
+
     # Validate and sanitize limit
     limit = cint(limit)
     if limit <= 0:
@@ -653,16 +658,31 @@ def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT) ->
     elif limit > MAX_INVOICE_LIMIT:
         limit = MAX_INVOICE_LIMIT
 
+    filters = {
+        "pos_profile": pos_profile,
+        "docstatus": 1,
+        "is_pos": 1,
+        "outstanding_amount": [">", 0],
+        "is_return": 0,
+    }
+
+    or_filters = None
+    if search:
+        # Search bypasses pagination - return all matches (capped at MAX_INVOICE_LIMIT)
+        # so the user never has to "Load More" before finding an invoice.
+        like_term = f"%{search}%"
+        or_filters = [
+            ["name", "like", like_term],
+            ["customer", "like", like_term],
+            ["customer_name", "like", like_term],
+        ]
+        limit = MAX_INVOICE_LIMIT
+
     # Get all unpaid invoices (any invoice with outstanding > 0)
     invoices = frappe.get_all(
         "Sales Invoice",
-        filters={
-            "pos_profile": pos_profile,
-            "docstatus": 1,
-            "is_pos": 1,
-            "outstanding_amount": [">", 0],
-            "is_return": 0,
-        },
+        filters=filters,
+        or_filters=or_filters,
         fields=[
             "name",
             "customer",
