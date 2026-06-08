@@ -638,6 +638,19 @@ def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT, se
         frappe.ValidationError: If validation fails
         frappe.PermissionError: If user lacks access
     """
+    try:
+        return _get_unpaid_invoices(pos_profile, limit, search)
+    except (frappe.ValidationError, frappe.PermissionError):
+        raise
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"get_unpaid_invoices failed (pos_profile={pos_profile}, limit={limit}, search={search})",
+        )
+        raise
+
+
+def _get_unpaid_invoices(pos_profile, limit, search):
     # Input validation
     if not pos_profile:
         frappe.throw(_("POS Profile is required"))
@@ -1002,6 +1015,19 @@ def get_unpaid_summary(pos_profile: str) -> Dict:
         frappe.ValidationError: If validation fails
         frappe.PermissionError: If user lacks access
     """
+    try:
+        return _get_unpaid_summary(pos_profile)
+    except (frappe.ValidationError, frappe.PermissionError):
+        raise
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"get_unpaid_summary failed (pos_profile={pos_profile})",
+        )
+        raise
+
+
+def _get_unpaid_summary(pos_profile):
     # Input validation
     if not pos_profile:
         frappe.throw(_("POS Profile is required"))
