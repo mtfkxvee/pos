@@ -816,7 +816,12 @@ def update_invoice(data):
 def get_pos_draft_invoices(pos_profile=None):
     """Fetch Draft Sales Invoices for a specific POS Profile including items."""
     try:
-        return _get_pos_draft_invoices(pos_profile)
+        result = _get_pos_draft_invoices(pos_profile)
+        frappe.log_error(
+            f"user={frappe.session.user}, pos_profile={pos_profile}, returned={len(result)}",
+            "get_pos_draft_invoices called",
+        )
+        return result
     except (frappe.ValidationError, frappe.PermissionError):
         raise
     except Exception:
@@ -2135,7 +2140,12 @@ def get_invoices(pos_profile, limit=50, offset=0, search=None):
 		List of invoices with details
 	"""
 	try:
-		return _get_invoices(pos_profile, limit, offset, search)
+		result = _get_invoices(pos_profile, limit, offset, search)
+		frappe.log_error(
+			f"user={frappe.session.user}, pos_profile={pos_profile}, limit={limit}, offset={offset}, search={search!r}, returned={len(result)}",
+			"get_invoices called",
+		)
+		return result
 	except (frappe.ValidationError, frappe.PermissionError):
 		raise
 	except Exception:
