@@ -823,7 +823,6 @@ def get_pos_draft_invoices(pos_profile=None):
         fields=[
             "name", "customer", "customer_name", "grand_total", "creation",
             "discount_amount", "additional_discount_percentage", "apply_discount_on",
-            "coupon_code",
         ]
     )
 
