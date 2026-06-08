@@ -856,6 +856,7 @@ def get_pos_draft_invoices(pos_profile=None):
 
         try:
             frappe.log_error(
+                "Draft Invoices TRACE",
                 json.dumps({
                     "pos_profile": pos_profile,
                     "invoices": [
@@ -879,7 +880,6 @@ def get_pos_draft_invoices(pos_profile=None):
                         for inv in invoices
                     ],
                 }, default=str)[:4000],
-                "Draft Invoices TRACE",
             )
         except Exception:
             pass
@@ -3283,6 +3283,7 @@ def apply_offers(invoice_data, selected_offers=None):
 
         try:
             frappe.log_error(
+                "Apply Offers TRACE input",
                 json.dumps({
                     "pos_profile": invoice.get("pos_profile"),
                     "customer": invoice.get("customer"),
@@ -3301,7 +3302,6 @@ def apply_offers(invoice_data, selected_offers=None):
                         for it in items
                     ],
                 }, default=str)[:4000],
-                "Apply Offers TRACE input",
             )
         except Exception:
             pass
@@ -3870,6 +3870,7 @@ def apply_offers(invoice_data, selected_offers=None):
 
         try:
             frappe.log_error(
+                "Apply Offers TRACE output",
                 json.dumps({
                     "applied_pricing_rules": sorted(applied_rules),
                     "transaction_discount_amount": flt(transaction_discount_amount, 2),
@@ -3887,7 +3888,6 @@ def apply_offers(invoice_data, selected_offers=None):
                         for it in prepared_items
                     ],
                 }, default=str)[:4000],
-                "Apply Offers TRACE output",
             )
         except Exception:
             pass
