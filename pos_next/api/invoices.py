@@ -723,7 +723,13 @@ def update_invoice(data):
         )
         if not invoice_doc.get("is_return") and (_discount_amount > 0 or _has_item_discount):
             gt = flt(invoice_doc.grand_total)
-            rounded_gt = round(gt / 100) * 100
+            # Use round-half-up (matches JS Math.round on the frontend), NOT
+            # Python's built-in round() which uses banker's rounding (round-half-to-even).
+            # When gt lands exactly on a .50 boundary (e.g. 252450 -> 2524.5), Python's
+            # round() and JS's Math.round() can disagree on the rounding direction —
+            # producing a +/-100 grand total mismatch and a stray +/-50 folded into
+            # discount_amount. math.floor(x + 0.5) replicates Math.round for positive x.
+            rounded_gt = math.floor(gt / 100 + 0.5) * 100
             # Record rounding details (used by the grand total mismatch log to
             # show exactly what value was rounded and by how much).
             invoice_doc.flags.pos_next_rounding_info = {
