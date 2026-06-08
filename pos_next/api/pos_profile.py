@@ -128,6 +128,7 @@ def get_payment_methods(pos_profile):
 				POSPaymentMethod.mode_of_payment,
 				POSPaymentMethod.default,
 				POSPaymentMethod.allow_in_returns,
+				POSPaymentMethod.custom_payment_type,
 				Coalesce(ModeOfPayment.type, "Cash").as_("type"),
 				Coalesce(Account.account_type, "").as_("account_type")
 			)

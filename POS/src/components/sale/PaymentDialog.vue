@@ -515,29 +515,115 @@
 							<span :class="['text-gray-500', isSmallMobile ? 'text-xs' : 'text-sm']">{{ __('Loading...') }}</span>
 						</div>
 						<div v-else-if="filteredPaymentMethods.length > 0" :class="['flex flex-wrap', isSmallMobile ? 'gap-1' : 'gap-1.5 lg:gap-2']">
+							<!-- Cash: single method, no dropdown - selects directly -->
 							<button
-								v-for="method in filteredPaymentMethods"
-								:key="method.mode_of_payment"
-								@pointerdown="onPaymentMethodDown(method, $event)"
-								@pointerup="onPaymentMethodUp(method)"
+								v-if="cashPaymentMethod"
+								@pointerdown="onPaymentMethodDown(cashPaymentMethod, $event)"
+								@pointerup="onPaymentMethodUp(cashPaymentMethod)"
 								@pointerleave="onPaymentMethodCancel"
 								@pointercancel="onPaymentMethodCancel"
 								:class="[
 									'inline-flex items-center rounded-lg border-2 transition-all font-medium select-none touch-none',
 									isSmallMobile ? 'gap-0.5 px-1.5 h-7 text-[10px]' : 'gap-1 lg:gap-2 px-2.5 lg:px-4 h-8 text-xs lg:h-11 lg:text-sm',
-									lastSelectedMethod?.mode_of_payment === method.mode_of_payment
+									isMethodSelected(cashPaymentMethod)
 										? 'border-blue-500 bg-blue-50 text-blue-700'
 										: 'border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-gray-700'
 								]"
 							>
-								<span :class="isSmallMobile ? 'text-xs' : 'text-sm lg:text-lg'">{{ getPaymentIcon(method.type) }}</span>
-								<span class="truncate max-w-[80px] lg:max-w-none">{{ __(method.mode_of_payment) }}</span>
+								<span :class="isSmallMobile ? 'text-xs' : 'text-sm lg:text-lg'">{{ getPaymentIcon(cashPaymentMethod.type) }}</span>
+								<span class="truncate max-w-[80px] lg:max-w-none">{{ __('Cash') }}</span>
 								<!-- Payment Amount Badge -->
-								<span v-if="getMethodTotal(method.mode_of_payment) > 0"
+								<span v-if="getMethodTotal(cashPaymentMethod.mode_of_payment) > 0"
 									:class="['font-bold rounded', isSmallMobile ? 'text-[8px] px-0.5 py-0.5' : 'text-xs px-1 py-0.5', 'text-blue-600 bg-blue-100']">
-									{{ formatCurrency(getMethodTotal(method.mode_of_payment)) }}
+									{{ formatCurrency(getMethodTotal(cashPaymentMethod.mode_of_payment)) }}
 								</span>
 							</button>
+
+							<!-- Debit: dropdown listing all Debit-tagged methods -->
+							<div v-if="debitPaymentMethods.length > 0" ref="debitDropdownRef" class="relative">
+								<button
+									@click="toggleDebitDropdown"
+									:class="[
+										'inline-flex items-center rounded-lg border-2 transition-all font-medium select-none',
+										isSmallMobile ? 'gap-0.5 px-1.5 h-7 text-[10px]' : 'gap-1 lg:gap-2 px-2.5 lg:px-4 h-8 text-xs lg:h-11 lg:text-sm',
+										selectedDebitMethod
+											? 'border-blue-500 bg-blue-50 text-blue-700'
+											: 'border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-gray-700'
+									]"
+								>
+									<span :class="isSmallMobile ? 'text-xs' : 'text-sm lg:text-lg'">{{ getPaymentIcon(selectedDebitMethod?.type || debitPaymentMethods[0].type) }}</span>
+									<span class="truncate max-w-[80px] lg:max-w-none">{{ selectedDebitMethod ? __(selectedDebitMethod.mode_of_payment) : __('Debit') }}</span>
+									<span v-if="selectedDebitMethod && getMethodTotal(selectedDebitMethod.mode_of_payment) > 0"
+										:class="['font-bold rounded', isSmallMobile ? 'text-[8px] px-0.5 py-0.5' : 'text-xs px-1 py-0.5', 'text-blue-600 bg-blue-100']">
+										{{ formatCurrency(getMethodTotal(selectedDebitMethod.mode_of_payment)) }}
+									</span>
+									<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+									</svg>
+								</button>
+								<div
+									v-if="debitDropdownOpen"
+									class="absolute z-30 mt-1 min-w-[10rem] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+								>
+									<button
+										v-for="method in debitPaymentMethods"
+										:key="method.mode_of_payment"
+										@click="selectCategoryMethod(method)"
+										:class="[
+											'w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-start transition-colors',
+											isMethodSelected(method) ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+										]"
+									>
+										<span class="truncate">{{ __(method.mode_of_payment) }}</span>
+										<span v-if="getMethodTotal(method.mode_of_payment) > 0" class="text-xs font-bold text-blue-600 bg-blue-100 rounded px-1 py-0.5">
+											{{ formatCurrency(getMethodTotal(method.mode_of_payment)) }}
+										</span>
+									</button>
+								</div>
+							</div>
+
+							<!-- Transfer: dropdown listing all Transfer-tagged methods -->
+							<div v-if="transferPaymentMethods.length > 0" ref="transferDropdownRef" class="relative">
+								<button
+									@click="toggleTransferDropdown"
+									:class="[
+										'inline-flex items-center rounded-lg border-2 transition-all font-medium select-none',
+										isSmallMobile ? 'gap-0.5 px-1.5 h-7 text-[10px]' : 'gap-1 lg:gap-2 px-2.5 lg:px-4 h-8 text-xs lg:h-11 lg:text-sm',
+										selectedTransferMethod
+											? 'border-blue-500 bg-blue-50 text-blue-700'
+											: 'border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-gray-700'
+									]"
+								>
+									<span :class="isSmallMobile ? 'text-xs' : 'text-sm lg:text-lg'">{{ getPaymentIcon(selectedTransferMethod?.type || transferPaymentMethods[0].type) }}</span>
+									<span class="truncate max-w-[80px] lg:max-w-none">{{ selectedTransferMethod ? __(selectedTransferMethod.mode_of_payment) : __('Transfer') }}</span>
+									<span v-if="selectedTransferMethod && getMethodTotal(selectedTransferMethod.mode_of_payment) > 0"
+										:class="['font-bold rounded', isSmallMobile ? 'text-[8px] px-0.5 py-0.5' : 'text-xs px-1 py-0.5', 'text-blue-600 bg-blue-100']">
+										{{ formatCurrency(getMethodTotal(selectedTransferMethod.mode_of_payment)) }}
+									</span>
+									<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+									</svg>
+								</button>
+								<div
+									v-if="transferDropdownOpen"
+									class="absolute z-30 mt-1 min-w-[10rem] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+								>
+									<button
+										v-for="method in transferPaymentMethods"
+										:key="method.mode_of_payment"
+										@click="selectCategoryMethod(method)"
+										:class="[
+											'w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-start transition-colors',
+											isMethodSelected(method) ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+										]"
+									>
+										<span class="truncate">{{ __(method.mode_of_payment) }}</span>
+										<span v-if="getMethodTotal(method.mode_of_payment) > 0" class="text-xs font-bold text-blue-600 bg-blue-100 rounded px-1 py-0.5">
+											{{ formatCurrency(getMethodTotal(method.mode_of_payment)) }}
+										</span>
+									</button>
+								</div>
+							</div>
 							<!-- Credit Balance as Payment Method -->
 							<button
 								v-if="customerCreditEnabled && (remainingAvailableCredit > 0 || getMethodTotal('Customer Credit') > 0)"
@@ -988,7 +1074,7 @@ import { getPaymentIcon } from "@/utils/payment"
 import { offlineWorker } from "@/utils/offline/workerClient"
 import { logger } from "@/utils/logger"
 import { Dialog, createResource, call } from "frappe-ui"
-import { computed, ref, watch, nextTick } from "vue"
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue"
 import { useToast } from "@/composables/useToast"
 import { useLongPress } from "@/composables/useLongPress"
 import { usePaymentNumpad } from "@/composables/usePaymentNumpad"
@@ -1384,6 +1470,95 @@ function isCashPaymentMethod(method) {
 
 // Filter payment methods
 const filteredPaymentMethods = computed(() => paymentMethods.value)
+
+// ===========================================
+// Payment Method Categories (Cash / Debit / Transfer)
+// Groups the (potentially many) POS Payment Methods into 3 category buttons
+// based on the `custom_payment_type` field tagged on each POS Payment Method.
+// ===========================================
+function methodsOfType(typeName) {
+	return paymentMethods.value.filter(
+		(m) => (m.custom_payment_type || "").toLowerCase() === typeName,
+	)
+}
+
+// Cash: there is only ever one per POS Profile - select it directly, no dropdown
+const cashPaymentMethod = computed(() => methodsOfType("cash")[0] || null)
+// Debit / Transfer: may have several methods - shown via dropdown
+const debitPaymentMethods = computed(() => methodsOfType("debit"))
+const transferPaymentMethods = computed(() => methodsOfType("transfer"))
+
+function isMethodSelected(method) {
+	return (
+		!!method &&
+		!!lastSelectedMethod.value &&
+		lastSelectedMethod.value.mode_of_payment === method.mode_of_payment
+	)
+}
+
+// Currently active method within a category (used to show its name on the button)
+const selectedDebitMethod = computed(() => {
+	const m = lastSelectedMethod.value
+	if (!m) return null
+	return debitPaymentMethods.value.find((d) => d.mode_of_payment === m.mode_of_payment) || null
+})
+const selectedTransferMethod = computed(() => {
+	const m = lastSelectedMethod.value
+	if (!m) return null
+	return transferPaymentMethods.value.find((t) => t.mode_of_payment === m.mode_of_payment) || null
+})
+
+const debitDropdownOpen = ref(false)
+const transferDropdownOpen = ref(false)
+const debitDropdownRef = ref(null)
+const transferDropdownRef = ref(null)
+
+function selectCashMethod() {
+	if (cashPaymentMethod.value) {
+		selectPaymentMethod(cashPaymentMethod.value)
+	}
+}
+
+function toggleDebitDropdown() {
+	transferDropdownOpen.value = false
+	debitDropdownOpen.value = !debitDropdownOpen.value
+}
+
+function toggleTransferDropdown() {
+	debitDropdownOpen.value = false
+	transferDropdownOpen.value = !transferDropdownOpen.value
+}
+
+function selectCategoryMethod(method) {
+	selectPaymentMethod(method)
+	debitDropdownOpen.value = false
+	transferDropdownOpen.value = false
+}
+
+function handleCategoryDropdownOutsideClick(event) {
+	if (
+		debitDropdownOpen.value &&
+		debitDropdownRef.value &&
+		!debitDropdownRef.value.contains(event.target)
+	) {
+		debitDropdownOpen.value = false
+	}
+	if (
+		transferDropdownOpen.value &&
+		transferDropdownRef.value &&
+		!transferDropdownRef.value.contains(event.target)
+	) {
+		transferDropdownOpen.value = false
+	}
+}
+
+onMounted(() => {
+	document.addEventListener("pointerdown", handleCategoryDropdownOutsideClick)
+})
+
+onBeforeUnmount(() => {
+	document.removeEventListener("pointerdown", handleCategoryDropdownOutsideClick)
+})
 
 // Sales Persons state
 const salesPersons = ref([])
