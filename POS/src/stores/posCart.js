@@ -1350,6 +1350,68 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	}
 
 	/**
+	 * Re-validate already-applied offers against the current cart/customer when
+	 * offline (e.g. customer changed from a Member group to a non-Member one).
+	 *
+	 * applyOffersOffline() only ever ADDS newly-eligible offers — it never removes
+	 * ones that stopped qualifying, because eligibility is only checked against
+	 * offers not yet in appliedOffers. Online mode handles removal via
+	 * reapplyOffer(), but that function calls the server (applyOffersResource),
+	 * which isn't available offline. This is the offline-safe equivalent: it uses
+	 * the same client-side offersStore.checkOfferEligibility() used to apply
+	 * offers in the first place, so it requires no network access.
+	 *
+	 * @returns {boolean} True if any offer was removed (caller can skip the
+	 *   subsequent "apply newly eligible offers" pass since this already re-derives them)
+	 */
+	function validateOffersOffline() {
+		if (appliedOffers.value.length === 0) return false
+
+		const cartSnapshot = buildCartSnapshot()
+		offersStore.updateCartSnapshot(cartSnapshot)
+
+		const invalidOffers = []
+		for (const appliedOffer of appliedOffers.value) {
+			const offer = appliedOffer.offer
+			if (!offer) continue
+			const { eligible, reason } = offersStore.checkOfferEligibility(offer)
+			if (!eligible) {
+				invalidOffers.push({ ...appliedOffer, reason })
+			}
+		}
+
+		if (invalidOffers.length === 0) return false
+
+		// Reset every item touched by an offline-applied promo back to its
+		// original price, then let applyOffersOffline() re-derive — from
+		// scratch — which offers (if any) are still eligible and reapply
+		// only those. This avoids partial-state bugs from selectively
+		// un-applying individual offers.
+		appliedOffers.value = []
+		promoTransactionDiscount.value = 0
+		processFreeItems([])
+		invoiceItems.value.forEach((item) => {
+			if (hasPricingRules(item.pricing_rules)) {
+				item.discount_percentage = 0
+				item.discount_amount = 0
+				item.pricing_rules = []
+				item.rate = item.price_list_rate || item.rate
+				recalculateItem(item)
+			}
+		})
+		rebuildIncrementalCache()
+
+		applyOffersOffline()
+
+		const offerNames = invalidOffers.map((o) => o.name || o.code).join(", ")
+		showWarning(
+			__("Offer removed: {0}. Cart no longer meets requirements.", [offerNames]),
+		)
+
+		return true
+	}
+
+	/**
 	 * Apply price discount (percentage or amount) to eligible items offline
 	 * @param {Object} offer - The offer to apply
 	 * @param {Array} eligibleItems - Items eligible for the discount
@@ -1885,7 +1947,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			if (appliedOffers.value.length === 0) {
 				processFreeItems([])
 			}
-			applyOffersOffline()
+			// Remove any applied offers that no longer qualify (e.g. customer
+			// changed away from the required customer group) BEFORE looking for
+			// newly-eligible ones — validateOffersOffline() already re-derives
+			// and reapplies remaining-eligible offers when it removes any.
+			if (!validateOffersOffline()) {
+				applyOffersOffline()
+			}
 			offerProcessingState.value.lastCartHash = generateCartHash()
 			offerProcessingState.value.lastProcessedAt = Date.now()
 			return
