@@ -3242,6 +3242,31 @@ def apply_offers(invoice_data, selected_offers=None):
         invoice = frappe._dict(invoice_data or {})
         items = invoice.get("items") or []
 
+        try:
+            frappe.log_error(
+                json.dumps({
+                    "pos_profile": invoice.get("pos_profile"),
+                    "customer": invoice.get("customer"),
+                    "discount_amount": invoice.get("discount_amount"),
+                    "coupon_code": invoice.get("coupon_code"),
+                    "selected_offers_in": selected_offers,
+                    "items": [
+                        {
+                            "item_code": it.get("item_code"),
+                            "qty": it.get("qty") or it.get("quantity"),
+                            "rate": it.get("rate"),
+                            "price_list_rate": it.get("price_list_rate"),
+                            "discount_percentage": it.get("discount_percentage"),
+                            "discount_amount": it.get("discount_amount"),
+                        }
+                        for it in items
+                    ],
+                }, default=str)[:4000],
+                "Apply Offers TRACE input",
+            )
+        except Exception:
+            pass
+
         if isinstance(selected_offers, str):
             try:
                 selected_offers = json.loads(selected_offers)
@@ -3803,6 +3828,30 @@ def apply_offers(invoice_data, selected_offers=None):
             if key not in seen_free:
                 seen_free.add(key)
                 deduped_free_items.append(fi)
+
+        try:
+            frappe.log_error(
+                json.dumps({
+                    "applied_pricing_rules": sorted(applied_rules),
+                    "transaction_discount_amount": flt(transaction_discount_amount, 2),
+                    "rule_map_names": list(rule_map.keys()),
+                    "raw_rule_names": list(raw_rule_names),
+                    "items_out": [
+                        {
+                            "item_code": it.get("item_code"),
+                            "rate": it.get("rate"),
+                            "price_list_rate": it.get("price_list_rate"),
+                            "discount_percentage": it.get("discount_percentage"),
+                            "discount_amount": it.get("discount_amount"),
+                            "pricing_rules": it.get("pricing_rules"),
+                        }
+                        for it in prepared_items
+                    ],
+                }, default=str)[:4000],
+                "Apply Offers TRACE output",
+            )
+        except Exception:
+            pass
 
         return {
             "items": [dict(item) for item in prepared_items],
