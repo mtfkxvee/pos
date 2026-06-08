@@ -815,19 +815,6 @@ def update_invoice(data):
 @frappe.whitelist()
 def get_pos_draft_invoices(pos_profile=None):
     """Fetch Draft Sales Invoices for a specific POS Profile including items."""
-    try:
-        return _get_pos_draft_invoices(pos_profile)
-    except (frappe.ValidationError, frappe.PermissionError):
-        raise
-    except Exception:
-        frappe.log_error(
-            frappe.get_traceback(),
-            f"get_pos_draft_invoices failed (pos_profile={pos_profile})",
-        )
-        raise
-
-
-def _get_pos_draft_invoices(pos_profile):
     if not pos_profile:
         return []
     invoices = frappe.get_all(
@@ -2134,19 +2121,6 @@ def get_invoices(pos_profile, limit=50, offset=0, search=None):
 	Returns:
 		List of invoices with details
 	"""
-	try:
-		return _get_invoices(pos_profile, limit, offset, search)
-	except (frappe.ValidationError, frappe.PermissionError):
-		raise
-	except Exception:
-		frappe.log_error(
-			frappe.get_traceback(),
-			f"get_invoices failed (pos_profile={pos_profile}, limit={limit}, offset={offset}, search={search})",
-		)
-		raise
-
-
-def _get_invoices(pos_profile, limit, offset, search):
 	if not pos_profile:
 		frappe.throw(_("POS Profile is required"))
 
