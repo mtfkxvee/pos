@@ -850,6 +850,36 @@ def get_pos_draft_invoices(pos_profile=None):
             inv.draft_id = inv.name
             inv.created_at = inv.creation
 
+        try:
+            frappe.log_error(
+                json.dumps({
+                    "pos_profile": pos_profile,
+                    "invoices": [
+                        {
+                            "name": inv.name,
+                            "discount_amount": inv.discount_amount,
+                            "additional_discount_percentage": inv.additional_discount_percentage,
+                            "apply_discount_on": inv.apply_discount_on,
+                            "items": [
+                                {
+                                    "item_code": it.get("item_code"),
+                                    "rate": it.get("rate"),
+                                    "price_list_rate": it.get("price_list_rate"),
+                                    "discount_percentage": it.get("discount_percentage"),
+                                    "discount_amount": it.get("discount_amount"),
+                                    "pricing_rules": it.get("pricing_rules"),
+                                }
+                                for it in inv.items
+                            ],
+                        }
+                        for inv in invoices
+                    ],
+                }, default=str)[:4000],
+                "Draft Invoices TRACE",
+            )
+        except Exception:
+            pass
+
     return invoices
 
 
