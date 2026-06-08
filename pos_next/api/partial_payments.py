@@ -639,12 +639,7 @@ def get_unpaid_invoices(pos_profile: str, limit: int = DEFAULT_INVOICE_LIMIT, se
         frappe.PermissionError: If user lacks access
     """
     try:
-        result = _get_unpaid_invoices(pos_profile, limit, search)
-        frappe.log_error(
-            f"user={frappe.session.user}, pos_profile={pos_profile}, limit={limit}, search={search!r}, returned={len(result)}",
-            "get_unpaid_invoices called",
-        )
-        return result
+        return _get_unpaid_invoices(pos_profile, limit, search)
     except (frappe.ValidationError, frappe.PermissionError):
         raise
     except Exception:
@@ -1021,12 +1016,7 @@ def get_unpaid_summary(pos_profile: str) -> Dict:
         frappe.PermissionError: If user lacks access
     """
     try:
-        result = _get_unpaid_summary(pos_profile)
-        frappe.log_error(
-            f"user={frappe.session.user}, pos_profile={pos_profile}, result={result}",
-            "get_unpaid_summary called",
-        )
-        return result
+        return _get_unpaid_summary(pos_profile)
     except (frappe.ValidationError, frappe.PermissionError):
         raise
     except Exception:
