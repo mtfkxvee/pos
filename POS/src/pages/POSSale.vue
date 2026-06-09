@@ -2097,6 +2097,7 @@ async function handlePaymentCompleted(paymentData) {
 			const now = new Date();
 			const offlineName = generateOfflineInvoiceId(shiftStore.profileName, userName.value, now);
 
+			const _offlinePromoDiscount = cartStore.promoTransactionDiscount || 0
 			const invoiceData = {
 				pos_profile: cartStore.posProfile,
 				posa_pos_opening_shift: cartStore.posOpeningShift,
@@ -2107,8 +2108,13 @@ async function handlePaymentCompleted(paymentData) {
 				grand_total: cartStore.grandTotal,
 				total_tax: cartStore.totalTax,
 				total_discount: cartStore.totalDiscount,
-				discount_amount: cartStore.additionalDiscount || 0,
-				apply_discount_on: "Grand Total", // Tell ERPNext to apply this to grand total
+				// Mirror the online path: promoTransactionDiscount is folded into
+				// discount_amount so ERPNext applies the full promo+manual discount
+				// to grand_total during validate. Without this, the cashier-facing
+				// total and the synced invoice total diverge, leaving an outstanding.
+				discount_amount: (cartStore.additionalDiscount || 0) + _offlinePromoDiscount,
+				promo_discount_amount: _offlinePromoDiscount,
+				apply_discount_on: "Grand Total",
 				coupon_code: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
 					? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name)
 					: undefined,

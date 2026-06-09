@@ -1837,7 +1837,9 @@ def submit_invoice(invoice=None, data=None):
         # Store promo transaction discount separately for GL routing.
         # This lets get_gl_entries split: promo → custom_discount_account,
         # manual → diskon_akun (Potongan Penjualan).
-        promo_da = flt(data.get("promo_discount_amount") or 0)
+        # Offline sync sends data={} — fall back to invoice-level field so the
+        # promo amount saved in the offline payload still reaches this path.
+        promo_da = flt(data.get("promo_discount_amount") or invoice.get("promo_discount_amount") or 0)
         if frappe.db.has_column("Sales Invoice", "custom_promo_discount_amount"):
             invoice_doc.custom_promo_discount_amount = promo_da
 
