@@ -1607,28 +1607,15 @@ async function fetchCustomers(posProfile) {
 		return []
 	}
 
-	let start = 0
-	let allCustomers = []
-
-	log.info("Fetching customers from server (paginated)...")
+	log.info("Fetching all customers from server...")
 
 	try {
-		while (true) {
-			const batch = await workerFetchBatch(
-				"/api/method/pos_next.api.customers.get_customers",
-				{ pos_profile: posProfile, start, limit: WORKER_BATCH_SIZE },
-			)
+		const allCustomers = await workerFetchBatch(
+			"/api/method/pos_next.api.customers.get_customers",
+			{ pos_profile: posProfile, limit: 0 },
+		)
 
-			if (!Array.isArray(batch) || batch.length === 0) break
-			allCustomers = allCustomers.concat(batch)
-			log.info(`Fetched ${allCustomers.length} customers so far...`)
-
-			if (batch.length < WORKER_BATCH_SIZE) break
-			start += WORKER_BATCH_SIZE
-
-			await new Promise((r) => setTimeout(r, 200))
-		}
-
+		if (!Array.isArray(allCustomers)) return []
 		log.info(`Total fetched: ${allCustomers.length} customers`)
 		return allCustomers
 	} catch (error) {

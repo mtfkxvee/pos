@@ -204,33 +204,17 @@ export const cacheItemsFromServer = async (posProfile) => {
 	}
 }
 
-// Load customers from server with pagination
+// Load all customers from server in a single request (no limit)
 export const cacheCustomersFromServer = async (posProfile) => {
 	try {
-		let start = 0
-		let allCustomers = []
+		console.log("Fetching all customers from server...")
 
-		console.log("Fetching customers from server (paginated)...")
+		const response = await call("pos_next.api.customers.get_customers", {
+			pos_profile: posProfile,
+			limit: 0,
+		})
 
-		while (true) {
-			const response = await call("pos_next.api.customers.get_customers", {
-				pos_profile: posProfile,
-				start,
-				limit: CACHE_BATCH_SIZE,
-			})
-
-			const batch = response?.message ?? response ?? []
-			if (!Array.isArray(batch) || batch.length === 0) break
-
-			allCustomers = allCustomers.concat(batch)
-			console.log(`Fetched ${allCustomers.length} customers so far...`)
-
-			if (batch.length < CACHE_BATCH_SIZE) break
-			start += CACHE_BATCH_SIZE
-
-			await new Promise((r) => setTimeout(r, 200))
-		}
-
+		const allCustomers = response?.message ?? response ?? []
 		console.log(`Total fetched: ${allCustomers.length} customers`)
 		return { customers: allCustomers }
 	} catch (error) {
@@ -266,25 +250,27 @@ export const searchCachedItems = async (searchTerm = "", limit = 50) => {
 	}
 }
 
-// Search customers in cache
-export const searchCachedCustomers = async (searchTerm = "", limit = 50) => {
+// Search customers in cache (limit=0 means no limit — return all)
+export const searchCachedCustomers = async (searchTerm = "", limit = 0) => {
 	try {
 		if (!searchTerm) {
-			return await db.customers.limit(limit).toArray()
+			return limit > 0
+				? await db.customers.limit(limit).toArray()
+				: await db.customers.toArray()
 		}
 
 		const term = searchTerm.toLowerCase()
 
 		// Search by name, mobile, or email
-		const results = await db.customers
+		let query = db.customers
 			.where("customer_name")
 			.startsWithIgnoreCase(term)
 			.or("mobile_no")
 			.startsWithIgnoreCase(term)
 			.or("email_id")
 			.startsWithIgnoreCase(term)
-			.limit(limit)
-			.toArray()
+		if (limit > 0) query = query.limit(limit)
+		const results = await query.toArray()
 
 		return results
 	} catch (error) {

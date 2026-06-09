@@ -198,7 +198,6 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 	})
 
 	// Actions
-	const CUSTOMER_LOAD_BATCH = 500
 
 	async function loadAllCustomers(posProfile, forceReload = false) {
 		if (!posProfile) {
@@ -212,36 +211,27 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 
 		loading.value = true
 		try {
-			// Try to get from worker cache first (use large limit to get all cached)
-			const cachedCustomers = await offlineWorker.searchCachedCustomers("", 5000)
+			// Try to get from worker cache first (no limit — all cached customers)
+			const cachedCustomers = await offlineWorker.searchCachedCustomers("", 0)
 
 			if (cachedCustomers && cachedCustomers.length > 0) {
 				allCustomers.value = cachedCustomers
 				log.debug(`Loaded ${cachedCustomers.length} customers from cache`)
 			} else if (!isOffline()) {
-				// Fetch from server with pagination to avoid overwhelming the server
-				let start = 0
-				const allFetched = []
-				while (true) {
-					const response = await call("pos_next.api.customers.get_customers", {
-						pos_profile: posProfile,
-						search_term: "",
-						start,
-						limit: CUSTOMER_LOAD_BATCH,
-					})
-					const batch = response?.message || response || []
-					if (!Array.isArray(batch) || batch.length === 0) break
-					allFetched.push(...batch)
-					if (batch.length < CUSTOMER_LOAD_BATCH) break
-					start += CUSTOMER_LOAD_BATCH
-				}
-				allCustomers.value = allFetched
+				// Fetch all customers from server in one request (limit=0 = no limit)
+				const response = await call("pos_next.api.customers.get_customers", {
+					pos_profile: posProfile,
+					search_term: "",
+					limit: 0,
+				})
+				const allFetched = response?.message || response || []
+				allCustomers.value = Array.isArray(allFetched) ? allFetched : []
 
 				// Cache for future use
-				if (allFetched.length) {
-					await offlineWorker.cacheCustomers(allFetched)
+				if (allCustomers.value.length) {
+					await offlineWorker.cacheCustomers(allCustomers.value)
 				}
-				log.debug(`Loaded ${allFetched.length} customers from server`)
+				log.debug(`Loaded ${allCustomers.value.length} customers from server`)
 			} else {
 				// Offline and cache is empty
 				log.warn("Offline mode: No cached customers available")
