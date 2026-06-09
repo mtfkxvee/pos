@@ -967,16 +967,21 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		try {
 			// Build current cart snapshot for validation
 			const cartSnapshot = buildCartSnapshot()
+			console.log("[reapplyOffer] snapshot:", { subtotal: cartSnapshot.subtotal, customerGroup: cartSnapshot.customerGroup, itemCount: cartSnapshot.itemCount })
 
 			// Check each applied offer against current cart state
 			const invalidOffers = []
 			for (const appliedOffer of appliedOffers.value) {
 				const offer = appliedOffer.offer
-				if (!offer) continue
+				if (!offer) {
+					console.log("[reapplyOffer] offer object null for code:", appliedOffer.code, "- skipping validation")
+					continue
+				}
 
 				// Use offersStore to check eligibility
 				offersStore.updateCartSnapshot(cartSnapshot)
 				const { eligible, reason } = offersStore.checkOfferEligibility(offer)
+				console.log("[reapplyOffer] code:", appliedOffer.code, "apply_on:", offer.apply_on, "applicable_for:", offer.applicable_for, "customer_group:", offer.customer_group, "min_amt:", offer.min_amt, "eligible:", eligible, "reason:", reason)
 
 				if (!eligible) {
 					invalidOffers.push({
@@ -1090,8 +1095,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 			// Get ALL eligible offers (not just auto-offers)
 			const allEligibleOffers = offersStore.allEligibleOffers
+			console.log("[autoApply] allEligibleOffers:", allEligibleOffers.map(o => o.name), "appliedOffers:", appliedOffers.value.map(o => o.code))
 
 			if (allEligibleOffers.length === 0) {
+				console.log("[autoApply] early return: no eligible offers")
 				return
 			}
 
@@ -1103,6 +1110,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			)
 
 			const existingCodes = appliedOffers.value.map((entry) => entry.code)
+			console.log("[autoApply] newOffers:", newOffers.map(o => o.name), "existingCodes:", existingCodes)
 
 			// If no new offers AND no existing offers, nothing to do
 			if (newOffers.length === 0 && existingCodes.length === 0) {
@@ -1126,6 +1134,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					appliedRules: recalcRules,
 					transactionDiscountAmount: recalcTda,
 				} = parseOfferResponse(recalcResponse)
+				console.log("[autoApply] recalc response - recalcRules:", recalcRules, "recalcTda:", recalcTda)
 				applyDiscountsFromServer(recalcItems)
 				processFreeItems(recalcFreeItems)
 				filterActiveOffers(recalcRules)
