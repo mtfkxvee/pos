@@ -49,11 +49,26 @@ export const usePOSDraftsStore = defineStore("posDrafts", () => {
 		}
 
 		try {
+			// Strip promo data so items are saved at their original prices.
+			// On load, forceRefreshOffers() reapplies promos from applied_offers.
+			// Saving discounted rates causes double-discount on reload because the
+			// server applies the same discount again to an already-reduced price.
+			const cleanItems = invoiceItems
+				.filter((item) => !item.is_free_item)
+				.map((item) => ({
+					...item,
+					rate: item.price_list_rate || item.rate,
+					discount_percentage: 0,
+					discount_amount: 0,
+					pricing_rules: [],
+					free_qty: 0,
+				}))
+
 			const draftData = {
 				pos_profile: posProfile,
 				customer: customer,
-				items: invoiceItems,
-				applied_offers: appliedOffers, // Save applied offers
+				items: cleanItems,
+				applied_offers: appliedOffers,
 				...extraData,
 			}
 
