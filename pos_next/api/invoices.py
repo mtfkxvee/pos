@@ -717,8 +717,13 @@ def update_invoice(data):
         # Round grand total to nearest 100 when a discount is applied.
         # Check both invoice-level discount AND item-level discounts so that
         # backend rounding matches the frontend (which rounds when totalDiscount > 0).
+        # Exclude is_free_item lines — their discount_amount/100% represents the
+        # "free" nature of a B1G1 item, not a real cashier-applied discount, and
+        # including them would trigger rounding for B1G1 invoices that the UI
+        # never rounds (the UI does not count free-item discount in totalDiscount).
         _has_item_discount = any(
-            flt(item.discount_amount) > 0 or flt(item.discount_percentage) > 0
+            (flt(item.discount_amount) > 0 or flt(item.discount_percentage) > 0)
+            and not item.get("is_free_item")
             for item in invoice_doc.items
         )
         if not invoice_doc.get("is_return") and (_discount_amount > 0 or _has_item_discount):
@@ -1239,6 +1244,13 @@ def _mismatch_promo_breakdown(invoice_doc):
     for rule_name, items in item_rules.items():
         rule = rule_map.get(rule_name)
         is_transaction = bool(rule) and rule.get("apply_on") == "Transaction"
+
+        # "Give Product" rules work by adding a free item at 0 price — they have
+        # no discount_percentage/discount_amount on the rule definition itself.
+        # Comparing expected=0 vs actual=free_item.discount_amount gives a false
+        # positive PROMO_ITEM_NOT_APPLIED classification, so skip them here.
+        if rule and rule.get("price_or_product_discount") == "Product":
+            continue
 
         if is_transaction:
             expected = 0.0
