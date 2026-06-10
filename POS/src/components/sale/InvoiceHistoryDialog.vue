@@ -24,7 +24,7 @@
 					<Button
 						variant="subtle"
 						@click="loadInvoices"
-						:loading="invoicesResource.loading"
+						:loading="invoicesResource.loading || offlineLoading"
 						:title="__('Refresh')"
 					>
 						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,7 +34,7 @@
 				</div>
 
 				<!-- Invoices List -->
-				<div v-if="invoicesResource.loading" class="text-center py-8">
+				<div v-if="invoicesResource.loading || offlineLoading" class="text-center py-8">
 					<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
 					<p class="mt-3 text-xs text-gray-500">{{ __('Loading invoices...') }}</p>
 				</div>
@@ -156,6 +156,11 @@ import {
 	formatCurrency as formatCurrencyUtil,
 } from "@/utils/currency"
 import { getInvoiceStatusColor } from "@/utils/invoice"
+import { isOffline } from "@/utils/offline/offlineState"
+import {
+	getCachedInvoiceHistory,
+	getOfflineInvoicesForHistory,
+} from "@/utils/offline/sync"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue"
@@ -197,6 +202,9 @@ const selectedInvoiceForReturn = ref(null)
 
 // Track if we're loading more (appending) vs fresh load (replacing)
 const isLoadingMore = ref(false)
+
+// Loading state for the offline path (no createResource involved)
+const offlineLoading = ref(false)
 
 // Create resource for loading invoices
 const invoicesResource = createResource({
@@ -257,7 +265,7 @@ watch(
 	(val) => {
 		show.value = val
 		if (val && props.posProfile) {
-			invoicesResource.reload()
+			loadInvoices()
 		}
 	},
 )
@@ -284,16 +292,38 @@ const filteredInvoices = computed(() => {
 	)
 })
 
-function loadInvoices() {
-	if (props.posProfile) {
-		// Reset to first page for fresh load
-		page.value = 0
-		isLoadingMore.value = false
-		invoicesResource.reload()
+async function loadInvoices() {
+	if (!props.posProfile) return
+
+	// Reset to first page for fresh load
+	page.value = 0
+	isLoadingMore.value = false
+
+	// Offline: show invoices saved locally (pending sync) plus any
+	// previously cached server history. No pagination available offline.
+	if (isOffline()) {
+		offlineLoading.value = true
+		try {
+			const [pending, cached] = await Promise.all([
+				getOfflineInvoicesForHistory(),
+				getCachedInvoiceHistory(props.posProfile, { limit: pageSize }),
+			])
+			invoices.value = [...pending, ...cached]
+			hasMore.value = false
+		} catch (error) {
+			console.error("Error loading offline invoice history:", error)
+			showError(__("Failed to load invoices"))
+		} finally {
+			offlineLoading.value = false
+		}
+		return
 	}
+
+	invoicesResource.reload()
 }
 
 function loadMore() {
+	if (isOffline()) return
 	page.value++
 	isLoadingMore.value = true
 	invoicesResource.reload()

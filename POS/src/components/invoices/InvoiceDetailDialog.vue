@@ -283,6 +283,7 @@ import {
 } from "@/utils/currency"
 import { getInvoiceStatusColor } from "@/utils/invoice"
 import { logger } from "@/utils/logger"
+import { isOffline } from "@/utils/offline/offlineState"
 import { Button, Dialog, call } from "frappe-ui"
 import { ref, watch, nextTick, computed } from "vue"
 
@@ -296,6 +297,12 @@ const props = defineProps({
 	currency: {
 		type: String,
 		default: DEFAULT_CURRENCY,
+	},
+	// Pre-loaded invoice data (e.g. from the offline/cached Invoice History
+	// list) used when the server can't be reached for `get_invoice`.
+	invoiceData: {
+		type: Object,
+		default: null,
 	},
 })
 
@@ -394,6 +401,21 @@ watch(show, async (val) => {
 
 async function loadInvoiceDetails() {
 	if (!props.invoiceName) return
+
+	// Offline (or invoice still pending sync): use the data already on hand
+	// from the Invoice History list instead of calling the unreachable server.
+	if (props.invoiceData && (isOffline() || props.invoiceData.is_offline_pending)) {
+		const data = props.invoiceData
+		invoiceData.value = {
+			...data,
+			items: (data.items || []).map((item) => ({
+				...item,
+				quantity: item.quantity ?? item.qty,
+			})),
+		}
+		loading.value = false
+		return
+	}
 
 	loading.value = true
 	try {

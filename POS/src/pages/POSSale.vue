@@ -686,6 +686,7 @@
 			<InvoiceDetailDialog
 				v-model="showInvoiceDetail"
 				:invoice-name="selectedInvoiceForView"
+				:invoice-data="selectedInvoiceForViewData"
 				:pos-profile="shiftStore.profileName"
 				:currency="shiftStore.profileCurrency"
 				@print-invoice="handlePrintInvoice"
@@ -1147,6 +1148,7 @@ const clearCacheOverlayRef = ref(null);
 // Invoice detail dialog state
 const showInvoiceDetail = ref(false);
 const selectedInvoiceForView = ref(null);
+const selectedInvoiceForViewData = ref(null);
 
 // Debounce timer for offer reapplication
 const offerReapplyTimer = ref(null);
@@ -3094,6 +3096,7 @@ async function loadInvoiceHistoryData() {
 // Handle invoice actions from InvoiceManagement
 function handleViewInvoice(invoice) {
 	selectedInvoiceForView.value = invoice.name || invoice;
+	selectedInvoiceForViewData.value = typeof invoice === "object" ? invoice : null;
 	showInvoiceDetail.value = true;
 }
 
