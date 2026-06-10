@@ -2587,7 +2587,11 @@ async function handleLoadDraft(draft) {
 					}
 				}),
 				customer: draft.customer
-					? { name: draft.customer, customer_name: draft.customer_name || draft.customer }
+					? {
+						name: draft.customer,
+						customer_name: draft.customer_name || draft.customer,
+						customer_group: draft.customer_group || null,
+					}
 					: null,
 				additionalDiscount: draft.discount_amount || 0,
 			}

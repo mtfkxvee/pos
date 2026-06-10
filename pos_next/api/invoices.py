@@ -844,16 +844,34 @@ def get_pos_draft_invoices(pos_profile=None):
                 "price_list_rate", "discount_percentage", "discount_amount",
                 "pricing_rules", "uom", "conversion_factor", "warehouse",
                 "batch_no", "serial_no",
+                # item_group/brand are required for offer eligibility checks
+                # (e.g. "Item Group" / "Brand" apply_on rules) when the draft
+                # is reopened and offers are re-evaluated against the cart.
+                "item_group", "brand",
             ]
         )
         items_by_invoice = {}
         for item in all_items:
             items_by_invoice.setdefault(item.parent, []).append(item)
 
+        # Fetch customer_group for each unique customer so the frontend can
+        # restore it on the reconstructed customer object — required for
+        # "Customer Group" restricted offers to be re-evaluated correctly.
+        customer_names = list({inv.customer for inv in invoices if inv.customer})
+        customer_groups = {}
+        if customer_names:
+            for c in frappe.get_all(
+                "Customer",
+                filters={"name": ["in", customer_names]},
+                fields=["name", "customer_group"],
+            ):
+                customer_groups[c.name] = c.customer_group
+
         for inv in invoices:
             inv.items = items_by_invoice.get(inv.name, [])
             inv.draft_id = inv.name
             inv.created_at = inv.creation
+            inv.customer_group = customer_groups.get(inv.customer)
 
     return invoices
 
