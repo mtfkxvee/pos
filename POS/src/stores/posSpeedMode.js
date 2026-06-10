@@ -78,6 +78,12 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 			// and new transactions during this window go through normally.
 			offlineWorker.setManualOffline(false)
 
+			// offlineState change notifications are debounced (150ms), so
+			// posSyncStore.isOffline doesn't flip to false immediately - wait
+			// for it to settle before syncing, otherwise syncAllPending() sees
+			// the stale "offline" value and bails out without syncing anything.
+			await new Promise((resolve) => setTimeout(resolve, 200))
+
 			await posSyncStore.syncAllPending()
 
 			const stats = await posSyncStore.getCacheStats()
