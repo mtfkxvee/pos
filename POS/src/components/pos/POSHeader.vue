@@ -471,31 +471,31 @@ const props = defineProps({
 
 // Cache status helpers
 function getCacheIconColor() {
-	if (!props.cacheStats || props.cacheStats.items === 0) {
-		return "text-red-600" // Red: No cache
-	}
 	if (props.cacheSyncing) {
 		return "text-orange-600" // Orange: Syncing in progress
+	}
+	if (!props.cacheStats || props.cacheStats.items === 0) {
+		return "text-red-600" // Red: No cache
 	}
 	return "text-green-600" // Green: Cache ready
 }
 
 function getCacheStatus() {
-	if (!props.cacheStats || props.cacheStats.items === 0) {
-		return __("Empty")
-	}
 	if (props.cacheSyncing) {
 		return __("Syncing")
+	}
+	if (!props.cacheStats || props.cacheStats.items === 0) {
+		return __("Empty")
 	}
 	return __("Ready")
 }
 
 function getCacheStatusBadgeClass() {
-	if (!props.cacheStats || props.cacheStats.items === 0) {
-		return "bg-red-500/20 text-red-300"
-	}
 	if (props.cacheSyncing) {
 		return "bg-orange-500/20 text-orange-300"
+	}
+	if (!props.cacheStats || props.cacheStats.items === 0) {
+		return "bg-red-500/20 text-red-300"
 	}
 	return "bg-green-500/20 text-green-300"
 }
@@ -513,11 +513,11 @@ function formatLastSync() {
 }
 
 function getCacheAriaLabel() {
-	if (!props.cacheStats || props.cacheStats.items === 0) {
-		return __("Cache empty")
-	}
 	if (props.cacheSyncing) {
 		return __("Cache syncing")
+	}
+	if (!props.cacheStats || props.cacheStats.items === 0) {
+		return __("Cache empty")
 	}
 	return __("Cache ready")
 }

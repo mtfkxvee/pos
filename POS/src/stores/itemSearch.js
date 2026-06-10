@@ -1119,7 +1119,15 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				// Start background sync for large catalogs to cache ALL items to IndexedDB
 				// Small catalogs already loaded everything
 				if (!isSmallCatalog) {
-					startBackgroundCacheSync(profile, [], list.length)
+					// On hard refresh, the cache may already hold most/all of the
+					// catalog from a previous session - start the sync offset from
+					// whichever is larger so progress reflects what's already cached
+					// instead of restarting the count (and re-downloading) from 0.
+					startBackgroundCacheSync(
+						profile,
+						[],
+						Math.max(list.length, stats.items || 0),
+					)
 				}
 			}
 		} catch (error) {
