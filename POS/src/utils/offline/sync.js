@@ -421,6 +421,52 @@ export const getOfflineInvoiceCount = async () => {
 }
 
 /**
+ * Get pending (unsynced) offline invoices formatted for display in the
+ * Invoice History list — same shape as `pos_next.api.invoices.get_invoices`.
+ * @returns {Promise<Array>}
+ */
+export const getOfflineInvoicesForHistory = async () => {
+	try {
+		const queued = await getOfflineInvoices()
+		// Most recently created first
+		queued.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+
+		return queued.map((entry) => {
+			const data = entry.data || {}
+			const customer = data.customer
+			const paidAmount = (data.payments || []).reduce(
+				(sum, p) => sum + (Number(p.amount) || 0),
+				0,
+			)
+			const grandTotal = Number(data.grand_total) || 0
+
+			return {
+				name: data.name || entry.offline_id,
+				customer: typeof customer === "object" ? customer?.name : customer,
+				customer_name:
+					data.customer_name ||
+					(typeof customer === "object" ? customer?.customer_name : customer),
+				posting_date: data.posting_date,
+				posting_time: data.posting_time,
+				grand_total: grandTotal,
+				paid_amount: paidAmount,
+				outstanding_amount: Math.max(grandTotal - paidAmount, 0),
+				status: "Pending Sync",
+				docstatus: 0,
+				is_return: !!data.is_return,
+				items: data.items || [],
+				payments: data.payments || [],
+				is_offline_pending: true,
+				offline_id: entry.offline_id,
+			}
+		})
+	} catch (error) {
+		log.error("Failed to get offline invoices for history", error)
+		return []
+	}
+}
+
+/**
  * Delete an offline invoice by ID
  * @param {number} id - Invoice queue ID
  * @returns {Promise<boolean>}

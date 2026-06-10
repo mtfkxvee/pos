@@ -621,6 +621,8 @@ import {
 	getCachedUnpaidInvoices,
 	cacheUnpaidSummary,
 	getCachedUnpaidSummary,
+	getCachedInvoiceHistory,
+	getOfflineInvoicesForHistory,
 } from "@/utils/offline/sync"
 import { logger } from "@/utils/logger"
 import { friendlyError } from "@/utils/errorHandler"
@@ -678,6 +680,26 @@ async function loadHistoryPage(reset = false) {
 		if (!historyHasMore.value || historyLoadingMore.value) return
 		historyLoadingMore.value = true
 	}
+
+	// Offline: show invoices saved locally (pending sync) plus any
+	// previously cached server history. No pagination available offline.
+	if (isOffline()) {
+		try {
+			const [pending, cached] = await Promise.all([
+				getOfflineInvoicesForHistory(),
+				getCachedInvoiceHistory(props.posProfile, { limit: PAGE_SIZE }),
+			])
+			localHistoryInvoices.value = [...pending, ...cached]
+			historyHasMore.value = false
+		} catch (e) {
+			log.error("Error loading offline invoice history:", e)
+		} finally {
+			historyInitialLoading.value = false
+			historyLoadingMore.value = false
+		}
+		return
+	}
+
 	try {
 		const result = await call("pos_next.api.invoices.get_invoices", {
 			pos_profile: props.posProfile,

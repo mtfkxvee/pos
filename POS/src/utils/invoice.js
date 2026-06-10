@@ -11,6 +11,11 @@
 export function getInvoiceStatusColor(invoice) {
 	const status = invoice.status?.toLowerCase()
 
+	// Purple for invoices saved offline and awaiting sync
+	if (status === "pending sync") {
+		return "bg-purple-100 text-purple-800"
+	}
+
 	// Red for overdue, cancelled
 	if (status === "overdue" || invoice.docstatus === 2) {
 		return "bg-red-100 text-red-800"
