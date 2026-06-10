@@ -108,6 +108,30 @@
 						</div>
 					</div>
 
+					<!-- Speed Mode Toggle -->
+					<button
+						@click="$emit('speed-mode-click')"
+						:class="[
+							'p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors relative touch-manipulation',
+							speedModeSyncing ? 'animate-pulse' : ''
+						]"
+						:title="speedModeActive ? __('Speed Mode active - tap to turn off') : __('Activate Speed Mode')"
+						:aria-label="speedModeActive ? __('Speed Mode active') : __('Speed Mode off')"
+					>
+						<svg
+							class="w-4 h-4 sm:w-5 sm:h-5"
+							:class="[
+								speedModeActive ? 'text-amber-500' : 'text-gray-400',
+								speedModeSyncing ? 'animate-spin' : ''
+							]"
+							:fill="speedModeActive ? 'currentColor' : 'none'"
+							:stroke="speedModeActive ? 'none' : 'currentColor'"
+							viewBox="0 0 24 24"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+						</svg>
+					</button>
+
 					<!-- WiFi/Offline Status -->
 					<button
 						@click="$emit('sync-click')"
@@ -336,6 +360,7 @@ const emit = defineEmits([
 	"menu-closed",
 	"clear-cache",
 	"print-format-change",
+	"speed-mode-click",
 ])
 
 const showPrintFormatMenu = ref(false)
@@ -433,6 +458,14 @@ const props = defineProps({
 	printFormat: {
 		type: String,
 		default: null,
+	},
+	speedModeActive: {
+		type: Boolean,
+		default: false,
+	},
+	speedModeSyncing: {
+		type: Boolean,
+		default: false,
 	},
 })
 

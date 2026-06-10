@@ -9,7 +9,7 @@ from erpnext.stock.doctype.batch.batch import get_batch_qty
 from erpnext.stock.get_item_details import get_item_details as erpnext_get_item_details
 from frappe import _
 from frappe.query_builder import DocType, functions as fn
-from frappe.utils import flt, nowdate
+from frappe.utils import cint, flt, get_datetime, nowdate
 
 ITEM_RESULT_FIELDS = [
 	"name as item_code",
@@ -658,7 +658,7 @@ def _get_item_group_with_descendants(item_group):
 	return [item_group] + list(descendants)
 
 
-def _build_item_base_conditions(pos_profile_doc, item_group=None, exclude_variants=True):
+def _build_item_base_conditions(pos_profile_doc, item_group=None, exclude_variants=True, modified_after=None):
 	"""Build base SQL conditions for POS item search with hierarchical item group support."""
 	conditions = [
 		"i.disabled = 0",
@@ -668,6 +668,10 @@ def _build_item_base_conditions(pos_profile_doc, item_group=None, exclude_varian
 		conditions.append("IFNULL(i.variant_of, '') = ''")
 
 	params = []
+
+	if modified_after:
+		conditions.append("i.modified > %s")
+		params.append(get_datetime(cint(modified_after) / 1000))
 
 	if pos_profile_doc.company:
 		conditions.append("IFNULL(i.custom_company, '') IN (%s, '')")
@@ -1018,7 +1022,7 @@ def _get_bundle_warehouse_availability_bulk(bundle_codes, warehouses):
 
 
 @frappe.whitelist()
-def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20, include_variants=0):
+def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20, include_variants=0, modified_after=None):
 	"""Get items for POS with stock, price, and tax details"""
 	try:
 		pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
@@ -1044,7 +1048,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 
 		# Build base conditions
 		exclude_variants = not int(include_variants)
-		conditions, params = _build_item_base_conditions(pos_profile_doc, item_group, exclude_variants=exclude_variants)
+		conditions, params = _build_item_base_conditions(pos_profile_doc, item_group, exclude_variants=exclude_variants, modified_after=modified_after)
 
 		# Build column list with table alias
 		item_columns = ",\n\t".join([f"i.{col}" for col in ITEM_RESULT_FIELDS])
@@ -1359,7 +1363,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 
 
 @frappe.whitelist()
-def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_variants=0):
+def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_variants=0, modified_after=None):
 	"""
 	Fetch items from multiple item groups in a SINGLE query.
 	Eliminates N+1 problem where frontend was making one API call per group.
@@ -1379,7 +1383,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 
 		# Build base conditions using shared helper
 		exclude_variants = not int(include_variants)
-		conditions, params = _build_item_base_conditions(pos_profile_doc, exclude_variants=exclude_variants)
+		conditions, params = _build_item_base_conditions(pos_profile_doc, exclude_variants=exclude_variants, modified_after=modified_after)
 
 		if item_groups:
 			# Expand all groups to include their descendants

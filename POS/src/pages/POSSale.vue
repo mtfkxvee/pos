@@ -24,11 +24,14 @@
 				:cache-stats="itemStore.cacheStats"
 				:stock-sync-active="isStockSyncActive"
 				:is-refreshing="stockStore.refreshing"
+				:speed-mode-active="speedModeStore.isActive"
+				:speed-mode-syncing="speedModeStore.isSyncing"
 				@sync-click="handleSyncClick"
 				@printer-click="uiStore.showHistoryDialog = true"
 				@refresh-click="handleRefresh"
 				@clear-cache="handleClearCache"
 				@print-format-change="setPrintFormat"
+				@speed-mode-click="handleSpeedModeClick"
 				:print-format="printFormat"
 				@logout="uiStore.showLogoutDialog = true"
 			>
@@ -506,6 +509,15 @@
 			v-model="showDiscountAuthDialog"
 			:correct-passwords="posSettingsStore.discountPasswords"
 			@authorized="paymentDialogRef?.openDiscountDialog()"
+		/>
+
+		<SpeedModePinDialog
+			v-model="showSpeedModePinDialog"
+			@verified="handleSpeedModePinVerified"
+		/>
+		<SpeedModeInfoDialog
+			v-model="showSpeedModeInfoDialog"
+			@confirm="speedModeStore.activate()"
 		/>
 
 			<!-- Customer Selection Dialog -->
@@ -1087,7 +1099,11 @@ import { usePOSSettingsStore } from "@/stores/posSettings";
 import { usePOSShiftStore } from "@/stores/posShift";
 import { usePOSSyncStore } from "@/stores/posSync";
 import { usePOSUIStore } from "@/stores/posUI";
+import { useSpeedModeStore } from "@/stores/posSpeedMode";
 import SyncStatusDialog from "@/components/pos/SyncStatusDialog.vue";
+import SpeedModePinDialog from "@/components/sale/SpeedModePinDialog.vue";
+import SpeedModeInfoDialog from "@/components/sale/SpeedModeInfoDialog.vue";
+import { getSpeedModeReadiness } from "@/composables/useSpeedModeReadiness";
 import { logger } from "@/utils/logger";
 
 // Initialize stores
@@ -1100,6 +1116,7 @@ const posSettingsStore = usePOSSettingsStore();
 const itemStore = useItemSearchStore();
 const stockStore = useStockStore();
 const customerSearchStore = useCustomerSearchStore();
+const speedModeStore = useSpeedModeStore();
 // Note: settingsStore is an alias to posSettingsStore (same Pinia store singleton)
 const settingsStore = posSettingsStore;
 
@@ -1186,6 +1203,10 @@ const showJournalEntry = ref(false);
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
 const showDiscountAuthDialog = ref(false);
+
+// Speed Mode dialogs
+const showSpeedModePinDialog = ref(false);
+const showSpeedModeInfoDialog = ref(false);
 
 // Warehouse availability dialog state
 const showWarehouseDialog = ref(false)
@@ -2186,6 +2207,8 @@ async function handlePaymentCompleted(paymentData) {
 				);
 				showSuccess(__("Invoice saved offline. Will sync when online"));
 			}
+
+			await speedModeStore.recordTransaction(shiftStore.profileName);
 		} else {
 			// Get item codes from cart before clearing
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
@@ -2234,6 +2257,8 @@ async function handlePaymentCompleted(paymentData) {
 					uiStore.showSuccess(invoiceName, invoiceTotal, paidAmount);
 					showSuccess(__("Invoice {0} created successfully", [invoiceName]));
 				}
+
+				await speedModeStore.recordTransaction(shiftStore.profileName);
 			}
 		}
 	} catch (error) {
@@ -2865,6 +2890,23 @@ async function handleCustomersSynced() {
 async function handleSyncClick() {
 	// Show the detailed sync status dialog
 	showSyncStatusDialog.value = true;
+}
+
+async function handleSpeedModeClick() {
+	if (speedModeStore.isActive) {
+		speedModeStore.deactivate();
+		return;
+	}
+	showSpeedModePinDialog.value = true;
+}
+
+async function handleSpeedModePinVerified() {
+	const { ready, missing } = await getSpeedModeReadiness(shiftStore.profileName);
+	if (!ready) {
+		showWarning(__("Speed Mode is not ready yet. Missing: {0}", [missing.join(", ")]));
+		return;
+	}
+	showSpeedModeInfoDialog.value = true;
 }
 
 async function handleSyncAll() {

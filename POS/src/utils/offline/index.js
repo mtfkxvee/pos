@@ -60,6 +60,8 @@ export {
 	isManualOffline,
 	cacheItemsFromServer,
 	cacheCustomersFromServer,
+	cacheItemsIncremental,
+	cacheCustomersIncremental,
 	cachePaymentMethodsFromServer,
 	getCachedPaymentMethods,
 	searchCachedItems,

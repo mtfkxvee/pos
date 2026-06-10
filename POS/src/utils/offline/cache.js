@@ -223,6 +223,68 @@ export const cacheCustomersFromServer = async (posProfile) => {
 	}
 }
 
+// Fetch only items modified since `modifiedAfter` (epoch ms). Used by Speed Mode
+// auto-sync to avoid re-downloading the entire catalog.
+export const cacheItemsIncremental = async (posProfile, modifiedAfter) => {
+	try {
+		let start = 0
+		let allItems = []
+
+		while (true) {
+			const response = await call("pos_next.api.items.get_items", {
+				pos_profile: posProfile,
+				start,
+				limit: CACHE_BATCH_SIZE,
+				modified_after: modifiedAfter || undefined,
+			})
+
+			const batch = response?.message ?? response ?? []
+			if (!Array.isArray(batch) || batch.length === 0) break
+
+			const processed = batch.map((item) => ({
+				...item,
+				barcodes: item.item_barcode
+					? Array.isArray(item.item_barcode)
+						? item.item_barcode.map((b) => b.barcode).filter(Boolean)
+						: [item.item_barcode]
+					: [],
+			}))
+
+			allItems = allItems.concat(processed)
+
+			if (batch.length < CACHE_BATCH_SIZE) break
+			start += CACHE_BATCH_SIZE
+
+			await new Promise((r) => setTimeout(r, 200))
+		}
+
+		console.log(`Incremental sync: ${allItems.length} items changed`)
+		return { items: allItems }
+	} catch (error) {
+		console.error("Error fetching incremental items from server:", error)
+		throw error
+	}
+}
+
+// Fetch only customers modified since `modifiedAfter` (epoch ms). Used by Speed Mode
+// auto-sync to avoid re-downloading the entire customer list (e.g. 84,981 records).
+export const cacheCustomersIncremental = async (posProfile, modifiedAfter) => {
+	try {
+		const response = await call("pos_next.api.customers.get_customers", {
+			pos_profile: posProfile,
+			limit: 0,
+			modified_after: modifiedAfter || undefined,
+		})
+
+		const customers = response?.message ?? response ?? []
+		console.log(`Incremental sync: ${customers.length} customers changed`)
+		return { customers }
+	} catch (error) {
+		console.error("Error fetching incremental customers from server:", error)
+		throw error
+	}
+}
+
 // Search items in cache
 export const searchCachedItems = async (searchTerm = "", limit = 50) => {
 	try {

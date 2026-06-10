@@ -5,11 +5,11 @@ Handles customer search, creation, and management for POS operations
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt, get_datetime
 
 
 @frappe.whitelist()
-def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=None):
+def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=None, modified_after=None):
 
     """
     Search customers for inline customer selection in POS.
@@ -18,6 +18,8 @@ def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=No
         search_term (str): Search query (name, mobile, or customer ID)
         pos_profile (str): POS Profile to filter by customer group
         limit (int): Maximum number of results to return
+        modified_after (int): Optional epoch ms timestamp; if provided, only
+            customers modified after this time are returned (incremental sync)
 
     Returns:
         list: List of customer dictionaries with name, customer_name, mobile_no, email_id
@@ -54,6 +56,10 @@ def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=No
                 fetch_fields = fields
 
         filters["disabled"] = 0
+
+        if modified_after:
+            filters["modified"] = [">", get_datetime(cint(modified_after) / 1000)]
+
         start = int(start or 0)
         # limit=0 means "no limit" — return all matching customers.
         # Pagination in the frontend handles large result sets.
