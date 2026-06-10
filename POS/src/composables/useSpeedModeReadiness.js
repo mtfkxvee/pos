@@ -8,11 +8,13 @@
 
 import { usePOSSyncStore } from "@/stores/posSync"
 import { usePOSOffersStore } from "@/stores/posOffers"
+import { useItemSearchStore } from "@/stores/itemSearch"
 import { getCachedPaymentMethods } from "@/utils/offline"
 
 export async function getSpeedModeReadiness(posProfile) {
 	const posSyncStore = usePOSSyncStore()
 	const offersStore = usePOSOffersStore()
+	const itemStore = useItemSearchStore()
 
 	const stats = await posSyncStore.getCacheStats()
 	const paymentMethods = await getCachedPaymentMethods(posProfile)
@@ -22,6 +24,17 @@ export async function getSpeedModeReadiness(posProfile) {
 	if (!stats?.customers) missing.push(__("Customer list"))
 	if (!offersStore.hasFetched) missing.push(__("Promotions / price rules"))
 	if (!paymentMethods?.length) missing.push(__("Payment methods"))
+
+	// Item catalog must be 100% downloaded before allowing offline-only checkout -
+	// a partial catalog would mean items are unexpectedly "not found" while offline.
+	const syncProgress = itemStore.cacheStats?.syncProgress
+	if (itemStore.cacheSyncing || (syncProgress != null && syncProgress < 100)) {
+		missing.push(
+			syncProgress != null
+				? __("Item catalog sync in progress ({0}%)", [syncProgress])
+				: __("Item catalog sync in progress"),
+		)
+	}
 
 	return { ready: missing.length === 0, missing }
 }
