@@ -86,6 +86,41 @@ export const isOffline = () => {
 // ============================================================================
 
 /**
+ * Check whether a "Kode Pelanggan" (customer code) is already used by a
+ * cached/synced customer or by a customer still pending sync. Used to
+ * prevent offline duplicate-creation that would only fail later at sync time.
+ * @param {string} kodePelanggan
+ * @returns {Promise<boolean>}
+ */
+export const isKodePelangganTaken = async (kodePelanggan) => {
+	const code = (kodePelanggan || "").trim().toLowerCase()
+	if (!code) return false
+
+	try {
+		const cachedMatch = await db.customers
+			.filter(
+				(cust) =>
+					(cust.custom_kode_pelanggan || "").trim().toLowerCase() === code,
+			)
+			.first()
+		if (cachedMatch) return true
+
+		const pendingMatch = await db.customer_queue
+			.filter(
+				(entry) =>
+					!entry.synced &&
+					(entry.data?.custom_kode_pelanggan || "").trim().toLowerCase() ===
+						code,
+			)
+			.first()
+		return !!pendingMatch
+	} catch (error) {
+		log.error("Failed to check kode pelanggan uniqueness", error)
+		return false
+	}
+}
+
+/**
  * Save a new customer to the offline queue
  * @param {Object} customerData - Customer data to save
  * @returns {Promise<{success: boolean, offline_id: string, name: string}>}
@@ -130,6 +165,7 @@ export const saveOfflineCustomer = async (customerData) => {
 		offline_id: offlineId,
 		name: tempName,
 		customer_name: cleanData.customer_name,
+		customer_group: cleanData.customer_group || "Individual",
 	}
 }
 

@@ -206,7 +206,7 @@ import { useToast } from "@/composables/useToast"
 import { useCountriesStore } from "@/stores/countries"
 import { friendlyError } from "@/utils/errorHandler"
 import { logger } from "@/utils/logger"
-import { saveOfflineCustomer } from "@/utils/offline"
+import { isKodePelangganTaken, saveOfflineCustomer } from "@/utils/offline"
 import { offlineState } from "@/utils/offline/offlineState"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
@@ -489,11 +489,20 @@ const handleCreate = async () => {
 	} else if (offlineState.isOffline) {
 		// Save customer offline
 		try {
+			if (await isKodePelangganTaken(customerData.value.custom_kode_pelanggan)) {
+				return showError(
+					__("Kode pelanggan {0} sudah digunakan. Gunakan kode lain.", [
+						customerData.value.custom_kode_pelanggan,
+					]),
+				)
+			}
+
+			const customerGroup = customerData.value.customer_group || __("Individual")
 			const result = await saveOfflineCustomer({
 				customer_name: customerData.value.customer_name,
 				custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
 				customer_type: "Individual",
-				customer_group: customerData.value.customer_group || __("Individual"),
+				customer_group: customerGroup,
 				mobile_no: customerData.value.mobile_no || "",
 				email_id: customerData.value.email_id || "",
 				primary_address: customerData.value.primary_address || "",
@@ -507,6 +516,11 @@ const handleCreate = async () => {
 			emit("customer-created", {
 				name: result.name,
 				customer_name: result.customer_name,
+				customer_group: customerGroup,
+				custom_kode_pelanggan: customerData.value.custom_kode_pelanggan,
+				customer_type: "Individual",
+				mobile_no: customerData.value.mobile_no || "",
+				email_id: customerData.value.email_id || "",
 				offline: true,
 			})
 			show.value = false

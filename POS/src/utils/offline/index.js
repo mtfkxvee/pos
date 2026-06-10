@@ -24,6 +24,7 @@ export {
 	getLocalStock,
 	saveOfflinePayment,
 	saveOfflineCustomer,
+	isKodePelangganTaken,
 	getOfflineCustomers,
 	syncOfflineCustomers,
 	cacheInvoiceHistory,
