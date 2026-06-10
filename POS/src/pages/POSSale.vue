@@ -26,6 +26,7 @@
 				:is-refreshing="stockStore.refreshing"
 				:speed-mode-active="speedModeStore.isActive"
 				:speed-mode-syncing="speedModeStore.isSyncing"
+				:speed-mode-sync-stage="speedModeStore.syncStage"
 				@sync-click="handleSyncClick"
 				@printer-click="uiStore.showHistoryDialog = true"
 				@refresh-click="handleRefresh"

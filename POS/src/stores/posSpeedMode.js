@@ -33,6 +33,8 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 	const isActive = ref(false)
 	const isSyncing = ref(false)
 	const transactionCount = ref(0)
+	/** Human-readable label for the auto-sync step currently in progress (shown next to the toggle) */
+	const syncStage = ref("")
 
 	function activate() {
 		isActive.value = true
@@ -48,6 +50,7 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 		isActive.value = false
 		isSyncing.value = false
 		transactionCount.value = 0
+		syncStage.value = ""
 	}
 
 	/**
@@ -76,6 +79,7 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 		try {
 			// Go online in the background so pending invoices/customers can sync
 			// and new transactions during this window go through normally.
+			syncStage.value = __("Going online...")
 			offlineWorker.setManualOffline(false)
 
 			// offlineState change notifications are debounced (150ms), so
@@ -84,8 +88,10 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 			// the stale "offline" value and bails out without syncing anything.
 			await new Promise((resolve) => setTimeout(resolve, 200))
 
+			syncStage.value = __("Syncing invoices...")
 			await posSyncStore.syncAllPending()
 
+			syncStage.value = __("Updating items & customers...")
 			const stats = await posSyncStore.getCacheStats()
 			const [{ items }, { customers }] = await Promise.all([
 				cacheItemsIncremental(posProfile, stats?.lastSync),
@@ -100,6 +106,7 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 			}
 
 			// Refresh promotions/offers
+			syncStage.value = __("Refreshing promotions...")
 			offersStore.hasFetched = false
 			await offersStore.ensureOffersFetched(posProfile)
 		} catch (error) {
@@ -109,9 +116,11 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 		} finally {
 			// Back to Speed Mode regardless of sync outcome - the next 10
 			// transactions will retry if anything was left pending.
+			syncStage.value = __("Going back to Speed Mode...")
 			offlineWorker.setManualOffline(true)
 			transactionCount.value = 0
 			isSyncing.value = false
+			syncStage.value = ""
 		}
 	}
 
@@ -126,6 +135,7 @@ export const useSpeedModeStore = defineStore("posSpeedMode", () => {
 		isActive,
 		isSyncing,
 		transactionCount,
+		syncStage,
 		activate,
 		deactivate,
 		recordTransaction,

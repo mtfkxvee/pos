@@ -112,14 +112,14 @@
 					<button
 						@click="$emit('speed-mode-click')"
 						:class="[
-							'p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors relative touch-manipulation',
+							'p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors relative flex items-center gap-1 touch-manipulation',
 							speedModeSyncing ? 'animate-pulse' : ''
 						]"
 						:title="speedModeActive ? __('Speed Mode active - tap to turn off') : __('Activate Speed Mode')"
 						:aria-label="speedModeActive ? __('Speed Mode active') : __('Speed Mode off')"
 					>
 						<svg
-							class="w-4 h-4 sm:w-5 sm:h-5"
+							class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0"
 							:class="[
 								speedModeActive ? 'text-amber-500' : 'text-gray-400',
 								speedModeSyncing ? 'animate-spin' : ''
@@ -130,6 +130,12 @@
 						>
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
 						</svg>
+						<span
+							v-if="speedModeSyncing && speedModeSyncStage"
+							class="hidden sm:inline text-[10px] text-amber-600 font-medium leading-none whitespace-nowrap max-w-[120px] truncate"
+						>
+							{{ speedModeSyncStage }}
+						</span>
 					</button>
 
 					<!-- WiFi/Offline Status -->
@@ -466,6 +472,10 @@ const props = defineProps({
 	speedModeSyncing: {
 		type: Boolean,
 		default: false,
+	},
+	speedModeSyncStage: {
+		type: String,
+		default: "",
 	},
 })
 
