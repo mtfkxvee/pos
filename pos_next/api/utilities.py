@@ -58,6 +58,34 @@ def get_app_build_info():
 	}
 
 
+@frappe.whitelist()
+def log_client_error(title=None, message=None, context=None):
+	"""
+	Record a client-side error in the Frappe Error Log so support staff can
+	diagnose issues (e.g. Speed Mode auto-sync failures) without needing
+	access to the cashier's browser console.
+	"""
+	if isinstance(context, str):
+		try:
+			context = json.loads(context)
+		except Exception:
+			pass
+
+	payload = {
+		"user": frappe.session.user,
+		"timestamp": frappe.utils.now(),
+		"message": message,
+		"context": context,
+	}
+
+	frappe.log_error(
+		title=(title or "POS Client Error")[:140],
+		message=json.dumps(payload, indent=2, default=str),
+	)
+
+	return {"logged": True}
+
+
 def _parse_list_parameter(value, param_name="parameter"):
 	"""
 	Parse a list parameter that may come as JSON string or list.

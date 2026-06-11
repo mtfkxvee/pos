@@ -2895,6 +2895,10 @@ async function handleSyncClick() {
 
 async function handleSpeedModeClick() {
 	if (speedModeStore.isActive) {
+		if (speedModeStore.isSyncing) {
+			showWarning(__("Please wait until the background sync finishes before turning off Speed Mode"));
+			return;
+		}
 		speedModeStore.deactivate();
 		return;
 	}

@@ -115,7 +115,7 @@
 							'p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors relative flex items-center gap-1 touch-manipulation',
 							speedModeSyncing ? 'animate-pulse' : ''
 						]"
-						:title="speedModeActive ? __('Speed Mode active - tap to turn off') : __('Activate Speed Mode')"
+						:title="speedModeSyncing ? __('Syncing - cannot turn off Speed Mode yet') : (speedModeActive ? __('Speed Mode active - tap to turn off') : __('Activate Speed Mode'))"
 						:aria-label="speedModeActive ? __('Speed Mode active') : __('Speed Mode off')"
 					>
 						<svg
