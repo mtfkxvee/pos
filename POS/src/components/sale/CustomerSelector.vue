@@ -18,7 +18,7 @@
 					v-model="searchTerm"
 					@input="handleSearch"
 					type="text"
-					:placeholder="__('Search by name, phone, or email...')"
+					:placeholder="__('Search by name, phone, email, or customer code...')"
 					class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 ps-9 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 				/>
 				<button 
@@ -74,8 +74,9 @@
 						<div>
 							<h3 class="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
 								{{ customer.customer_name }}
+								<span v-if="customer.custom_kode_pelanggan" class="text-xs font-normal text-gray-400">({{ customer.custom_kode_pelanggan }})</span>
 							</h3>
-							
+
 							<div class="mt-1 space-y-0.5">
 								<p v-if="customer.mobile_no" class="text-xs text-gray-500 flex items-center gap-1.5">
 									<svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -352,6 +352,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 						["customer_name", "like", "%" + searchTerm + "%"],
 						["mobile_no", "like", "%" + searchTerm + "%"],
 						["email_id", "like", "%" + searchTerm + "%"],
+						["custom_kode_pelanggan", "like", "%" + searchTerm + "%"],
 					]
 				: []
 
@@ -367,6 +368,7 @@ export const useCustomerSearchStore = defineStore("customerSearch", () => {
 					"customer_group",
 					"primary_address",
 					"custom_tanggal_lahir",
+					"custom_kode_pelanggan",
 				],
 				limit_page_length: limit,
 				order_by: "creation desc",
