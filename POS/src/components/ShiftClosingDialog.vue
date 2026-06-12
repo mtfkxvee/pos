@@ -207,6 +207,27 @@
             </div>
           </div>
 
+          <!-- Visitor Count -->
+          <div class="bg-white border border-gray-200 rounded-lg p-3 md:p-4 shadow-sm">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <label for="visitor-count" class="text-sm md:text-base font-semibold text-gray-900">{{ __('Visitors') }}</label>
+                <p class="text-xs text-gray-500">{{ __('Number of visitors during this shift') }}</p>
+              </div>
+              <div class="w-24 md:w-32">
+                <Input
+                  id="visitor-count"
+                  v-model="closingData.visitor"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  :disabled="submitResource.loading || showSuccessReport"
+                  class="text-base md:text-lg text-center font-semibold"
+                />
+              </div>
+            </div>
+          </div>
+
           <!-- Payment Reconciliation -->
           <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <div :class="[
@@ -647,6 +668,10 @@ async function loadClosingData() {
 			data.payment_reconciliation.forEach((payment) => {
 				calculateDifference(payment)
 			})
+		}
+
+		if (data.visitor === null || data.visitor === undefined) {
+			data.visitor = 0
 		}
 
 		closingData.value = data

@@ -46,6 +46,12 @@
 										<td class="text-left font-bold">{{ _('Total Transactions') }}</td>
 										<td class='text-right'>{{ total_txn }}</td>
 									</tr>
+									{% if data.visitor %}
+									<tr>
+										<td class="text-left font-bold">{{ _('Visitor') }}</td>
+										<td class='text-right'>{{ data.visitor }}</td>
+									</tr>
+									{% endif %}
 
 							</tbody>
 						</table>

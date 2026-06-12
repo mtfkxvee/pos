@@ -471,6 +471,10 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
                     <span>${__("Transactions:")}</span>
                     <span>${(closingData.sales_count || 0) + (closingData.returns_count || 0)} (${closingData.sales_count || 0} ${__("sales")}, ${closingData.returns_count || 0} ${__("returns")})</span>
                 </div>
+                ${closingData.visitor ? `<div class="row">
+                    <span>${__("Visitors:")}</span>
+                    <span>${closingData.visitor}</span>
+                </div>` : ""}
             </div>
 
              <div class="section">

@@ -29,6 +29,7 @@
   "grand_total",
   "net_total",
   "total_quantity",
+  "visitor",
   "column_break_16",
   "taxes",
   "section_break_14",
@@ -155,6 +156,13 @@
    "fieldtype": "Float",
    "label": "Total Quantity",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "visitor",
+   "fieldtype": "Int",
+   "label": "Visitor",
+   "non_negative": 1
   },
   {
    "fieldname": "column_break_16",
