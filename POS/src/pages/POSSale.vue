@@ -2060,6 +2060,140 @@ async function handleErrorRetry() {
 	}
 }
 
+/**
+ * Save the current cart as an offline invoice (queued for sync), print/show
+ * success, clear the cart, and record the transaction for Speed Mode.
+ * Used both for the normal offline checkout flow and as a fallback when an
+ * online submission fails with a retryable/transient error.
+ */
+async function saveCurrentTransactionOffline(paymentData, customerValue, draftIdToDelete, { isFallback = false } = {}) {
+	// Use the same item transformation as online flow for consistency
+	// This ensures rate, discount_percentage, discount_amount, and pricing_rules
+	// are all correctly formatted for ERPNext
+	const preparedItems = cartStore.formatItemsForSubmission(cartStore.invoiceItems);
+
+	const now = new Date();
+	const offlineName = generateOfflineInvoiceId(shiftStore.profileName, userName.value, now);
+
+	const _offlinePromoDiscount = cartStore.promoTransactionDiscount || 0
+	const invoiceData = {
+		pos_profile: cartStore.posProfile,
+		posa_pos_opening_shift: cartStore.posOpeningShift,
+		customer: customerValue || shiftStore.profileCustomer,
+		items: preparedItems,
+		payments: JSON.parse(JSON.stringify(cartStore.payments)),
+		sales_team: JSON.parse(JSON.stringify(cartStore.salesTeam || [])),
+		grand_total: cartStore.grandTotal,
+		total_tax: cartStore.totalTax,
+		total_discount: cartStore.totalDiscount,
+		// Mirror the online path: promoTransactionDiscount is folded into
+		// discount_amount so ERPNext applies the full promo+manual discount
+		// to grand_total during validate. Without this, the cashier-facing
+		// total and the synced invoice total diverge, leaving an outstanding.
+		discount_amount: (cartStore.additionalDiscount || 0) + _offlinePromoDiscount,
+		promo_discount_amount: _offlinePromoDiscount,
+		apply_discount_on: "Grand Total",
+		coupon_code: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
+			? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name)
+			: undefined,
+		write_off_amount: paymentData.write_off_amount || 0,
+		redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
+		loyalty_points: paymentData.loyalty_points || 0,
+		loyalty_amount: paymentData.loyalty_amount || 0,
+		loyalty_program: paymentData.loyalty_program || null,
+		loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
+		loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
+		remarks: paymentData.remarks || null,
+
+		// Keep real posting time when synced
+		set_posting_time: 1,
+		posting_date: now.toISOString().split("T")[0],
+		posting_time: now.toTimeString().split(" ")[0],
+
+		// Custom offline invoice ID — persists to ERPNext on sync
+		name: offlineName,
+	};
+
+	await offlineStore.saveInvoiceOffline(invoiceData);
+	uiStore.showPaymentDialog = false;
+
+	// Build print data BEFORE clearing cart (cart data will be gone after clear)
+	const offlinePrintData = {
+		...invoiceData,
+		company: shiftStore.company || invoiceData.company || "POS",
+		customer_name: cartStore.customer?.customer_name || cartStore.customer?.name || cartStore.customer || invoiceData.customer,
+		owner: userName.value || "Administrator",
+		paid_amount: paymentData.paid_amount || 0,
+		change_amount: paymentData.change_amount || 0,
+		outstanding_amount: paymentData.outstanding_amount || 0,
+	};
+
+	cartStore.clearCart();
+	// Reset cart hash after successful payment
+	previousCartHash = "";
+
+	// Delete draft after successful save
+	if (draftIdToDelete) {
+		if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
+			frappeRequest({
+				url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
+				method: 'DELETE'
+			}).catch(e => log.warn("Failed to delete server draft after checkout", e));
+		} else {
+			draftsStore.deleteDraft(draftIdToDelete);
+		}
+	}
+
+	// Auto-print: print directly, show toast only (no success dialog)
+	// No auto-print: show success dialog (has its own Print button)
+	if (shiftStore.autoPrintEnabled) {
+		try {
+			printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
+			showSuccess(isFallback
+				? __("Connection issue - invoice saved offline and sent to printer")
+				: __("Invoice saved offline and sent to printer"));
+		} catch (printError) {
+			log.warn("Offline print failed:", printError);
+			showWarning(__("Invoice saved offline but print failed"));
+		}
+	} else {
+		uiStore.showSuccess(
+			offlineName,
+			invoiceData.grand_total,
+			paymentData.paid_amount
+		);
+		showSuccess(isFallback
+			? __("Connection issue - invoice saved offline. Will sync when online")
+			: __("Invoice saved offline. Will sync when online"));
+	}
+
+	await speedModeStore.recordTransaction(shiftStore.profileName);
+}
+
+/**
+ * Decide whether a failed online submission should be saved to the offline
+ * queue as a fallback (so the transaction isn't lost), instead of just
+ * showing an error and discarding it.
+ *
+ * Only transient/system errors qualify - errors that require the cashier to
+ * make a decision (stock, payment config, customer, etc.) are excluded since
+ * queuing them offline would just fail again identically on sync.
+ */
+function isFallbackEligibleError(errorContext) {
+	const blockedTitles = [
+		__("Insufficient Stock"),
+		__("Validation Error"),
+		__("Pricing Error"),
+		__("Customer Error"),
+		__("Tax Configuration Error"),
+		__("Payment Error"),
+		__("Permission Denied"),
+		__("Duplicate Entry"),
+		__("Not Found"),
+	];
+	return !blockedTitles.includes(errorContext.title);
+}
+
 async function handlePaymentCompleted(paymentData) {
 	try {
 		const customerValue = cartStore.customer?.name || cartStore.customer;
@@ -2113,103 +2247,7 @@ async function handlePaymentCompleted(paymentData) {
 		const draftIdToDelete = cartStore.currentDraftId;
 
 		if (offlineStore.isOffline) {
-			// Use the same item transformation as online flow for consistency
-			// This ensures rate, discount_percentage, discount_amount, and pricing_rules
-			// are all correctly formatted for ERPNext
-			const preparedItems = cartStore.formatItemsForSubmission(cartStore.invoiceItems);
-
-			const now = new Date();
-			const offlineName = generateOfflineInvoiceId(shiftStore.profileName, userName.value, now);
-
-			const _offlinePromoDiscount = cartStore.promoTransactionDiscount || 0
-			const invoiceData = {
-				pos_profile: cartStore.posProfile,
-				posa_pos_opening_shift: cartStore.posOpeningShift,
-				customer: customerValue || shiftStore.profileCustomer,
-				items: preparedItems,
-				payments: JSON.parse(JSON.stringify(cartStore.payments)),
-				sales_team: JSON.parse(JSON.stringify(cartStore.salesTeam || [])),
-				grand_total: cartStore.grandTotal,
-				total_tax: cartStore.totalTax,
-				total_discount: cartStore.totalDiscount,
-				// Mirror the online path: promoTransactionDiscount is folded into
-				// discount_amount so ERPNext applies the full promo+manual discount
-				// to grand_total during validate. Without this, the cashier-facing
-				// total and the synced invoice total diverge, leaving an outstanding.
-				discount_amount: (cartStore.additionalDiscount || 0) + _offlinePromoDiscount,
-				promo_discount_amount: _offlinePromoDiscount,
-				apply_discount_on: "Grand Total",
-				coupon_code: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
-					? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name)
-					: undefined,
-				write_off_amount: paymentData.write_off_amount || 0,
-				redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
-				loyalty_points: paymentData.loyalty_points || 0,
-				loyalty_amount: paymentData.loyalty_amount || 0,
-				loyalty_program: paymentData.loyalty_program || null,
-				loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
-				loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
-				remarks: paymentData.remarks || null,
-
-				// Keep real posting time when synced
-				set_posting_time: 1,
-				posting_date: now.toISOString().split("T")[0],
-				posting_time: now.toTimeString().split(" ")[0],
-
-				// Custom offline invoice ID — persists to ERPNext on sync
-				name: offlineName,
-			};
-
-			await offlineStore.saveInvoiceOffline(invoiceData);
-			uiStore.showPaymentDialog = false;
-
-			// Build print data BEFORE clearing cart (cart data will be gone after clear)
-			const offlinePrintData = {
-				...invoiceData,
-				company: shiftStore.company || invoiceData.company || "POS",
-				customer_name: cartStore.customer?.customer_name || cartStore.customer?.name || cartStore.customer || invoiceData.customer,
-				owner: userName.value || "Administrator",
-				paid_amount: paymentData.paid_amount || 0,
-				change_amount: paymentData.change_amount || 0,
-				outstanding_amount: paymentData.outstanding_amount || 0,
-			};
-
-			cartStore.clearCart();
-			// Reset cart hash after successful payment
-			previousCartHash = "";
-
-			// Delete draft after successful save
-			if (draftIdToDelete) {
-				if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
-					frappeRequest({
-						url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
-						method: 'DELETE'
-					}).catch(e => log.warn("Failed to delete server draft after checkout", e));
-				} else {
-					draftsStore.deleteDraft(draftIdToDelete);
-				}
-			}
-
-			// Auto-print: print directly, show toast only (no success dialog)
-			// No auto-print: show success dialog (has its own Print button)
-			if (shiftStore.autoPrintEnabled) {
-				try {
-					printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
-					showSuccess(__("Invoice saved offline and sent to printer"));
-				} catch (printError) {
-					log.warn("Offline print failed:", printError);
-					showWarning(__("Invoice saved offline but print failed"));
-				}
-			} else {
-				uiStore.showSuccess(
-					offlineName,
-					invoiceData.grand_total,
-					paymentData.paid_amount
-				);
-				showSuccess(__("Invoice saved offline. Will sync when online"));
-			}
-
-			await speedModeStore.recordTransaction(shiftStore.profileName);
+			await saveCurrentTransactionOffline(paymentData, customerValue, draftIdToDelete);
 		} else {
 			// Get item codes from cart before clearing
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
@@ -2264,9 +2302,23 @@ async function handlePaymentCompleted(paymentData) {
 		}
 	} catch (error) {
 		log.error("Error submitting invoice:", error);
-		uiStore.showPaymentDialog = false;
 
 		const errorContext = parseError(error);
+
+		// Online submission failed with a transient/system error and the cart
+		// still has the transaction (not yet cleared) - save it offline so the
+		// sale isn't lost, instead of just showing an error.
+		if (!offlineStore.isOffline && !cartStore.isEmpty && isFallbackEligibleError(errorContext)) {
+			try {
+				const customerValue = cartStore.customer?.name || cartStore.customer;
+				await saveCurrentTransactionOffline(paymentData, customerValue, cartStore.currentDraftId, { isFallback: true });
+				return;
+			} catch (fallbackError) {
+				log.error("Offline fallback save failed:", fallbackError);
+			}
+		}
+
+		uiStore.showPaymentDialog = false;
 		uiStore.showError(
 			errorContext.title || __("Error"),
 			errorContext.message || __("An unexpected error occurred"),

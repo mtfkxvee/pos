@@ -2061,7 +2061,32 @@ def submit_invoice(invoice=None, data=None):
         return result
 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Submit Invoice Error")
+        # Enrich the error log with enough context to find/identify an invoice
+        # that may have been created as a Draft before the failure (e.g. if
+        # submit() itself failed) - no auto-recovery, just visibility.
+        _details = []
+        _doc = locals().get("invoice_doc")
+        if _doc is not None:
+            try:
+                _details.append(f"Invoice: {_doc.name} (docstatus={_doc.docstatus})")
+                _details.append(f"Customer: {_doc.get('customer')}")
+                _details.append(f"Grand Total: {_doc.get('grand_total')}")
+                _items = [
+                    f"{it.item_code} x{it.qty}" for it in (_doc.get('items') or [])
+                ]
+                _details.append(f"Items: {_items}")
+            except Exception:
+                pass
+        if offline_id:
+            _details.append(f"Offline ID: {offline_id}")
+        if pos_profile:
+            _details.append(f"POS Profile: {pos_profile}")
+
+        _message = frappe.get_traceback()
+        if _details:
+            _message = "\n".join(_details) + "\n\n" + _message
+
+        frappe.log_error(_message, "Submit Invoice Error")
         raise
 
     finally:

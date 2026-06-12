@@ -599,6 +599,30 @@ const markInvoiceSynced = async (id, serverInvoice) => {
 }
 
 /**
+ * Report a permanently-failed invoice sync to the server error log, including
+ * the full invoice payload, so support staff can diagnose without needing
+ * access to the cashier's browser/IndexedDB.
+ * @param {Object} invoice - Invoice record (with .data, .offline_id, .retry_count)
+ * @param {string} errorMessage - Final error message
+ */
+const reportFailedInvoiceSync = async (invoice, errorMessage) => {
+	try {
+		await call("pos_next.api.utilities.log_client_error", {
+			title: "Offline Invoice Sync Failed",
+			message: `Invoice failed to sync after ${SYNC_CONFIG.MAX_RETRY_COUNT} attempts: ${errorMessage}`,
+			context: {
+				offline_id: invoice.offline_id,
+				retry_count: (invoice.retry_count || 0) + 1,
+				error: errorMessage,
+				invoice: invoice.data,
+			},
+		})
+	} catch (reportError) {
+		log.warn("Failed to report invoice sync failure to server", reportError)
+	}
+}
+
+/**
  * Increment retry count and optionally mark as failed
  * @param {Object} invoice - Invoice record
  * @param {string} errorMessage - Error message
@@ -610,6 +634,7 @@ const handleSyncFailure = async (invoice, errorMessage) => {
 	if (newRetryCount >= SYNC_CONFIG.MAX_RETRY_COUNT) {
 		updates.sync_failed = true
 		updates.error = errorMessage
+		await reportFailedInvoiceSync(invoice, errorMessage)
 	}
 
 	await db.invoice_queue.update(invoice.id, updates)
