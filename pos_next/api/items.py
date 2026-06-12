@@ -378,6 +378,10 @@ def search_by_barcode(barcode, pos_profile):
 		)
 
 		return item_details
+	except frappe.ValidationError:
+		# Expected user-facing validation errors (e.g. barcode not found) -
+		# don't spam the Error Log, just let the message reach the cashier.
+		raise
 	except Exception as e:
 		frappe.log_error(frappe.get_traceback(), "Search by Barcode Error")
 		frappe.throw(_("Error searching by barcode: {0}").format(str(e)))
