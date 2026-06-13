@@ -256,6 +256,12 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 	printWindow.onload = () => {
 		printWindow.print()
 	}
+
+	// Match the online print flow: close the window automatically once the
+	// print dialog is dismissed, whether the user printed or cancelled.
+	printWindow.onafterprint = () => {
+		printWindow.close()
+	}
 }
 
 /**
