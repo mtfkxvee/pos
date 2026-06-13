@@ -20,10 +20,10 @@ export async function getSpeedModeReadiness(posProfile) {
 	const paymentMethods = await getCachedPaymentMethods(posProfile)
 
 	const missing = []
-	if (!stats?.cacheReady || !stats?.items) missing.push(__("Item catalog"))
-	if (!stats?.customers) missing.push(__("Customer list"))
-	if (!offersStore.hasFetched) missing.push(__("Promotions / price rules"))
-	if (!paymentMethods?.length) missing.push(__("Payment methods"))
+	if (!stats?.cacheReady || !stats?.items) missing.push(__("Katalog barang"))
+	if (!stats?.customers) missing.push(__("Daftar pelanggan"))
+	if (!offersStore.hasFetched) missing.push(__("Promo / aturan harga"))
+	if (!paymentMethods?.length) missing.push(__("Metode pembayaran"))
 
 	// Item catalog must be 100% downloaded before allowing offline-only checkout -
 	// a partial catalog would mean items are unexpectedly "not found" while offline.
@@ -31,8 +31,8 @@ export async function getSpeedModeReadiness(posProfile) {
 	if (itemStore.cacheSyncing || (syncProgress != null && syncProgress < 100)) {
 		missing.push(
 			syncProgress != null
-				? __("Item catalog sync in progress ({0}%)", [syncProgress])
-				: __("Item catalog sync in progress"),
+				? __("Sinkronisasi katalog barang sedang berjalan ({0}%)", [syncProgress])
+				: __("Sinkronisasi katalog barang sedang berjalan"),
 		)
 	}
 
@@ -44,18 +44,18 @@ export async function getSpeedModeReadiness(posProfile) {
  */
 export const SPEED_MODE_WORKS = [
 	__(
-		"Cart, item search/scan, and checkout with any payment method (Cash, Debit, Transfer)",
+		"Keranjang, pencarian/scan barang, dan pembayaran dengan metode apa pun (Tunai, Debit, Transfer)",
 	),
-	__("Customer search and creating new customers"),
-	__("Promotions and discounts, including the Member discount"),
-	__("Invoice History and viewing invoice details"),
-	__("Returns for previously viewed/cached invoices"),
-	__("Receipt printing"),
+	__("Pencarian pelanggan dan membuat pelanggan baru"),
+	__("Promo dan diskon, termasuk diskon Member"),
+	__("Riwayat Invoice dan melihat detail invoice"),
+	__("Retur untuk invoice yang sudah pernah dilihat/tersimpan"),
+	__("Cetak struk"),
 ]
 
 export const SPEED_MODE_DOES_NOT_WORK = [
-	__("Selling items not already in the offline cache"),
-	__("Real-time stock levels from other terminals"),
-	__("Server-side pricing-rule edge cases not present in cached offers"),
-	__("Viewing invoices that aren't cached locally"),
+	__("Menjual barang yang belum ada di cache offline"),
+	__("Stok real-time dari terminal lain"),
+	__("Aturan harga khusus server yang tidak ada di cache promo"),
+	__("Melihat invoice yang tidak tersimpan secara lokal"),
 ]

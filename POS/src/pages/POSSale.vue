@@ -2942,7 +2942,7 @@ async function handleSyncClick() {
 async function handleSpeedModeClick() {
 	if (speedModeStore.isActive) {
 		if (speedModeStore.isSyncing) {
-			showWarning(__("Please wait until the background sync finishes before turning off Speed Mode"));
+			showWarning(__("Mohon tunggu sinkronisasi latar belakang selesai sebelum mematikan Speed Mode"));
 			return;
 		}
 		speedModeStore.deactivate();
@@ -2951,7 +2951,7 @@ async function handleSpeedModeClick() {
 
 	const { ready, missing } = await getSpeedModeReadiness(shiftStore.profileName);
 	if (!ready) {
-		showWarning(__("Speed Mode is not ready yet. Missing: {0}", [missing.join(", ")]));
+		showWarning(__("Speed Mode belum siap. Yang belum tersedia: {0}", [missing.join(", ")]));
 		return;
 	}
 	showSpeedModeInfoDialog.value = true;
