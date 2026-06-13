@@ -35,6 +35,14 @@ export function useInvoice() {
 	// Submission state - prevents duplicate submissions
 	const isSubmitting = ref(false)
 
+	// Name of the draft invoice created by step 1 (update_invoice) of the most
+	// recent submission attempt for the CURRENT cart. Kept around until step 2
+	// (submit_invoice) succeeds or the cart is cleared/reset. If a retry happens
+	// (e.g. after a lost-response/connection error), this is sent back as
+	// `name` so the backend reuses/checks the SAME document instead of creating
+	// a brand new invoice - preventing duplicate invoices in Invoice History.
+	const lastInvoiceDraftName = ref(null)
+
 	// Performance: Incrementally maintained aggregates (updated on add/remove/change)
 	// This avoids O(n) array reductions on every reactive change
 	const _cachedSubtotal = ref(0)
@@ -903,6 +911,12 @@ export function useInvoice() {
 					remarks: remarks.value || undefined,
 				}
 
+				// Retry of a previous attempt for this same cart - reuse the same
+				// draft invoice instead of letting the backend create a new one.
+				if (lastInvoiceDraftName.value) {
+					invoiceData.name = lastInvoiceDraftName.value
+				}
+
 	
 				if (targetDoctype === "Sales Order" && deliveryDate) {
 					invoiceData.delivery_date = deliveryDate
@@ -933,6 +947,19 @@ export function useInvoice() {
 					throw new Error(
 						"Failed to create draft invoice - no invoice name returned",
 					)
+				}
+
+				// Remember this draft so a retry (if step 2 below fails) reuses it.
+				lastInvoiceDraftName.value = invoiceDoc.name
+
+				// Idempotent retry: the backend found that this draft was already
+				// submitted by a previous attempt (whose response never reached us,
+				// e.g. flaky connection) and returned it as-is without re-submitting.
+				// Treat this as a successful submission - the sale already exists.
+				if (Number(invoiceDoc.docstatus) === 1) {
+					lastInvoiceDraftName.value = null
+					resetInvoice()
+					return invoiceDoc
 				}
 
 				const submitData = {
@@ -987,6 +1014,7 @@ export function useInvoice() {
 						throw detailedError
 					}
 
+					lastInvoiceDraftName.value = null
 					resetInvoice()
 					return result
 				} catch (error) {
@@ -1082,6 +1110,7 @@ export function useInvoice() {
 		payments.value = []
 		additionalDiscount.value = 0
 		couponCode.value = null
+		lastInvoiceDraftName.value = null
 
 		// Reset incremental cache
 		_cachedSubtotal.value = 0
@@ -1109,6 +1138,7 @@ export function useInvoice() {
 		payments.value = []
 		additionalDiscount.value = 0
 		couponCode.value = null
+		lastInvoiceDraftName.value = null
 
 		// Reset incremental cache
 		_cachedSubtotal.value = 0

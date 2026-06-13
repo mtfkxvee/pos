@@ -453,6 +453,16 @@ def update_invoice(data):
         if data.get("name") and frappe.db.exists(doctype, data.get("name")):
             # Fetch and update existing draft
             invoice_doc = frappe.get_doc(doctype, data.get("name"))
+
+            # Idempotent retry: this invoice was already submitted by a
+            # previous attempt whose response never reached the frontend
+            # (e.g. flaky connection). Return it as-is instead of trying to
+            # update/save an already-submitted document - doing so would
+            # either error out or, worse, allow a second invoice to be
+            # created for the same sale.
+            if invoice_doc.docstatus == 1:
+                return invoice_doc.as_dict()
+
             invoice_doc.update(data)
         else:
             # Strip name so ERPNext auto-generates one; rename after save if needed
@@ -1544,6 +1554,17 @@ def submit_invoice(invoice=None, data=None):
 
     try:
         invoice_name = invoice.get("name")
+
+        # Idempotency guard (online retry): if this invoice was already
+        # submitted by a previous attempt whose response never reached the
+        # client (e.g. flaky connection), return it as-is instead of
+        # re-running submit logic - which would error on an already-submitted
+        # document and risk a second invoice being created for the same sale.
+        if not offline_id and invoice_name and frappe.db.exists(doctype, invoice_name):
+            existing_docstatus = frappe.db.get_value(doctype, invoice_name, "docstatus")
+            if existing_docstatus == 1:
+                return frappe.get_doc(doctype, invoice_name).as_dict()
+
         # Custom offline name (e.g. XPYREG130309430001) — not an OFFLINE- temp name
         custom_offline_name = (
             invoice_name

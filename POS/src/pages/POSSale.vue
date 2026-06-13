@@ -512,10 +512,6 @@
 			@authorized="paymentDialogRef?.openDiscountDialog()"
 		/>
 
-		<SpeedModePinDialog
-			v-model="showSpeedModePinDialog"
-			@verified="handleSpeedModePinVerified"
-		/>
 		<SpeedModeInfoDialog
 			v-model="showSpeedModeInfoDialog"
 			@confirm="speedModeStore.activate()"
@@ -1102,7 +1098,6 @@ import { usePOSSyncStore } from "@/stores/posSync";
 import { usePOSUIStore } from "@/stores/posUI";
 import { useSpeedModeStore } from "@/stores/posSpeedMode";
 import SyncStatusDialog from "@/components/pos/SyncStatusDialog.vue";
-import SpeedModePinDialog from "@/components/sale/SpeedModePinDialog.vue";
 import SpeedModeInfoDialog from "@/components/sale/SpeedModeInfoDialog.vue";
 import { getSpeedModeReadiness } from "@/composables/useSpeedModeReadiness";
 import { logger } from "@/utils/logger";
@@ -1206,7 +1201,6 @@ const paymentDialogRef = ref(null);
 const showDiscountAuthDialog = ref(false);
 
 // Speed Mode dialogs
-const showSpeedModePinDialog = ref(false);
 const showSpeedModeInfoDialog = ref(false);
 
 // Warehouse availability dialog state
@@ -2954,10 +2948,7 @@ async function handleSpeedModeClick() {
 		speedModeStore.deactivate();
 		return;
 	}
-	showSpeedModePinDialog.value = true;
-}
 
-async function handleSpeedModePinVerified() {
 	const { ready, missing } = await getSpeedModeReadiness(shiftStore.profileName);
 	if (!ready) {
 		showWarning(__("Speed Mode is not ready yet. Missing: {0}", [missing.join(", ")]));
