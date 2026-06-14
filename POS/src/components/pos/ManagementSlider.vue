@@ -72,6 +72,23 @@
 			</div>
 		</button>
 
+		<!-- POS Closing -->
+		<button
+			@click="handleMenuClick('pos_closing')"
+			:class="[
+				'w-12 h-12 rounded-lg flex items-center justify-center transition-all relative group',
+				activeMenu === 'pos_closing'
+					? 'bg-teal-100 text-teal-600'
+					: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+			]"
+			:title="__('POS Closing')"
+		>
+			<ClipboardDocumentCheckIcon class="w-6 h-6" />
+			<div class="absolute start-full ms-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+				{{ __('POS Closing') }}
+			</div>
+		</button>
+
 		<!-- Spacer -->
 		<div class="flex-1"></div>
 
@@ -107,6 +124,7 @@ import {
 	Cog6ToothIcon,
 	ArrowPathIcon,
 	BookOpenIcon,
+	ClipboardDocumentCheckIcon,
 } from "@heroicons/vue/24/outline"
 
 defineProps({

@@ -678,6 +678,13 @@
 				:currency="shiftStore.profileCurrency"
 			/>
 
+			<!-- POS Closing -->
+			<POSClosingManagement
+				v-model="showPOSClosing"
+				:pos-profile="shiftStore.profileName"
+				:currency="shiftStore.profileCurrency"
+			/>
+
 			<!-- Invoice Management -->
 			<InvoiceManagement
 				v-model="showInvoiceManagement"
@@ -1067,6 +1074,7 @@ import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailability
 import POSSettings from "@/components/settings/POSSettings.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import JournalEntryManagement from "@/components/journal/JournalEntryManagement.vue";
+import POSClosingManagement from "@/components/journal/POSClosingManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -1195,6 +1203,7 @@ const showInvoiceManagement = ref(false);
 
 // Journal Entry dialog
 const showJournalEntry = ref(false);
+const showPOSClosing = ref(false);
 
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
@@ -3176,6 +3185,8 @@ function handleManagementMenuClick(menuItem) {
 		showStockLookup.value = true;
 	} else if (menuItem === "journal") {
 		showJournalEntry.value = true;
+	} else if (menuItem === "pos_closing") {
+		showPOSClosing.value = true;
 	}
 }
 
