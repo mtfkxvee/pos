@@ -1218,6 +1218,7 @@ export function useInvoice() {
 		taxRules,
 		taxInclusive,
 		isSubmitting,
+		lastInvoiceDraftName,
 
 		// Computed
 		subtotal,

@@ -2057,10 +2057,9 @@ async function handleErrorRetry() {
 /**
  * Save the current cart as an offline invoice (queued for sync), print/show
  * success, clear the cart, and record the transaction for Speed Mode.
- * Used both for the normal offline checkout flow and as a fallback when an
- * online submission fails with a retryable/transient error.
+ * Used for the normal offline checkout flow.
  */
-async function saveCurrentTransactionOffline(paymentData, customerValue, draftIdToDelete, { isFallback = false } = {}) {
+async function saveCurrentTransactionOffline(paymentData, customerValue, draftIdToDelete) {
 	// Use the same item transformation as online flow for consistency
 	// This ensures rate, discount_percentage, discount_amount, and pricing_rules
 	// are all correctly formatted for ERPNext
@@ -2143,9 +2142,7 @@ async function saveCurrentTransactionOffline(paymentData, customerValue, draftId
 	if (shiftStore.autoPrintEnabled) {
 		try {
 			printInvoiceCustom(offlinePrintData, getPaperSize() === "80mm" ? "80 PRINTER" : "58 PRINTER");
-			showSuccess(isFallback
-				? __("Connection issue - invoice saved offline and sent to printer")
-				: __("Invoice saved offline and sent to printer"));
+			showSuccess(__("Invoice saved offline and sent to printer"));
 		} catch (printError) {
 			log.warn("Offline print failed:", printError);
 			showWarning(__("Invoice saved offline but print failed"));
@@ -2156,22 +2153,20 @@ async function saveCurrentTransactionOffline(paymentData, customerValue, draftId
 			invoiceData.grand_total,
 			paymentData.paid_amount
 		);
-		showSuccess(isFallback
-			? __("Connection issue - invoice saved offline. Will sync when online")
-			: __("Invoice saved offline. Will sync when online"));
+		showSuccess(__("Invoice saved offline. Will sync when online"));
 	}
 
 	await speedModeStore.recordTransaction(shiftStore.profileName);
 }
 
 /**
- * Decide whether a failed online submission should be saved to the offline
- * queue as a fallback (so the transaction isn't lost), instead of just
+ * Decide whether a failed online submission should be saved as a draft
+ * invoice as a fallback (so the transaction isn't lost), instead of just
  * showing an error and discarding it.
  *
  * Only transient/system errors qualify - errors that require the cashier to
  * make a decision (stock, payment config, customer, etc.) are excluded since
- * queuing them offline would just fail again identically on sync.
+ * saving a draft with the same data would just fail again identically.
  */
 function isFallbackEligibleError(errorContext) {
 	const blockedTitles = [
@@ -2186,6 +2181,65 @@ function isFallbackEligibleError(errorContext) {
 		__("Not Found"),
 	];
 	return !blockedTitles.includes(errorContext.title);
+}
+
+/**
+ * Save the current cart as a server-side Draft Sales Invoice (docstatus=0),
+ * used as a fallback when an online submission fails with a retryable/system
+ * error and the cart still has the transaction (not yet cleared) - so the
+ * sale isn't lost. The cashier can re-open it from Drafts and retry payment.
+ */
+async function saveCurrentTransactionAsDraft(customerValue, draftIdToDelete) {
+	let invoiceName;
+
+	// Step 1 of submitInvoice already created/updated a docstatus=0 draft on
+	// the server for this cart before the failure - reuse it instead of
+	// creating a duplicate.
+	if (cartStore.lastInvoiceDraftName) {
+		invoiceName = cartStore.lastInvoiceDraftName;
+	} else {
+		const invoiceData = {
+			doctype: cartStore.targetDoctype || "Sales Invoice",
+			pos_profile: cartStore.posProfile,
+			posa_pos_opening_shift: shiftStore.posOpeningShift,
+			customer: customerValue || shiftStore.profileCustomer,
+			items: cartStore.formatItemsForSubmission(toRaw(cartStore.invoiceItems)),
+			discount_amount: cartStore.additionalDiscount || 0,
+			coupon_code: cartStore.appliedCoupon?.code || cartStore.appliedCoupon?.name || undefined,
+			is_pos: 1,
+			docstatus: 0,
+			update_stock: 0,
+			remarks: "Draft - Koneksi terputus saat pembayaran",
+			...cartStore.loyaltyData,
+		};
+
+		const draftInvoice = await cartStore.updateInvoiceResource.submit({ data: invoiceData });
+		invoiceName = draftInvoice?.name || draftInvoice?.data?.name;
+	}
+
+	if (!invoiceName) {
+		throw new Error("Failed to save draft invoice - no invoice name returned");
+	}
+
+	uiStore.showPaymentDialog = false;
+
+	// Delete the old draft if we were continuing from a different one
+	if (draftIdToDelete && draftIdToDelete !== invoiceName) {
+		if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
+			frappeRequest({
+				url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
+				method: 'DELETE'
+			}).catch(e => log.warn("Failed to delete replaced server draft", e));
+		} else {
+			draftsStore.deleteDraft(draftIdToDelete);
+		}
+	}
+
+	cartStore.clearCart();
+	// Reset cart hash after successful save
+	previousCartHash = "";
+
+	showWarning(__("Koneksi bermasalah - transaksi disimpan sebagai draft ({0}). Buka dari menu Draft untuk melanjutkan.", [invoiceName]));
 }
 
 async function handlePaymentCompleted(paymentData) {
@@ -2300,15 +2354,15 @@ async function handlePaymentCompleted(paymentData) {
 		const errorContext = parseError(error);
 
 		// Online submission failed with a transient/system error and the cart
-		// still has the transaction (not yet cleared) - save it offline so the
+		// still has the transaction (not yet cleared) - save it as a draft so the
 		// sale isn't lost, instead of just showing an error.
 		if (!offlineStore.isOffline && !cartStore.isEmpty && isFallbackEligibleError(errorContext)) {
 			try {
 				const customerValue = cartStore.customer?.name || cartStore.customer;
-				await saveCurrentTransactionOffline(paymentData, customerValue, cartStore.currentDraftId, { isFallback: true });
+				await saveCurrentTransactionAsDraft(customerValue, cartStore.currentDraftId);
 				return;
 			} catch (fallbackError) {
-				log.error("Offline fallback save failed:", fallbackError);
+				log.error("Draft fallback save failed:", fallbackError);
 			}
 		}
 

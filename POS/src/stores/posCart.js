@@ -95,6 +95,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		remarks,
 		taxInclusive,
 		isSubmitting,
+		lastInvoiceDraftName,
 		addItem: addItemToInvoice,
 		removeItem,
 		updateItemQuantity,
@@ -2233,6 +2234,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		checkoutLocked,
 		currentDraftId,
 		currentDraftIsServer,
+		lastInvoiceDraftName,
 		offerProcessingState, // Offer processing state for UI feedback
 
 		// Computed
