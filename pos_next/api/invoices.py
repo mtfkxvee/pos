@@ -2183,7 +2183,17 @@ def get_invoice_loyalty_points(invoice_name):
 
 
 @frappe.whitelist()
-def get_invoices(pos_profile, limit=50, offset=0, search=None):
+def get_invoices(
+	pos_profile,
+	limit=50,
+	offset=0,
+	search=None,
+	customer=None,
+	date_from=None,
+	date_to=None,
+	status=None,
+	product=None,
+):
 	"""
 	Get list of invoices for a POS Profile with pagination support.
 
@@ -2192,9 +2202,18 @@ def get_invoices(pos_profile, limit=50, offset=0, search=None):
 		limit: Page size (default 50)
 		offset: Number of rows to skip (default 0)
 		search: Optional search term matched against invoice name and customer
-			(name/customer/customer_name). When provided, pagination is bypassed
-			and all matching invoices (up to MAX_SEARCH_RESULTS) are returned -
-			the user never has to "Load More" before searching.
+			(name/customer/customer_name).
+		customer: Optional exact customer (name) filter.
+		date_from: Optional posting_date >= filter (YYYY-MM-DD).
+		date_to: Optional posting_date <= filter (YYYY-MM-DD).
+		status: Optional invoice status filter (e.g. "Paid", "Unpaid").
+		product: Optional item_code/item_name filter - matches invoices
+			containing a matching line item.
+
+		When any of search/customer/date_from/date_to/status/product is
+		provided, pagination is bypassed and all matching invoices (up to
+		MAX_SEARCH_RESULTS) are returned - the user never has to "Load More"
+		before filtering.
 
 	Returns:
 		List of invoices with details
@@ -2212,75 +2231,83 @@ def get_invoices(pos_profile, limit=50, offset=0, search=None):
 		frappe.throw(_("You don't have access to this POS Profile"))
 
 	search = (search or "").strip()
+	customer = (customer or "").strip()
+	date_from = (date_from or "").strip()
+	date_to = (date_to or "").strip()
+	status = (status or "").strip()
+	product = (product or "").strip()
+
+	has_filters = bool(search or customer or date_from or date_to or status or product)
+
+	conditions = ["pos_profile = %(pos_profile)s", "docstatus = 1", "is_pos = 1"]
+	params = {"pos_profile": pos_profile}
 
 	if search:
+		conditions.append(
+			"(name LIKE %(search)s OR customer LIKE %(search)s OR customer_name LIKE %(search)s)"
+		)
+		params["search"] = f"%{search}%"
+
+	if customer:
+		conditions.append("customer = %(customer)s")
+		params["customer"] = customer
+
+	if date_from:
+		conditions.append("posting_date >= %(date_from)s")
+		params["date_from"] = date_from
+
+	if date_to:
+		conditions.append("posting_date <= %(date_to)s")
+		params["date_to"] = date_to
+
+	if status:
+		conditions.append("status = %(status)s")
+		params["status"] = status
+
+	if product:
+		conditions.append("""
+			EXISTS (
+				SELECT 1 FROM `tabSales Invoice Item` sii
+				WHERE sii.parent = `tabSales Invoice`.name
+					AND (sii.item_code LIKE %(product)s OR sii.item_name LIKE %(product)s)
+			)
+		""")
+		params["product"] = f"%{product}%"
+
+	where_clause = " AND ".join(conditions)
+
+	if has_filters:
 		MAX_SEARCH_RESULTS = 500
-		like_term = f"%{search}%"
-		invoices = frappe.db.sql("""
-			SELECT
-				name,
-				customer,
-				customer_name,
-				posting_date,
-				posting_time,
-				grand_total,
-				paid_amount,
-				outstanding_amount,
-				status,
-				docstatus,
-				is_return,
-				return_against
-			FROM
-				`tabSales Invoice`
-			WHERE
-				pos_profile = %(pos_profile)s
-				AND docstatus = 1
-				AND is_pos = 1
-				AND (
-					name LIKE %(search)s
-					OR customer LIKE %(search)s
-					OR customer_name LIKE %(search)s
-				)
-			ORDER BY
-				posting_date DESC,
-				posting_time DESC
-			LIMIT %(limit)s
-		""", {
-			"pos_profile": pos_profile,
-			"search": like_term,
-			"limit": MAX_SEARCH_RESULTS,
-		}, as_dict=True)
+		params["limit"] = MAX_SEARCH_RESULTS
+		limit_clause = "LIMIT %(limit)s"
 	else:
-		# Query for invoices
-		invoices = frappe.db.sql("""
-			SELECT
-				name,
-				customer,
-				customer_name,
-				posting_date,
-				posting_time,
-				grand_total,
-				paid_amount,
-				outstanding_amount,
-				status,
-				docstatus,
-				is_return,
-				return_against
-			FROM
-				`tabSales Invoice`
-			WHERE
-				pos_profile = %(pos_profile)s
-				AND docstatus = 1
-				AND is_pos = 1
-			ORDER BY
-				posting_date DESC,
-				posting_time DESC
-			LIMIT %(limit)s OFFSET %(offset)s
-		""", {
-			"pos_profile": pos_profile,
-			"limit": cint(limit),
-			"offset": cint(offset),
-		}, as_dict=True)
+		params["limit"] = cint(limit)
+		params["offset"] = cint(offset)
+		limit_clause = "LIMIT %(limit)s OFFSET %(offset)s"
+
+	invoices = frappe.db.sql(f"""
+		SELECT
+			name,
+			customer,
+			customer_name,
+			posting_date,
+			posting_time,
+			grand_total,
+			paid_amount,
+			outstanding_amount,
+			status,
+			docstatus,
+			is_return,
+			return_against
+		FROM
+			`tabSales Invoice`
+		WHERE
+			{where_clause}
+		ORDER BY
+			posting_date DESC,
+			posting_time DESC
+		{limit_clause}
+	""", params, as_dict=True)
 
 	# Load items for all invoices in a single batch query
 	if invoices:

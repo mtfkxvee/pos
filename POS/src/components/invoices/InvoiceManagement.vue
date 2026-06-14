@@ -449,7 +449,11 @@
 									</button>
 									<p v-else-if="localHistoryInvoices.length > 0" class="text-xs text-gray-400">{{ __('Semua invoice sudah ditampilkan ({0} total)', [localHistoryInvoices.length]) }}</p>
 								</div>
-								<p v-else class="text-xs text-gray-400 text-center pt-2 pb-4">{{ __('{0} result(s) found for "{1}"', [filteredHistoryInvoices.length, trimmedSearchTerm]) }}</p>
+								<p v-else class="text-xs text-gray-400 text-center pt-2 pb-4">
+					{{ trimmedSearchTerm
+						? __('{0} result(s) found for "{1}"', [filteredHistoryInvoices.length, trimmedSearchTerm])
+						: __('{0} result(s) found', [filteredHistoryInvoices.length]) }}
+				</p>
 								</div>
 							</div>
 						</div>
@@ -727,13 +731,18 @@ const historySearching = ref(false)
 const unpaidSearchResults = ref(null)
 const unpaidSearching = ref(false)
 
-const performHistorySearch = debounce(async (term) => {
+const performHistorySearch = debounce(async () => {
 	if (!props.posProfile) return
 	historySearching.value = true
 	try {
 		const result = await call("pos_next.api.invoices.get_invoices", {
 			pos_profile: props.posProfile,
-			search: term,
+			search: trimmedSearchTerm.value || undefined,
+			customer: filterStore.customer || undefined,
+			date_from: filterStore.dateFrom || undefined,
+			date_to: filterStore.dateTo || undefined,
+			status: filterStore.status || undefined,
+			product: filterStore.product || undefined,
 		})
 		historySearchResults.value = result || []
 	} catch (e) {
@@ -763,27 +772,56 @@ const performUnpaidSearch = debounce(async (term) => {
 
 const trimmedSearchTerm = computed(() => (filterStore.searchTerm || "").trim())
 
+// Any filter that should be resolved against the server (not just the
+// already-loaded/paginated page) for the history/returns tabs
+const hasHistoryFilters = computed(
+	() =>
+		!!(
+			trimmedSearchTerm.value ||
+			filterStore.dateFrom ||
+			filterStore.dateTo ||
+			filterStore.customer ||
+			filterStore.status ||
+			filterStore.product
+		),
+)
+
 const isHistorySearchActive = computed(
-	() => !!trimmedSearchTerm.value && historySearchResults.value !== null,
+	() => hasHistoryFilters.value && historySearchResults.value !== null,
 )
 const isUnpaidSearchActive = computed(
 	() => !!trimmedSearchTerm.value && unpaidSearchResults.value !== null,
 )
 
-// React to search term changes - query the server directly for the active tab
-// (and the other tab on switch) so results aren't limited to already-loaded pages
-watch(trimmedSearchTerm, (term) => {
-	if (!term) {
-		historySearchResults.value = null
-		unpaidSearchResults.value = null
-		return
-	}
-	if (activeTab.value === "partial") {
-		performUnpaidSearch(term)
-	} else if (activeTab.value === "history" || activeTab.value === "returns") {
-		performHistorySearch(term)
-	}
-})
+// React to search term / advanced filter changes - query the server directly
+// for the active tab so results aren't limited to already-loaded pages
+watch(
+	[
+		trimmedSearchTerm,
+		() => filterStore.dateFrom,
+		() => filterStore.dateTo,
+		() => filterStore.customer,
+		() => filterStore.status,
+		() => filterStore.product,
+	],
+	() => {
+		if (activeTab.value === "partial") {
+			if (!trimmedSearchTerm.value) {
+				unpaidSearchResults.value = null
+			} else {
+				performUnpaidSearch(trimmedSearchTerm.value)
+			}
+			return
+		}
+		if (activeTab.value === "history" || activeTab.value === "returns") {
+			if (!hasHistoryFilters.value) {
+				historySearchResults.value = null
+			} else {
+				performHistorySearch()
+			}
+		}
+	},
+)
 
 // Use local history invoices (self-fetched) instead of props, falling back to
 // server-side search results (covering ALL matches) while a search is active
@@ -951,6 +989,12 @@ watch(
 			loadUnpaidInvoices()
 			loadUnpaidSummary()
 			loadHistoryPage(true)
+			if (hasHistoryFilters.value) {
+				performHistorySearch()
+			}
+			if (trimmedSearchTerm.value) {
+				performUnpaidSearch(trimmedSearchTerm.value)
+			}
 		}
 	},
 )
@@ -967,8 +1011,8 @@ watch(activeTab, (newTab) => {
 		if (localHistoryInvoices.value.length === 0) {
 			loadHistoryPage(true)
 		}
-		if (term && historySearchResults.value === null) {
-			performHistorySearch(term)
+		if (hasHistoryFilters.value && historySearchResults.value === null) {
+			performHistorySearch()
 		}
 	} else if (newTab === "partial") {
 		loadUnpaidInvoices()
