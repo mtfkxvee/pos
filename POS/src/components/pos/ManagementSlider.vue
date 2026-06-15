@@ -89,6 +89,23 @@
 			</div>
 		</button>
 
+		<!-- Delivery Note -->
+		<button
+			@click="handleMenuClick('delivery_notes')"
+			:class="[
+				'w-12 h-12 rounded-lg flex items-center justify-center transition-all relative group',
+				activeMenu === 'delivery_notes'
+					? 'bg-sky-100 text-sky-600'
+					: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+			]"
+			:title="__('Delivery Note')"
+		>
+			<TruckIcon class="w-6 h-6" />
+			<div class="absolute start-full ms-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+				{{ __('Delivery Note') }}
+			</div>
+		</button>
+
 		<!-- Spacer -->
 		<div class="flex-1"></div>
 
@@ -125,6 +142,7 @@ import {
 	ArrowPathIcon,
 	BookOpenIcon,
 	ClipboardDocumentCheckIcon,
+	TruckIcon,
 } from "@heroicons/vue/24/outline"
 
 defineProps({

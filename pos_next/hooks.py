@@ -97,6 +97,7 @@ fixtures = [
 					"Sales Invoice-posa_pos_opening_shift",
 					"Sales Invoice-posa_is_printed",
 					"Sales Invoice-custom_compliment_reason",
+					"Sales Invoice-custom_shipping_address",
 					"Item-custom_company",
 					"POS Profile-posa_cash_mode_of_payment",
 					"POS Profile-posa_allow_delete",
@@ -113,7 +114,8 @@ fixtures = [
 				"name",
 				"in",
 				[
-					"POS Next Receipt"
+					"POS Next Receipt",
+					"POS Next Delivery Note"
 				]
 			]
 		]

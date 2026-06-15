@@ -685,6 +685,13 @@
 				:currency="shiftStore.profileCurrency"
 			/>
 
+			<!-- Delivery Note -->
+			<DeliveryNoteManagement
+				v-model="showDeliveryNotes"
+				:pos-profile="shiftStore.profileName"
+				:currency="shiftStore.profileCurrency"
+			/>
+
 			<!-- Invoice Management -->
 			<InvoiceManagement
 				v-model="showInvoiceManagement"
@@ -693,6 +700,7 @@
 				:draft-invoices="draftsStore.drafts"
 				@view-invoice="handleViewInvoice"
 				@print-invoice="handlePrintInvoice"
+				@print-delivery-note="handlePrintDeliveryNote"
 				@load-draft="handleLoadDraftFromManagement"
 				@delete-draft="handleDeleteDraft"
 				@refresh-history="draftsStore.loadDrafts"
@@ -1075,6 +1083,7 @@ import POSSettings from "@/components/settings/POSSettings.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import JournalEntryManagement from "@/components/journal/JournalEntryManagement.vue";
 import POSClosingManagement from "@/components/journal/POSClosingManagement.vue";
+import DeliveryNoteManagement from "@/components/journal/DeliveryNoteManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -1204,6 +1213,7 @@ const showInvoiceManagement = ref(false);
 // Journal Entry dialog
 const showJournalEntry = ref(false);
 const showPOSClosing = ref(false);
+const showDeliveryNotes = ref(false);
 
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
@@ -3188,6 +3198,8 @@ function handleManagementMenuClick(menuItem) {
 		showJournalEntry.value = true;
 	} else if (menuItem === "pos_closing") {
 		showPOSClosing.value = true;
+	} else if (menuItem === "delivery_notes") {
+		showDeliveryNotes.value = true;
 	}
 }
 
@@ -3270,6 +3282,21 @@ async function handlePrintInvoice(invoiceData) {
 		window.frappe?.msgprint({
 			title: "Error",
 			message: "Failed to print invoice",
+			indicator: "red",
+		});
+	}
+}
+
+// Print "Surat Jalan" (Delivery Note) format for an invoice
+async function handlePrintDeliveryNote(invoiceData) {
+	try {
+		const paperSize = getPaperSize()
+		await printInvoiceByName(invoiceData.name, "POS Next Delivery Note", null, paperSize)
+	} catch (error) {
+		log.error("Error printing delivery note:", error);
+		window.frappe?.msgprint({
+			title: "Error",
+			message: "Failed to print delivery note",
 			indicator: "red",
 		});
 	}

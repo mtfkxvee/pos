@@ -253,6 +253,11 @@
 					<h4 class="text-sm font-semibold text-gray-700 mb-2 text-start">{{ __('Compliment Reason') }}</h4>
 					<p class="text-sm text-gray-600 text-start">{{ invoiceData.custom_compliment_reason }}</p>
 				</div>
+
+				<div v-if="invoiceData.custom_shipping_address" class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+					<h4 class="text-sm font-semibold text-gray-700 mb-2 text-start">{{ __('Shipping Address') }}</h4>
+					<p class="text-sm text-gray-600 text-start whitespace-pre-line">{{ invoiceData.custom_shipping_address }}</p>
+				</div>
 			</div>
 
 			<div v-else class="text-center py-12">
