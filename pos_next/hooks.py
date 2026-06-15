@@ -96,6 +96,7 @@ fixtures = [
 				[
 					"Sales Invoice-posa_pos_opening_shift",
 					"Sales Invoice-posa_is_printed",
+					"Sales Invoice-custom_compliment_reason",
 					"Item-custom_company",
 					"POS Profile-posa_cash_mode_of_payment",
 					"POS Profile-posa_allow_delete",

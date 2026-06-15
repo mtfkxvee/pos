@@ -28,6 +28,7 @@ export function useInvoice() {
 	const posOpeningShift = ref(null) // POS Opening Shift name
 	const additionalDiscount = ref(0)
 	const couponCode = ref(null)
+	const complimentReason = ref("") // Reason text for an applied Compliment discount
 	const remarks = ref("") // Invoice remarks
 	const taxRules = ref([]) // Tax rules from POS Profile
 	const taxInclusive = ref(false) // Tax inclusive setting from POS Settings
@@ -836,6 +837,7 @@ export function useInvoice() {
 			discount_amount: additionalDiscount.value || 0,
 			apply_discount_on: "Grand Total",
 			coupon_code: couponCode.value,
+			custom_compliment_reason: complimentReason.value || undefined,
 			is_pos: 1,
 			update_stock: 1,
 		}
@@ -905,6 +907,7 @@ export function useInvoice() {
 					discount_amount: additionalDiscount.value || 0,
 					apply_discount_on: "Grand Total",
 					coupon_code: couponCode.value,
+					custom_compliment_reason: complimentReason.value || undefined,
 					is_pos: 1,
 					update_stock: 1, // Critical: Ensures stock is updated
 					...loyaltyData,
@@ -1110,6 +1113,7 @@ export function useInvoice() {
 		payments.value = []
 		additionalDiscount.value = 0
 		couponCode.value = null
+		complimentReason.value = ""
 		lastInvoiceDraftName.value = null
 
 		// Reset incremental cache
@@ -1138,6 +1142,7 @@ export function useInvoice() {
 		payments.value = []
 		additionalDiscount.value = 0
 		couponCode.value = null
+		complimentReason.value = ""
 		lastInvoiceDraftName.value = null
 
 		// Reset incremental cache
@@ -1214,6 +1219,7 @@ export function useInvoice() {
 		posOpeningShift,
 		additionalDiscount,
 		couponCode,
+		complimentReason,
 		remarks,
 		taxRules,
 		taxInclusive,

@@ -2215,6 +2215,7 @@ async function saveCurrentTransactionAsDraft(customerValue, draftIdToDelete) {
 			items: cartStore.formatItemsForSubmission(toRaw(cartStore.invoiceItems)),
 			discount_amount: cartStore.additionalDiscount || 0,
 			coupon_code: cartStore.appliedCoupon?.code || cartStore.appliedCoupon?.name || undefined,
+			custom_compliment_reason: cartStore.complimentReason || undefined,
 			is_pos: 1,
 			docstatus: 0,
 			update_stock: 0,

@@ -92,6 +92,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		payments,
 		salesTeam,
 		additionalDiscount,
+		complimentReason,
 		remarks,
 		taxInclusive,
 		isSubmitting,
@@ -128,6 +129,11 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const appliedOffers = ref([])
 	const appliedCoupon = ref(null)
 	const appliedCompliment = ref(null)
+	// Keep the compliment reason in sync for submission - sent to the backend
+	// as custom_compliment_reason so it's stored on the Sales Invoice
+	watch(appliedCompliment, (val) => {
+		complimentReason.value = val?.description || ""
+	})
 	const manualDiscountAmount = ref(0)
 	const complimentDiscountAmount = ref(0)
 	// Transaction-level promo discount preview (applied at invoice level by ERPNext,
@@ -2292,6 +2298,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Remarks
 		remarks,
 		setRemarks,
+		complimentReason,
 		setSalesTeam,
 
 		// Payment methods
