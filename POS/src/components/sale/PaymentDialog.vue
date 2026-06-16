@@ -341,13 +341,30 @@
 								</div>
 								
 								<div v-if="!isPointsRedemptionActive" class="flex gap-2">
+									<!-- Inline confirmation -->
+									<div v-if="showLoyaltyConfirm" class="w-full flex flex-col gap-1.5">
+										<p class="text-xs text-amber-700 font-medium text-center">
+											{{ __('Pakai {0} poin ({1})?', [maxRedeemablePoints, formatCurrency(maxRedeemablePoints * (loyaltyPointInfo.conversion_factor || 1))]) }}
+										</p>
+										<div class="flex gap-2">
+											<button
+												@click="showLoyaltyConfirm = false"
+												class="flex-1 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+											>{{ __('Batal') }}</button>
+											<button
+												@click="activateLoyaltyRedemption"
+												class="flex-1 px-3 py-1.5 rounded-lg text-sm font-medium border border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+											>{{ __('Ya, Pakai') }}</button>
+										</div>
+									</div>
 									<button
-										@click="isPointsRedemptionActive = true; pointsToRedeem = loyaltyPointInfo.loyalty_points"
+										v-else
+										@click="showLoyaltyConfirm = true"
 										:disabled="loyaltyPointInfo.loyalty_points === 0"
 										:class="[
 											'w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
-											loyaltyPointInfo.loyalty_points > 0 
-												? 'bg-white border-amber-300 text-amber-600 hover:bg-amber-50' 
+											loyaltyPointInfo.loyalty_points > 0
+												? 'bg-white border-amber-300 text-amber-600 hover:bg-amber-50'
 												: 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-70'
 										]"
 									>
@@ -364,7 +381,7 @@
 											class="w-full h-8 px-2 text-sm border border-amber-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
 										/>
 										<button
-											@click="isPointsRedemptionActive = false; pointsToRedeem = 0"
+											@click="isPointsRedemptionActive = false; pointsToRedeem = 0; showLoyaltyConfirm = false"
 											class="p-1.5 text-red-500 hover:bg-red-50 rounded"
 										>
 											<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1206,6 +1223,19 @@ const loyaltyPointInfo = ref({ loyalty_points: 0 })
 const loadingLoyalty = ref(false)
 const pointsToRedeem = ref(0)
 const isPointsRedemptionActive = ref(false)
+const showLoyaltyConfirm = ref(false)
+
+const maxRedeemablePoints = computed(() => {
+	const available = loyaltyPointInfo.value?.loyalty_points || 0
+	const convFactor = loyaltyPointInfo.value?.conversion_factor || 1
+	return Math.min(available, Math.floor(props.grandTotal / convFactor))
+})
+
+function activateLoyaltyRedemption() {
+	pointsToRedeem.value = maxRedeemablePoints.value
+	isPointsRedemptionActive.value = true
+	showLoyaltyConfirm.value = false
+}
 
 // Pay on Account warning state
 const payOnAccountWarningActive = ref(false)
@@ -2101,6 +2131,7 @@ watch(show, (newVal) => {
 		// Reset loyalty state
 		isPointsRedemptionActive.value = false
 		pointsToRedeem.value = 0
+		showLoyaltyConfirm.value = false
 		_clearPayOnAccountWarning()
 
 		// Set default delivery date to today for Sales Orders
