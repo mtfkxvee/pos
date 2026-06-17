@@ -2251,18 +2251,9 @@ function quickAddPayment(method) {
 
 	let amt = remainingAmount.value
 
-	// Exact amount validation for non-cash payments
-	if (isExactAmountModeActive.value && !isCashPaymentMethod(method)) {
-		const currentNonCashTotal = paymentEntries.value
-			.filter((entry) => {
-				const m = paymentMethods.value.find(
-					(pm) => pm.mode_of_payment === entry.mode_of_payment,
-				)
-				return m && !isCashPaymentMethod(m) && !entry.is_customer_credit
-			})
-			.reduce((sum, entry) => sum + (entry.amount || 0), 0)
-
-		const maxAllowed = roundCurrency(props.grandTotal) - currentNonCashTotal
+	// Non-cash payments can never exceed the remaining balance
+	if (!isCashPaymentMethod(method) && !method?.is_customer_credit) {
+		const maxAllowed = roundCurrency(Math.max(0, props.grandTotal - totalPaid.value))
 
 		if (maxAllowed <= 0) {
 			showWarning(
@@ -2271,7 +2262,6 @@ function quickAddPayment(method) {
 			return
 		}
 
-		// For quick add (long press), always use exact remaining amount
 		amt = maxAllowed
 	}
 
@@ -2333,11 +2323,9 @@ function addCustomPayment(method, amount) {
 	let amt = Number.parseFloat(amount)
 	if (!amt || amt <= 0) return
 
-	// Exact amount validation for non-cash payments
-	if (isExactAmountModeActive.value && !isCashPaymentMethod(method)) {
-		// Calculate the remaining amount after ALL existing payments (cash + non-cash)
-		// Non-cash payments in exact amount mode must equal the remaining balance exactly
-		const maxAllowed = roundCurrency(props.grandTotal - totalPaid.value)
+	// Non-cash payments can never exceed the remaining balance (no change allowed for non-cash)
+	if (!isCashPaymentMethod(method) && !method?.is_customer_credit) {
+		const maxAllowed = roundCurrency(Math.max(0, props.grandTotal - totalPaid.value))
 
 		if (maxAllowed <= 0) {
 			showWarning(
@@ -2346,21 +2334,30 @@ function addCustomPayment(method, amount) {
 			return
 		}
 
-		// Warn and reject if amount doesn't match exact remaining (use rounded comparison to avoid floating-point issues)
-		if (roundCurrency(amt) !== maxAllowed) {
+		if (isExactAmountModeActive.value) {
+			// In exact amount mode, non-cash must equal exactly the remaining balance
+			if (roundCurrency(amt) !== maxAllowed) {
+				showWarning(
+					__("Non-cash payment must equal {0} exactly", [
+						formatCurrency(maxAllowed),
+					]),
+				)
+				return
+			}
+		} else if (roundCurrency(amt) > maxAllowed) {
+			// Outside exact mode, non-cash still cannot cause overpayment/change
 			showWarning(
-				__("Non-cash payment must equal {0} exactly", [
+				__("Non-cash payment cannot exceed remaining amount ({0})", [
 					formatCurrency(maxAllowed),
 				]),
 			)
 			return
 		}
 
-		// Use the maxAllowed value to ensure exact match
-		amt = maxAllowed
+		amt = Math.min(amt, maxAllowed)
 	}
 
-	// For mixed payments in exact amount mode, validate total doesn't exceed grand total
+	// For mixed payments in exact amount mode, validate cash total doesn't exceed grand total
 	if (
 		isExactAmountModeActive.value &&
 		hasNonCashPayment.value &&
