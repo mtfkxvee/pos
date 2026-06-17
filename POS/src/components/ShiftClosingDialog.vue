@@ -223,6 +223,7 @@
                   placeholder="0"
                   :disabled="submitResource.loading || showSuccessReport"
                   class="text-base md:text-lg text-center font-semibold"
+                  @input="showVisitorConfirm = false"
                 />
               </div>
             </div>
@@ -519,9 +520,30 @@
             {{ __('✓ Shift closed successfully') }}
           </div>
 
-          <!-- Submit/Close button (only shown in entry mode) -->
+          <!-- Visitor confirmation prompt -->
+          <div v-if="showVisitorConfirm && !showSuccessReport" class="flex flex-col sm:flex-row items-center gap-2">
+            <span class="text-xs md:text-sm text-orange-600 font-medium text-center">
+              ⚠ {{ __('Visitor belum diisi. Yakin tidak ada visitor?') }}
+            </span>
+            <div class="flex gap-2">
+              <Button
+                variant="subtle"
+                size="sm"
+                @click="showVisitorConfirm = false"
+              >{{ __('Batal') }}</Button>
+              <Button
+                variant="solid"
+                theme="red"
+                size="sm"
+                :loading="submitResource.loading"
+                @click="doSubmit"
+              >{{ __('Ya, Lanjutkan') }}</Button>
+            </div>
+          </div>
+
+          <!-- Submit/Close button (only shown in entry mode and not confirming) -->
           <Button
-            v-if="!showSuccessReport"
+            v-if="!showSuccessReport && !showVisitorConfirm"
             variant="solid"
             theme="blue"
             @click="submitClosing"
@@ -603,6 +625,7 @@ const showInvoiceDetails = ref(false)
 const showSuccessReport = ref(false) // Track if shift is closed and showing report
 const errorMessage = ref("") // User-friendly error message
 const showIdleWarning = ref(false)
+const showVisitorConfirm = ref(false)
 let _idleWarningTimer = null
 
 // Watch dialog open state
@@ -732,6 +755,21 @@ const canSubmit = computed(() => {
 })
 
 async function submitClosing() {
+	if (!closingData.value) return
+
+	const visitorValue = closingData.value.visitor
+	const visitorEmpty = !visitorValue || Number(visitorValue) === 0
+
+	if (visitorEmpty && !showVisitorConfirm.value) {
+		showVisitorConfirm.value = true
+		return
+	}
+
+	showVisitorConfirm.value = false
+	await doSubmit()
+}
+
+async function doSubmit() {
 	if (!closingData.value) return
 
 	try {
