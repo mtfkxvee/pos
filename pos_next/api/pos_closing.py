@@ -17,7 +17,8 @@ def get_pos_closing_shifts(pos_profile, page_size=20, page=1):
 		SELECT
 			cs.name, cs.pos_profile, cs.user, u.full_name as cashier_name,
 			cs.period_start_date, cs.period_end_date, cs.posting_date,
-			cs.grand_total, cs.net_total, cs.total_quantity, cs.docstatus
+			cs.grand_total, cs.net_total, cs.total_quantity, cs.docstatus,
+			cs.visitor
 		FROM `tabPOS Closing Shift` cs
 		LEFT JOIN `tabUser` u ON u.name = cs.user
 		WHERE cs.pos_profile = %(pos_profile)s
@@ -27,6 +28,17 @@ def get_pos_closing_shifts(pos_profile, page_size=20, page=1):
 		{"pos_profile": pos_profile, "page_size": int(page_size), "offset": offset},
 		as_dict=True,
 	)
+
+
+@frappe.whitelist()
+def set_visitor_count(name, visitor):
+	"""Update the visitor count on a submitted POS Closing Shift."""
+	if not frappe.has_permission("POS Closing Shift", "write", name):
+		frappe.throw(frappe._("Not permitted to update this POS Closing Shift"))
+
+	visitor_int = max(0, int(visitor or 0))
+	frappe.db.set_value("POS Closing Shift", name, "visitor", visitor_int)
+	return {"name": name, "visitor": visitor_int}
 
 
 @frappe.whitelist()

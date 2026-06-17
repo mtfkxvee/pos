@@ -51,6 +51,7 @@
 									<th class="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('ID') }}</th>
 									<th class="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{{ __('Kasir') }}</th>
 									<th class="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{{ __('Total') }}</th>
+									<th class="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase">{{ __('Visitor') }}</th>
 									<th class="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase">{{ __('Status') }}</th>
 									<th class="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase">{{ __('Actions') }}</th>
 								</tr>
@@ -66,6 +67,42 @@
 									<td class="px-5 py-3 text-gray-400 font-mono text-xs">{{ entry.name }}</td>
 									<td class="px-5 py-3 text-gray-600">{{ entry.cashier_name || entry.user }}</td>
 									<td class="px-5 py-3 text-end font-medium text-gray-800">{{ formatCurrency(entry.grand_total) }}</td>
+									<td class="px-5 py-3 text-center" @click.stop>
+										<template v-if="entry.docstatus === 1">
+											<span
+												v-if="visitorEditId !== entry.name"
+												@click="startVisitorEdit(entry)"
+												class="inline-flex items-center gap-1 cursor-pointer group"
+												:title="__('Klik untuk edit')"
+											>
+												<span :class="entry.visitor ? 'text-gray-800 font-medium' : 'text-gray-300 italic'">
+													{{ entry.visitor || __('–') }}
+												</span>
+												<PencilIcon class="w-3 h-3 text-gray-300 group-hover:text-teal-500 transition-colors" />
+											</span>
+											<span v-else class="inline-flex items-center gap-1" @click.stop>
+												<input
+													v-model.number="visitorInput"
+													type="number"
+													min="0"
+													class="w-16 h-6 px-1 text-xs text-center border border-teal-400 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+													@keyup.enter="saveVisitor(entry)"
+													@keyup.escape="cancelVisitorEdit"
+												/>
+												<button
+													@click="saveVisitor(entry)"
+													:disabled="visitorSaving"
+													class="p-0.5 text-teal-600 hover:text-teal-800 disabled:opacity-50"
+												>
+													<CheckIcon class="w-4 h-4" />
+												</button>
+												<button @click="cancelVisitorEdit" class="p-0.5 text-gray-400 hover:text-gray-600">
+													<XMarkIcon class="w-4 h-4" />
+												</button>
+											</span>
+										</template>
+										<span v-else class="text-xs text-gray-300">-</span>
+									</td>
 									<td class="px-5 py-3 text-center">
 										<span :class="['inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', statusBadgeClass(entry.docstatus)]">
 											{{ statusLabel(entry.docstatus) }}
@@ -132,6 +169,43 @@
 								</div>
 							</div>
 
+							<!-- Visitor Edit (detail view) -->
+							<div class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between gap-4">
+								<div>
+									<p class="text-xs text-gray-500 mb-0.5">{{ __('Visitor') }}</p>
+									<p class="text-sm font-semibold text-gray-900">{{ detail.visitor || 0 }}</p>
+								</div>
+								<div v-if="visitorEditId === detail.name" class="flex items-center gap-2">
+									<input
+										v-model.number="visitorInput"
+										type="number"
+										min="0"
+										class="w-24 h-8 px-2 text-sm text-center border border-teal-400 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+										@keyup.enter="saveVisitor(detail)"
+										@keyup.escape="cancelVisitorEdit"
+									/>
+									<button
+										@click="saveVisitor(detail)"
+										:disabled="visitorSaving"
+										class="inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-teal-400 text-teal-700 rounded-lg hover:bg-teal-50 disabled:opacity-50"
+									>
+										<CheckIcon class="w-3.5 h-3.5" />
+										{{ visitorSaving ? __('Menyimpan...') : __('Simpan') }}
+									</button>
+									<button @click="cancelVisitorEdit" class="p-1.5 text-gray-400 hover:text-gray-600">
+										<XMarkIcon class="w-4 h-4" />
+									</button>
+								</div>
+								<button
+									v-else
+									@click="startVisitorEdit(detail)"
+									class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+								>
+									<PencilIcon class="w-3.5 h-3.5" />
+									{{ __('Edit Visitor') }}
+								</button>
+							</div>
+
 							<!-- Payment reconciliation -->
 							<div v-if="detail.payment_reconciliation && detail.payment_reconciliation.length" class="border border-gray-200 rounded-lg overflow-hidden mb-6">
 								<div class="grid grid-cols-[1fr_110px_110px_110px] bg-gray-50 border-b border-gray-200 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
@@ -179,6 +253,7 @@
 import { ref, watch } from "vue"
 import {
 	ArrowLeftIcon, XMarkIcon, ClipboardDocumentCheckIcon, PrinterIcon,
+	PencilIcon, CheckIcon,
 } from "@heroicons/vue/24/outline"
 import { call } from "@/utils/apiWrapper"
 import { useToast } from "@/composables/useToast"
@@ -205,6 +280,40 @@ const page = ref(1)
 const PAGE_SIZE = 20
 const hasMore = ref(false)
 const printingName = ref(null)
+
+// Visitor inline edit state
+const visitorEditId = ref(null)
+const visitorInput = ref(0)
+const visitorSaving = ref(false)
+
+function startVisitorEdit(entry) {
+	visitorEditId.value = entry.name
+	visitorInput.value = entry.visitor || 0
+}
+
+function cancelVisitorEdit() {
+	visitorEditId.value = null
+	visitorInput.value = 0
+}
+
+async function saveVisitor(entry) {
+	visitorSaving.value = true
+	try {
+		const result = await call("pos_next.api.pos_closing.set_visitor_count", {
+			name: entry.name,
+			visitor: visitorInput.value,
+		})
+		entry.visitor = result.visitor
+		if (detail.value && detail.value.name === entry.name) {
+			detail.value.visitor = result.visitor
+		}
+		cancelVisitorEdit()
+	} catch (e) {
+		showError(friendlyError(e, __("Gagal menyimpan visitor")))
+	} finally {
+		visitorSaving.value = false
+	}
+}
 
 // ── Sync v-model ──────────────────────────────────────────────────────────────
 watch(() => props.modelValue, (val) => { show.value = val })
