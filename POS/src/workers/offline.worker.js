@@ -1145,7 +1145,8 @@ async function getCachedOffers(posProfile) {
 		}
 
 		const db = await initDB()
-		const today = new Date().toISOString().split("T")[0]
+		const _td = new Date()
+		const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,"0")}-${String(_td.getDate()).padStart(2,"0")}`
 
 		// Get offers for specific profile
 		const allOffers = await db

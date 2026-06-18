@@ -2117,9 +2117,10 @@ async function saveCurrentTransactionOffline(paymentData, customerValue, draftId
 		loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 		remarks: paymentData.remarks || null,
 
-		// Keep real posting time when synced
+		// Keep real posting time when synced — use local date (not UTC) so
+		// midnight transactions in UTC+7 don't land on yesterday's date.
 		set_posting_time: 1,
-		posting_date: now.toISOString().split("T")[0],
+		posting_date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
 		posting_time: now.toTimeString().split(" ")[0],
 
 		// Custom offline invoice ID — persists to ERPNext on sync
