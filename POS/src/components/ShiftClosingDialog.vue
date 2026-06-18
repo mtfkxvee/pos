@@ -15,6 +15,38 @@
             <p class="text-xs md:text-sm text-amber-800 font-medium">{{ __('This dialog has been open for over a minute. Please close the shift or close this dialog to resume the shift timer.') }}</p>
           </div>
 
+          <!-- Pending Sync Warning — blocks shift closing until all invoices are synced -->
+          <div v-if="hasPendingSync && !showSuccessReport" class="rounded-lg bg-red-50 border border-red-300 p-3 md:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div class="flex items-start gap-2 flex-1">
+              <FeatherIcon name="alert-circle" class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p class="text-sm font-semibold text-red-800">
+                  {{ syncStore.isSyncing
+                    ? __('Sedang sinkronisasi...')
+                    : __('Ada {0} transaksi belum tersinkronisasi', [syncStore.pendingInvoicesCount]) }}
+                </p>
+                <p class="text-xs text-red-600 mt-0.5">
+                  {{ __('Selesaikan sinkronisasi terlebih dahulu sebelum menutup shift agar tidak ada transaksi yang hilang.') }}
+                </p>
+              </div>
+            </div>
+            <Button
+              v-if="!syncStore.isOffline && !syncStore.isSyncing"
+              size="sm"
+              variant="outline"
+              theme="red"
+              @click="handleSyncNow"
+            >
+              <template #prefix><FeatherIcon name="refresh-cw" class="w-3.5 h-3.5" /></template>
+              {{ __('Sync Sekarang') }}
+            </Button>
+            <span v-else-if="syncStore.isOffline" class="text-xs font-medium text-red-600">{{ __('(Offline — tidak bisa sync)') }}</span>
+            <span v-else class="text-xs font-medium text-red-600 flex items-center gap-1">
+              <FeatherIcon name="loader" class="w-3.5 h-3.5 animate-spin" />
+              {{ __('Menyinkronkan...') }}
+            </span>
+          </div>
+
           <!-- Shift Summary Header (hidden in entry mode when hideExpectedAmount is enabled) -->
           <div v-if="shouldShowSummary" class="bg-white border border-gray-200 rounded-lg p-3 md:p-6 shadow-sm">
             <div class="flex flex-col sm:flex-row justify-start items-start gap-3 mb-3 md:mb-6">
@@ -548,7 +580,7 @@
             theme="blue"
             @click="submitClosing"
             :loading="submitResource.loading"
-            :disabled="!canSubmit"
+            :disabled="!canSubmit || hasPendingSync"
           >
             {{ submitResource.loading ? __('Closing Shift...') : __('Close Shift') }}
           </Button>
@@ -575,6 +607,7 @@ import { useShift, shiftState } from "../composables/useShift"
 import { useFormatters } from "../composables/useFormatters"
 import { usePOSSettingsStore } from "../stores/posSettings"
 import { usePOSShiftStore } from "../stores/posShift"
+import { usePOSSyncStore } from "../stores/posSync"
 import TranslatedHTML from "./common/TranslatedHTML.vue"
 import { printShiftClosing } from "@/utils/printInvoice"
 import { usePrintFormat } from "@/composables/usePrintFormat"
@@ -617,6 +650,19 @@ const posSettingsStore = usePOSSettingsStore()
 const { hideExpectedAmount } = storeToRefs(posSettingsStore)
 
 const shiftStore = usePOSShiftStore()
+const syncStore = usePOSSyncStore()
+
+const hasPendingSync = computed(
+	() => syncStore.pendingInvoicesCount > 0 || syncStore.isSyncing
+)
+
+async function handleSyncNow() {
+	try {
+		await syncStore.syncAllPending()
+	} catch (e) {
+		// syncAllPending handles its own error logging; silently ignore here
+	}
+}
 
 const closingData = ref(null)
 const closingDataResource = getClosingShiftData
