@@ -510,7 +510,7 @@ def _process_invoice(invoice, invoice_field, company_currency, cash_mode, paymen
 
     # Update summary totals
     summary["grand_total"] += base_grand_total
-    summary["net_total"] += base_net_total
+    summary["net_total"] += base_grand_total
     summary["total_quantity"] += flt(invoice.total_qty)
 
     if is_return:
