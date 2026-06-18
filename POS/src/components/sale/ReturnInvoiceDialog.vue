@@ -348,8 +348,8 @@
 											:max="item.quantity"
 											:disabled="!item.selected"
 											type="number"
-											min="1"
-											step="1"
+											min="0.001"
+											step="any"
 											@change="normalizeItemQuantity(item)"
 											@blur="normalizeItemQuantity(item)"
 											class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-sm text-center font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -419,8 +419,8 @@
 											:max="item.quantity"
 											:disabled="!item.selected"
 											type="number"
-											min="1"
-											step="1"
+											min="0.001"
+											step="any"
 											@change="normalizeItemQuantity(item)"
 											@blur="normalizeItemQuantity(item)"
 											class="w-16 h-10 px-2 border-2 border-gray-300 rounded-lg text-lg text-center font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1340,12 +1340,12 @@ function closeErrorDialog() {
 
 function normalizeItemQuantity(item) {
 	const maxQuantity = Number(item.quantity) || 0
-	const currentQuantity = Number(item.return_qty)
-	const validQuantity = Number.isFinite(currentQuantity) ? currentQuantity : 1
-	item.return_qty = Math.max(
-		1,
-		Math.min(validQuantity, maxQuantity || validQuantity),
-	)
+	const val = Number(item.return_qty)
+	if (!Number.isFinite(val) || val <= 0) {
+		item.return_qty = maxQuantity
+	} else {
+		item.return_qty = Math.min(val, maxQuantity)
+	}
 }
 
 function validateSelectedItems() {
