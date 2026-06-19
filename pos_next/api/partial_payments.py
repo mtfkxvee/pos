@@ -352,6 +352,7 @@ def create_payment_entry(
     reference_no: Optional[str] = None,
     remarks: Optional[str] = None,
     posting_date: Optional[str] = None,
+    cost_center: Optional[str] = None,
 ) -> str:
     """
     Create a proper Payment Entry that updates Payment Ledger.
@@ -475,6 +476,10 @@ def create_payment_entry(
     # Set currency
     pe.paid_from_account_currency = invoice.currency
     pe.paid_to_account_currency = invoice.currency
+
+    # Set cost center from POS Profile so GL entries are posted to the right dimension
+    if cost_center:
+        pe.cost_center = cost_center
 
     # Set reference
     if reference_no:
@@ -848,6 +853,11 @@ def add_payment_to_partial_invoice(invoice_name: str, payments) -> Dict:
             )
         )
 
+    # Resolve cost center from POS Profile so all Payment Entries carry the right dimension
+    pos_cost_center = None
+    if invoice.pos_profile:
+        pos_cost_center = frappe.db.get_value("POS Profile", invoice.pos_profile, "cost_center")
+
     # Create Payment Entries - with transactional rollback on failure
     payment_entries_created = []
 
@@ -874,6 +884,7 @@ def add_payment_to_partial_invoice(invoice_name: str, payments) -> Dict:
                 payment_account=payment_account,
                 reference_no=reference_no,
                 remarks=f"POS Payment - {mode_of_payment}",
+                cost_center=pos_cost_center,
             )
 
             payment_entries_created.append(pe_name)
