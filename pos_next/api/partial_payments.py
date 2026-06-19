@@ -853,10 +853,12 @@ def add_payment_to_partial_invoice(invoice_name: str, payments) -> Dict:
             )
         )
 
-    # Resolve cost center from POS Profile so all Payment Entries carry the right dimension
+    # Resolve cost center: POS Profile → company default (Payment Entry requires it)
     pos_cost_center = None
     if invoice.pos_profile:
         pos_cost_center = frappe.db.get_value("POS Profile", invoice.pos_profile, "cost_center")
+    if not pos_cost_center:
+        pos_cost_center = frappe.db.get_value("Company", invoice.company, "cost_center")
 
     # Create Payment Entries - with transactional rollback on failure
     payment_entries_created = []
