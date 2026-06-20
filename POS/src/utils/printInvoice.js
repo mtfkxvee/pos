@@ -328,6 +328,7 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
 			)
 		: 0
 	const paymentReconciliation = (closingData.payment_reconciliation || []).filter(function(p) { return Number(p.expected_amount) > 0 || Number(p.closing_amount) > 0; })
+	const hasReturns = (closingData.returns_count || 0) > 0
 
 	const totalExpected = paymentReconciliation.reduce(
 		(acc, p) => acc + (Number.parseFloat(p.expected_amount) || 0),
@@ -486,8 +487,11 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
              <div class="section">
                 <div class="section-title">${__("PAYMENTS")}</div>
                 ${paymentReconciliation
-									.map(
-										(p) => `
+									.map((p) => {
+										const returnsAmount = Number.parseFloat(p.returns_amount || 0)
+										const showBreakdown = hasReturns && returnsAmount !== 0
+										const grossBeforeReturns = Number.parseFloat(p.expected_amount || 0) - returnsAmount
+										return `
                     <div style="margin-bottom: 5px;">
                         <div class="row bold">
                             <span>${p.mode_of_payment}</span>
@@ -496,10 +500,25 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
                             <span>Open:</span>
                             <span>${formatCurrency(p.opening_amount, "IDR", "id-ID")}</span>
                         </div>
+                        ${showBreakdown ? `
+                        <div class="row">
+                            <span>${__("Saldo Awal")}:</span>
+                            <span>${formatCurrency(grossBeforeReturns, "IDR", "id-ID")}</span>
+                        </div>
+                        <div class="row">
+                            <span>${__("Dipotong")}:</span>
+                            <span>-${formatCurrency(Math.abs(returnsAmount), "IDR", "id-ID")}</span>
+                        </div>
+                        <div class="row bold">
+                            <span>${__("Saldo Akhir")}:</span>
+                            <span>${formatCurrency(p.expected_amount, "IDR", "id-ID")}</span>
+                        </div>
+                        ` : `
                         <div class="row">
                             <span>Expected:</span>
                             <span>${formatCurrency(p.expected_amount, "IDR", "id-ID")}</span>
                         </div>
+                        `}
                          <div class="row">
                             <span>Actual:</span>
                             <span>${formatCurrency(p.closing_amount, "IDR", "id-ID")}</span>
@@ -509,8 +528,7 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
                             <span>${formatCurrency(Number.parseFloat(p.closing_amount || 0) - Number.parseFloat(p.expected_amount || 0), "IDR", "id-ID")}</span>
                         </div>
                     </div>
-                `,
-									)
+                `})
 									.join("")}
             </div>
 

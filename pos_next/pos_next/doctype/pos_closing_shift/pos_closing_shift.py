@@ -456,15 +456,21 @@ def _get_cash_mode_of_payment(pos_profile):
     return cash_mode or "Cash"
 
 
-def _aggregate_payment(payments, mode_of_payment, amount, opening_amount=0):
+def _aggregate_payment(payments, mode_of_payment, amount, is_return=False, opening_amount=0):
     """Add or update payment amount for a mode of payment."""
     for pay in payments:
         if pay.mode_of_payment == mode_of_payment:
             pay.expected_amount += flt(amount)
+            if is_return:
+                pay.returns_amount = flt(pay.get("returns_amount", 0)) + flt(amount)
+            else:
+                pay.sales_amount = flt(pay.get("sales_amount", 0)) + flt(amount)
             return
     payments.append(frappe._dict({
         "mode_of_payment": mode_of_payment,
         "opening_amount": opening_amount,
+        "sales_amount": flt(amount) if not is_return else 0.0,
+        "returns_amount": flt(amount) if is_return else 0.0,
         "expected_amount": flt(amount) + opening_amount,
     }))
 
@@ -533,7 +539,7 @@ def _process_invoice(invoice, invoice_field, company_currency, cash_mode, paymen
         amount = get_base_value(p, "amount", "base_amount", conversion_rate)
         if p.mode_of_payment == cash_mode:
             amount -= get_base_value(invoice, "change_amount", "base_change_amount", conversion_rate)
-        _aggregate_payment(payments, p.mode_of_payment, amount)
+        _aggregate_payment(payments, p.mode_of_payment, amount, is_return=bool(is_return))
 
     return transaction
 
@@ -579,6 +585,8 @@ def make_closing_shift_from_opening(opening_shift):
         payments.append(frappe._dict({
             "mode_of_payment": detail.get("mode_of_payment"),
             "opening_amount": opening_amount,
+            "sales_amount": 0.0,
+            "returns_amount": 0.0,
             "expected_amount": opening_amount,
         }))
 
@@ -624,6 +632,9 @@ def make_closing_shift_from_opening(opening_shift):
         "sales_count": summary["sales_count"],
         "loyalty_redemption_total": summary["loyalty_redemption_total"],
         "pos_transactions": pos_transactions,  # Include return info for display
+        # Override payment_reconciliation to preserve sales_amount/returns_amount
+        # (frappe child doc serialization strips unknown fields from the schema)
+        "payment_reconciliation": [dict(p) for p in payments],
     })
 
     return result

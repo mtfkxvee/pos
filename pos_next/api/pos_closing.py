@@ -78,6 +78,25 @@ def get_pos_closing_shift_print_data(name):
 				if loyalty_amount > 0:
 					loyalty_redemption_total += loyalty_amount * conversion_rate
 
+	# Compute per-payment-method returns breakdown for print display
+	returns_by_mode = {}
+	if invoice_names:
+		placeholders = ", ".join(["%s"] * len(invoice_names))
+		return_payment_rows = frappe.db.sql(
+			f"""
+			SELECT
+				sip.mode_of_payment,
+				SUM(COALESCE(sip.base_amount, sip.amount)) AS returns_amount
+			FROM `tabSales Invoice Payment` sip
+			JOIN `tabSales Invoice` si ON si.name = sip.parent
+			WHERE sip.parent IN ({placeholders}) AND si.is_return = 1
+			GROUP BY sip.mode_of_payment
+			""",
+			invoice_names,
+			as_dict=True,
+		)
+		returns_by_mode = {row.mode_of_payment: flt(row.returns_amount) for row in return_payment_rows}
+
 	result = doc.as_dict()
 	result.update({
 		"sales_total": sales_total,
@@ -86,5 +105,10 @@ def get_pos_closing_shift_print_data(name):
 		"returns_count": returns_count,
 		"loyalty_redemption_total": loyalty_redemption_total,
 	})
+
+	# Annotate each payment reconciliation row with returns_amount for breakdown display
+	for pr in result.get("payment_reconciliation", []):
+		mop = pr.get("mode_of_payment")
+		pr["returns_amount"] = returns_by_mode.get(mop, 0.0)
 
 	return json.loads(json.dumps(result, default=str))
