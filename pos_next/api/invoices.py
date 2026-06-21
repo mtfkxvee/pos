@@ -2002,6 +2002,59 @@ def submit_invoice(invoice=None, data=None):
                         "POS Return Payment Fix"
                     )
 
+            # ── Reconcile outstanding amounts ───────────────────────────────
+            # With update_outstanding_for_self = 0, ERPNext books the return's
+            # GL entries against the original invoice (against_voucher = original).
+            # This has two side effects we must correct here:
+            #
+            # 1. Return invoice outstanding: ERPNext sets outstanding = grand_total
+            #    (negative) during validate, before our payment records are written.
+            #    The force-write block above already resets this for normal returns,
+            #    but credit-sale returns (no payments) still fall through.
+            #
+            # 2. Original invoice outstanding: ERPNext's update_outstanding_amounts
+            #    finds the return's GL credit against the original and makes
+            #    original.outstanding negative.  Since POS returns are immediate
+            #    cash refunds, both invoices must show outstanding = 0.
+
+            # Fix return invoice
+            if abs(flt(invoice_doc.outstanding_amount)) > 0.01:
+                try:
+                    frappe.db.set_value(
+                        "Sales Invoice", invoice_doc.name,
+                        {"outstanding_amount": 0},
+                        update_modified=False,
+                    )
+                    invoice_doc.outstanding_amount = 0
+                    invoice_doc.set_status(update=True)
+                except Exception as _e_ret:
+                    frappe.log_error(
+                        f"POS Return: failed to zero outstanding on {invoice_doc.name}: {_e_ret}",
+                        "POS Return Outstanding",
+                    )
+
+            # Fix original invoice (only when outstanding went negative — positive
+            # outstanding means a genuine credit-sale that should keep its balance)
+            _return_against = invoice_doc.get("return_against")
+            if _return_against:
+                try:
+                    _orig_os = flt(frappe.db.get_value(
+                        "Sales Invoice", _return_against, "outstanding_amount"
+                    ))
+                    if _orig_os < -0.01:
+                        frappe.db.set_value(
+                            "Sales Invoice", _return_against,
+                            {"outstanding_amount": 0},
+                            update_modified=False,
+                        )
+                        _orig_doc = frappe.get_doc("Sales Invoice", _return_against)
+                        _orig_doc.set_status(update=True)
+                except Exception as _e_orig:
+                    frappe.log_error(
+                        f"POS Return: failed to reconcile original {_return_against}: {_e_orig}",
+                        "POS Return Reconciliation",
+                    )
+
             # Reverse loyalty points earned on the original invoice,
             # proportional to the returned amount (never blocks the return).
             _reverse_loyalty_points_for_return(invoice_doc)
