@@ -2976,12 +2976,15 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
         if remaining_qty <= 0:
             return None
 
-        # Use rate copied by make_sales_return() from original invoice — this is what
-        # ERPNext validates against ("return rate cannot exceed original rate").
         original_rate = flt(item.get("rate"), 3)
         price_list_rate = flt(item.get("price_list_rate") or original_rate, 3)
-        # net_rate is for display (rate_with_tax) only; never submit it as the line rate
         net_rate = flt(item.get("net_rate") or original_rate, 3)
+        # ERPNext validates that return rate <= original item rate.
+        # net_rate is normally <= rate (discount applied), so we use it as the
+        # submitted rate for accurate refund amount.  In the rare case where
+        # net_rate > rate (e.g. surcharge stored as negative discount), cap to
+        # rate so ERPNext validation passes.
+        submitted_rate = flt(min(net_rate, original_rate), 3)
         discount_per_unit = flt(price_list_rate - net_rate, 3)
         tax_per_unit = flt(item_tax_map.get(item.get("item_code"), 0) / original_qty, 3) if original_qty else 0
 
@@ -2992,9 +2995,9 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
             "remaining_qty": remaining_qty,
             "qty": -remaining_qty,
             "price_list_rate": price_list_rate,
-            "rate": original_rate,
+            "rate": submitted_rate,
             "discount_per_unit": discount_per_unit,
-            "amount": flt(original_rate * -remaining_qty, 3),
+            "amount": flt(submitted_rate * -remaining_qty, 3),
             "tax_per_unit": tax_per_unit,
             "rate_with_tax": flt(net_rate + tax_per_unit, 3),
         }
