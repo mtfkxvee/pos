@@ -1965,6 +1965,24 @@ def submit_invoice(invoice=None, data=None):
                         _refund_total += abs(_amt)
 
                     if _refund_total > 0:
+                        # Normalize: ensure SUM(payments.amount) == grand_total.
+                        # The frontend computes returnTotal from rate_with_tax (per-unit);
+                        # ERPNext recomputes grand_total during validate from items + taxes.
+                        # Per-unit rounding in discount/tax splits can cause a small drift.
+                        # Absorb the difference in the last payment row so the closing
+                        # shift payment reconciliation stays consistent with grand_total.
+                        _actual_gt = abs(flt(invoice_doc.grand_total))
+                        if _actual_gt > 0 and abs(_refund_total - _actual_gt) > 0.01:
+                            _diff = _actual_gt - _refund_total
+                            frappe.db.sql(
+                                """UPDATE `tabSales Invoice Payment`
+                                   SET amount = amount - %s, base_amount = base_amount - %s
+                                   WHERE parent = %s
+                                   ORDER BY idx DESC LIMIT 1""",
+                                (_diff, _diff, invoice_doc.name),
+                            )
+                            _refund_total = _actual_gt
+
                         frappe.db.set_value(
                             "Sales Invoice", invoice_doc.name,
                             {
