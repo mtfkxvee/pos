@@ -452,6 +452,16 @@
 												</svg>
 												<span>{{ __('Surat Jalan') }}</span>
 											</button>
+											<button
+												@click="openReturnDialog(invoice)"
+												class="px-3 py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1"
+												:title="__('Return')"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+												</svg>
+												<span>{{ __('Return') }}</span>
+											</button>
 										</div>
 									</div>
 
@@ -633,12 +643,23 @@
 		:loading="deliveryNoteLoading"
 		@confirm="handleDeliveryNoteConfirm"
 	/>
+
+	<!-- Return Invoice Dialog -->
+	<ReturnInvoiceDialog
+		v-model="showReturnDialog"
+		:pos-profile="posProfile"
+		:pos-opening-shift="posOpeningShift"
+		:currency="currency"
+		:preselected-invoice="returnTargetInvoice"
+		@return-created="handleReturnCreated"
+	/>
 </template>
 
 <script setup>
 import InvoiceFilters from "@/components/invoices/InvoiceFilters.vue"
 import DeliveryNoteAddressDialog from "@/components/invoices/DeliveryNoteAddressDialog.vue"
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
+import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue"
 import { useInvoiceFilters } from "@/composables/useInvoiceFilters"
 import { useInvoiceFiltersStore } from "@/stores/invoiceFilters"
 import {
@@ -669,6 +690,7 @@ const { formatDate, formatDateTime, formatTime } = useFormatters()
 const props = defineProps({
 	modelValue: Boolean,
 	posProfile: String,
+	posOpeningShift: String,
 	currency: {
 		type: String,
 		default: DEFAULT_CURRENCY,
@@ -692,6 +714,7 @@ const emit = defineEmits([
 	"load-draft",
 	"delete-draft",
 	"refresh-history",
+	"return-created",
 ])
 
 const show = ref(props.modelValue)
@@ -878,9 +901,22 @@ const showDeliveryNoteDialog = ref(false)
 const deliveryNoteTargetInvoice = ref(null)
 const deliveryNoteLoading = ref(false)
 
+const showReturnDialog = ref(false)
+const returnTargetInvoice = ref(null)
+
 function openDeliveryNoteDialog(invoice) {
 	deliveryNoteTargetInvoice.value = invoice
 	showDeliveryNoteDialog.value = true
+}
+
+function openReturnDialog(invoice) {
+	returnTargetInvoice.value = invoice
+	showReturnDialog.value = true
+}
+
+function handleReturnCreated(returnInvoice) {
+	emit("return-created", returnInvoice)
+	loadHistoryPage(true)
 }
 
 async function handleDeliveryNoteConfirm(address) {
