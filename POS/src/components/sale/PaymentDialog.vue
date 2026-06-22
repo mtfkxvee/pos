@@ -2134,6 +2134,14 @@ watch(show, (newVal) => {
 		showLoyaltyConfirm.value = false
 		_clearPayOnAccountWarning()
 
+		// If payment methods failed to preload (e.g. network hiccup), retry now
+		if (paymentMethods.value.length === 0 && !loadingPaymentMethods.value) {
+			loadPaymentMethods()
+		} else if (paymentMethods.value.length > 0 && !lastSelectedMethod.value) {
+			const defaultMethod = paymentMethods.value.find((m) => m.default)
+			lastSelectedMethod.value = defaultMethod || paymentMethods.value[0]
+		}
+
 		// Set default delivery date to today for Sales Orders
 		deliveryDate.value = isSalesOrder.value ? today : ""
 		// Reset remarks
