@@ -166,6 +166,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	// Pinned items state - per POS Profile, persisted server-side
 	const pinnedItems = ref(new Set())
 	const pinnedItemDetails = ref([]) // Full item objects for pinned codes
+	const pinnedItemsVersion = ref(0) // bumped whenever pinned items change, forces filteredItems recompute
 
 	// Pinned categories (item groups) state - per POS Profile, persisted server-side
 	const pinnedCategories = ref(new Set())
@@ -558,6 +559,11 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 	}
 
 	const filteredItems = computed(() => {
+		// Always read pinnedItemsVersion so Vue tracks it as a dependency even
+		// when allItems is still empty (early-exit path). This guarantees the
+		// computed re-runs when pinned items finish loading after a hard refresh.
+		const _pinVer = pinnedItemsVersion.value // eslint-disable-line no-unused-vars
+
 		// Step 1: Determine source items (search results or all items)
 		const sourceItems = searchTerm.value?.trim()
 			? searchResults.value
@@ -1918,6 +1924,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		if (!profile) {
 			pinnedItems.value = new Set()
 			pinnedItemDetails.value = []
+			pinnedItemsVersion.value += 1
 			return
 		}
 		try {
@@ -1926,6 +1933,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			})
 			const list = result?.message || result || []
 			pinnedItems.value = new Set(list)
+			pinnedItemsVersion.value += 1
 
 			if (list.length > 0) {
 				// Fetch full item details so pinned items appear at top even before lazy load reaches them
@@ -1934,6 +1942,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					{ pos_profile: profile, item_codes: JSON.stringify(list) },
 				)
 				pinnedItemDetails.value = detailsResult?.message || detailsResult || []
+				pinnedItemsVersion.value += 1
 				if (pinnedItemDetails.value.length > 0) {
 					registerItems(pinnedItemDetails.value, registeredAllItems)
 				}
@@ -1956,6 +1965,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			const data = result?.message || result || {}
 			const list = data.pinned_items || []
 			pinnedItems.value = new Set(list)
+			pinnedItemsVersion.value += 1
 
 			// Re-fetch details to reflect updated pin list
 			if (list.length > 0) {
@@ -1964,6 +1974,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					{ pos_profile: profile, item_codes: JSON.stringify(list) },
 				)
 				pinnedItemDetails.value = detailsResult?.message || detailsResult || []
+				pinnedItemsVersion.value += 1
 				if (pinnedItemDetails.value.length > 0) {
 					registerItems(pinnedItemDetails.value, registeredAllItems)
 				}
