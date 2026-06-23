@@ -883,7 +883,7 @@ const {
 } = storeToRefs(itemStore)
 
 function togglePin(item) {
-	itemStore.togglePinnedItem(item.item_code)
+	itemStore.togglePinnedItem(item.item_code, item)
 }
 
 function togglePinCategory(itemGroup) {

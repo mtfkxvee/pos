@@ -47,7 +47,10 @@ def get_pinned_item_details(pos_profile, item_codes):
 
     results = []
     for code in item_codes:
-        items = _get_items(pos_profile=pos_profile, search_term=code, limit=10)
+        # Escape LIKE wildcards in the item_code so the text-search LIKE query
+        # matches the exact code rather than treating % or _ as wildcards.
+        escaped = code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        items = _get_items(pos_profile=pos_profile, search_term=escaped, limit=50)
         match = next((i for i in (items or []) if i.get("item_code") == code), None)
         if match:
             results.append(match)

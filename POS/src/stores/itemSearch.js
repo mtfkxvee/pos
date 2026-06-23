@@ -1954,7 +1954,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		}
 	}
 
-	async function togglePinnedItem(item_code) {
+	async function togglePinnedItem(item_code, itemObject = null) {
 		const profile = posProfile.value
 		if (!profile || !item_code) return
 		try {
@@ -1965,22 +1965,38 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			const data = result?.message || result || {}
 			const list = data.pinned_items || []
 			pinnedItems.value = new Set(list)
-			pinnedItemsVersion.value += 1
 
-			// Re-fetch details to reflect updated pin list
 			if (list.length > 0) {
-				const detailsResult = await call(
-					"pos_next.api.pinned_items.get_pinned_item_details",
-					{ pos_profile: profile, item_codes: JSON.stringify(list) },
-				)
-				pinnedItemDetails.value = detailsResult?.message || detailsResult || []
-				pinnedItemsVersion.value += 1
-				if (pinnedItemDetails.value.length > 0) {
-					registerItems(pinnedItemDetails.value, registeredAllItems)
+				const isPinned = list.includes(item_code)
+				if (isPinned && itemObject) {
+					// Item was just pinned and we already have the full object — add
+					// it to pinnedItemDetails immediately without an extra API call.
+					// This is critical for items on page 2+ that aren't in allItems.
+					const existing = pinnedItemDetails.value.filter(
+						(i) => i.item_code !== item_code,
+					)
+					pinnedItemDetails.value = [itemObject, ...existing]
+					registerItems([itemObject], registeredAllItems)
+				} else if (!isPinned) {
+					// Item was unpinned — remove from details
+					pinnedItemDetails.value = pinnedItemDetails.value.filter(
+						(i) => i.item_code !== item_code,
+					)
+				} else {
+					// Pinned but no local object — fall back to server fetch
+					const detailsResult = await call(
+						"pos_next.api.pinned_items.get_pinned_item_details",
+						{ pos_profile: profile, item_codes: JSON.stringify(list) },
+					)
+					pinnedItemDetails.value = detailsResult?.message || detailsResult || []
+					if (pinnedItemDetails.value.length > 0) {
+						registerItems(pinnedItemDetails.value, registeredAllItems)
+					}
 				}
 			} else {
 				pinnedItemDetails.value = []
 			}
+			pinnedItemsVersion.value += 1
 		} catch (e) {
 			log.warn("Failed to toggle pinned item", e)
 		}
