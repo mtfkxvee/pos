@@ -1633,6 +1633,25 @@ def submit_invoice(invoice=None, data=None):
                     "POS Return Account"
                 )
 
+        # For regular invoices, ensure all item rows use the company default income
+        # account. Some items have income_account = 'Retur Penjualan' in tabItem
+        # Default which ERPNext picks up automatically — for non-return transactions
+        # this posts revenue to the wrong GL account.
+        if not invoice_doc.get("is_return") and invoice_doc.get("company"):
+            try:
+                company_income_account = frappe.get_cached_value(
+                    "Company", invoice_doc.company, "default_income_account"
+                )
+                if company_income_account:
+                    for item in invoice_doc.get("items", []):
+                        if item.income_account != company_income_account:
+                            item.income_account = company_income_account
+            except Exception as e:
+                frappe.log_error(
+                    f"POS Invoice: failed to normalize income_account: {e}",
+                    "POS Income Account Override"
+                )
+
         # Copy accounting dimensions from POS Profile if not already set
         if pos_profile and not invoice_doc.get("branch"):
             try:
