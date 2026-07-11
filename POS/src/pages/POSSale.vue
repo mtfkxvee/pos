@@ -2499,8 +2499,8 @@ async function handleOptionSelected(option) {
 					qty: qty,
 					uom: option.uom,
 				});
-				rate = itemDetails.price_list_rate || itemDetails.rate;
-				price_list_rate = itemDetails.price_list_rate;
+				rate = itemDetails.price_list_rate || itemDetails.rate || option.rate || 0;
+				price_list_rate = itemDetails.price_list_rate || option.rate || 0;
 			}
 
 			const itemToAdd = {
