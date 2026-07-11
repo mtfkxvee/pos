@@ -1709,11 +1709,16 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			uom: newUom,
 		})
 
+		const localRate =
+			cartItem.uom_prices?.[newUom] ||
+			(cartItem.uom_prices?.[cartItem.stock_uom]
+				? cartItem.uom_prices[cartItem.stock_uom] * (uomData?.conversion_factor || 1)
+				: null)
 		cartItem.uom = newUom
 		cartItem.conversion_factor =
 			uomData?.conversion_factor || itemDetails.conversion_factor || 1
-		cartItem.rate = itemDetails.price_list_rate || itemDetails.rate
-		cartItem.price_list_rate = itemDetails.price_list_rate
+		cartItem.rate = itemDetails.price_list_rate || itemDetails.rate || localRate || 0
+		cartItem.price_list_rate = itemDetails.price_list_rate || localRate || 0
 	}
 
 	/**
