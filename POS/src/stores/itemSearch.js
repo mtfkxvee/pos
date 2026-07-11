@@ -1726,7 +1726,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		}
 	}
 
-	async function searchItems(term) {
+	async function searchItems(term, immediate = false) {
 		// Clear previous debounce timer
 		if (searchDebounceTimer) {
 			clearTimeout(searchDebounceTimer)
@@ -1739,7 +1739,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			return
 		}
 
-		// Debounce search - wait 300ms after user stops typing
+		// Debounce search — 0ms for scanner input, 400ms for manual typing
+		const delay = immediate ? 0 : 400
 		return new Promise((resolve) => {
 			searchDebounceTimer = setTimeout(async () => {
 				searching.value = true
@@ -1819,7 +1820,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				} finally {
 					searching.value = false
 				}
-			}, performanceConfig.get("searchDebounce")) // Reactive: auto-adjusted 500ms/300ms/150ms based on device
+			}, delay)
 		})
 	}
 
@@ -1867,12 +1868,12 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		}
 	}
 
-	function setSearchTerm(term) {
+	function setSearchTerm(term, immediate = false) {
 		searchTerm.value = term
 
 		// Trigger server-side search when term is entered
 		if (term && term.trim().length > 0) {
-			searchItems(term)
+			searchItems(term, immediate)
 		} else {
 			// Clear search results when term is cleared
 			setSearchResults([])

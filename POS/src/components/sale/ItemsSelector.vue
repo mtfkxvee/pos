@@ -1225,7 +1225,7 @@ function handleKeyDown(event) {
 // Handle search input with instant reactivity
 function handleSearchInput(event) {
 	const value = event.target.value
-	itemStore.setSearchTerm(value)
+	itemStore.setSearchTerm(value, scannerInputDetected.value)
 
 	// Clear any existing timer
 	if (autoSearchTimer.value) {
