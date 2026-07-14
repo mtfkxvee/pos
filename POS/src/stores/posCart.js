@@ -148,6 +148,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	// the cashier sees/confirms the grand total and the moment submitInvoice
 	// captures it, causing a mismatch (e.g. displayed 95,000 vs submitted 94,100).
 	const checkoutLocked = ref(false)
+	const valuationWarning = ref(null) // { item_name, rate, valuation_rate, onConfirm, onCancel }
 	const currentDraftId = ref(null)
 	const currentDraftIsServer = ref(false)
 	const targetDoctype = ref("Sales Invoice")
@@ -217,6 +218,19 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	const hasCustomer = computed(() => !!customer.value)
 
 	// Actions
+
+	function showValuationWarning(item_name, rate, valuation_rate) {
+		return new Promise((resolve) => {
+			valuationWarning.value = {
+				item_name,
+				rate,
+				valuation_rate,
+				onConfirm: () => { valuationWarning.value = null; resolve(true) },
+				onCancel: () => { valuationWarning.value = null; resolve(false) },
+			}
+		})
+	}
+
 	function addItem(item, qty = 1, autoAdd = false, currentProfile = null) {
 		// Check stock availability before adding to cart
 		// Skip validation for batch/serial items - they have their own validation in the dialog
@@ -265,6 +279,20 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					throw new Error(errorMsg.replace("Item", itemType))
 				}
 			}
+		}
+
+		// Check valuation rate — warn if selling below cost
+		const itemRate = item.rate || 0
+		const valRate = item.valuation_rate || 0
+		if (valRate > 0 && itemRate < valRate) {
+			valuationWarning.value = {
+				item_name: item.item_name,
+				rate: itemRate,
+				valuation_rate: valRate,
+				onConfirm: () => { valuationWarning.value = null; addItemToInvoice(item, qty) },
+				onCancel: () => { valuationWarning.value = null },
+			}
+			return
 		}
 
 		// Add item to cart - no toast notification for performance
@@ -1677,48 +1705,55 @@ export const usePOSCartStore = defineStore("posCart", () => {
 	 */
 	async function applyUomChange(cartItem, newUom, qty) {
 		const uomData = cartItem.item_uoms?.find((u) => u.uom === newUom)
+		let newRate, newPriceListRate, newConversionFactor
 
 		if (offlineState.isOffline) {
-			cartItem.uom = newUom
-			cartItem.conversion_factor = uomData?.conversion_factor || 1
-
-			// Try to get price from pre-cached uom_prices
+			newConversionFactor = uomData?.conversion_factor || 1
 			if (cartItem.uom_prices && newUom in cartItem.uom_prices) {
-				cartItem.rate = cartItem.uom_prices[newUom]
-				cartItem.price_list_rate = cartItem.uom_prices[newUom]
+				newRate = cartItem.uom_prices[newUom]
+				newPriceListRate = newRate
 			} else if (
 				cartItem.stock_uom &&
 				cartItem.uom_prices &&
 				cartItem.stock_uom in cartItem.uom_prices
 			) {
-				// Fallback to calculate from stock UOM price * conversion factor
 				const basePrice = cartItem.uom_prices[cartItem.stock_uom]
-				cartItem.rate = basePrice * cartItem.conversion_factor
-				cartItem.price_list_rate = cartItem.rate
+				newRate = basePrice * newConversionFactor
+				newPriceListRate = newRate
+			} else {
+				newRate = cartItem.rate || 0
+				newPriceListRate = cartItem.price_list_rate || 0
 			}
-
-			// In offline mode, we cannot reliably evaluate pricing rules dynamically (handled during sync)
-			return
+		} else {
+			const itemDetails = await getItemDetailsResource.submit({
+				item_code: cartItem.item_code,
+				pos_profile: posProfile.value,
+				customer: customer.value?.name || customer.value,
+				qty,
+				uom: newUom,
+			})
+			const localRate =
+				cartItem.uom_prices?.[newUom] ||
+				(cartItem.uom_prices?.[cartItem.stock_uom]
+					? cartItem.uom_prices[cartItem.stock_uom] * (uomData?.conversion_factor || 1)
+					: null)
+			newRate = itemDetails.price_list_rate || itemDetails.rate || localRate || 0
+			newPriceListRate = itemDetails.price_list_rate || localRate || 0
+			newConversionFactor = uomData?.conversion_factor || itemDetails.conversion_factor || 1
 		}
 
-		const itemDetails = await getItemDetailsResource.submit({
-			item_code: cartItem.item_code,
-			pos_profile: posProfile.value,
-			customer: customer.value?.name || customer.value,
-			qty,
-			uom: newUom,
-		})
+		// Check valuation rate before applying mutation
+		const valRate = cartItem.valuation_rate || 0
+		if (valRate > 0 && newRate < valRate) {
+			const confirmed = await showValuationWarning(cartItem.item_name, newRate, valRate)
+			if (!confirmed) return false // user cancelled — leave UOM unchanged
+		}
 
-		const localRate =
-			cartItem.uom_prices?.[newUom] ||
-			(cartItem.uom_prices?.[cartItem.stock_uom]
-				? cartItem.uom_prices[cartItem.stock_uom] * (uomData?.conversion_factor || 1)
-				: null)
 		cartItem.uom = newUom
-		cartItem.conversion_factor =
-			uomData?.conversion_factor || itemDetails.conversion_factor || 1
-		cartItem.rate = itemDetails.price_list_rate || itemDetails.rate || localRate || 0
-		cartItem.price_list_rate = itemDetails.price_list_rate || localRate || 0
+		cartItem.conversion_factor = newConversionFactor
+		cartItem.rate = newRate
+		cartItem.price_list_rate = newPriceListRate
+		return true
 	}
 
 	/**
@@ -1740,8 +1775,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				return
 			}
 
-			// Apply UOM change
-			await applyUomChange(cartItem, newUom, cartItem.quantity)
+			// Apply UOM change (returns false if user cancelled valuation warning)
+			const applied = await applyUomChange(cartItem, newUom, cartItem.quantity)
+			if (applied === false) return
 			recalculateItem(cartItem)
 			rebuildIncrementalCache()
 			showSuccess(__("Unit changed to {0}", [newUom]))
@@ -2311,6 +2347,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		removePayment,
 		clearPayments,
 		updatePayment,
+
+		// Valuation warning
+		valuationWarning,
 
 		// Utilities
 		cancelPendingOfferProcessing: () => {

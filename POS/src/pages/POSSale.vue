@@ -663,6 +663,9 @@
 				@warehouse-changed="handleWarehouseChanged"
 			/>
 
+			<!-- Valuation Rate Warning -->
+			<ValuationWarningDialog />
+
 			<!-- Stock Lookup Dialog (Products Menu) -->
 			<WarehouseAvailabilityDialog
 				v-model="showStockLookup"
@@ -1079,6 +1082,7 @@ import PaymentDialog from "@/components/sale/PaymentDialog.vue";
 import DiscountAuthDialog from "@/components/sale/DiscountAuthDialog.vue";
 import PromotionManagement from "@/components/sale/PromotionManagement.vue";
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
+import ValuationWarningDialog from "@/components/sale/ValuationWarningDialog.vue";
 import WarehouseAvailabilityDialog from "@/components/sale/WarehouseAvailabilityDialog.vue";
 import POSSettings from "@/components/settings/POSSettings.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";

@@ -26,6 +26,7 @@ ITEM_RESULT_FIELDS = [
 	"variant_of",
 	"custom_company",
 	"disabled",
+	"valuation_rate",
 ]
 
 ITEM_RESULT_COLUMNS = ",\n\t".join(ITEM_RESULT_FIELDS)
