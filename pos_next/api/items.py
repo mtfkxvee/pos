@@ -26,7 +26,6 @@ ITEM_RESULT_FIELDS = [
 	"variant_of",
 	"custom_company",
 	"disabled",
-	"valuation_rate",
 ]
 
 ITEM_RESULT_COLUMNS = ",\n\t".join(ITEM_RESULT_FIELDS)
@@ -1102,12 +1101,15 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 
 		where_clause = " AND ".join(conditions)
 
+		bin_warehouse = pos_profile_doc.warehouse or ""
 		query = f"""
 			SELECT {item_columns},
+				COALESCE(MAX(bin.valuation_rate), 0) as valuation_rate,
 				GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 			FROM `tabItem` i
 			LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
+			LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
 			WHERE {where_clause}
 			GROUP BY {group_by_columns}
 			ORDER BY {order_by}
@@ -1116,7 +1118,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 
 		params.extend(score_params)
 		params.extend([limit, start])
-		items = frappe.db.sql(query, tuple(params), as_dict=1)
+		items = frappe.db.sql(query, tuple([bin_warehouse] + params), as_dict=1)
 
 		# Prepare maps for enrichment
 		item_codes = [item["item_code"] for item in items]
@@ -1403,13 +1405,16 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		item_columns = ",\n\t".join([f"i.{col}" for col in ITEM_RESULT_FIELDS])
 		group_by_columns = ", ".join([f"i.{col.split(' as ')[0]}" for col in ITEM_RESULT_FIELDS])
 
+		bin_warehouse = pos_profile_doc.warehouse or ""
 		where_clause = " AND ".join(conditions)
 		query = f"""
 			SELECT {item_columns},
+				COALESCE(MAX(bin.valuation_rate), 0) as valuation_rate,
 				GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 			FROM `tabItem` i
 			LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
+			LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
 			WHERE {where_clause}
 			GROUP BY {group_by_columns}
 			ORDER BY i.item_name ASC
@@ -1417,7 +1422,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		"""
 		params.append(int(limit))
 		params.append(int(start))
-		items = frappe.db.sql(query, tuple(params), as_dict=1)
+		items = frappe.db.sql(query, tuple([bin_warehouse] + params), as_dict=1)
 
 		if not items:
 			return []

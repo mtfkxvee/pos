@@ -282,9 +282,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		}
 
 		// Check valuation rate — warn if selling below cost
+		// Skip for returns (negative qty), free items, and items without cost data
 		const itemRate = item.rate || 0
 		const valRate = item.valuation_rate || 0
-		if (valRate > 0 && itemRate < valRate) {
+		if (valRate > 0 && itemRate < valRate && qty > 0 && !item.is_free_item) {
 			valuationWarning.value = {
 				item_name: item.item_name,
 				rate: itemRate,
