@@ -1104,7 +1104,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 		bin_warehouse = pos_profile_doc.warehouse or ""
 		query = f"""
 			SELECT {item_columns},
-				COALESCE(MAX(bin.valuation_rate), 0) as valuation_rate,
+				COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
 				GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 			FROM `tabItem` i
@@ -1409,7 +1409,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		where_clause = " AND ".join(conditions)
 		query = f"""
 			SELECT {item_columns},
-				COALESCE(MAX(bin.valuation_rate), 0) as valuation_rate,
+				COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
 				GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 			FROM `tabItem` i
