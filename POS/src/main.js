@@ -237,4 +237,42 @@ async function initializeApp() {
 	)
 }
 
-initializeApp()
+// Top-level guard: if Vue fails to initialize for any reason (missing globals,
+// chunk load error, etc.) show a minimal retry UI instead of a blank screen.
+initializeApp().catch((error) => {
+	console.error("Fatal: POS app initialization failed", error)
+
+	const el = document.getElementById("app")
+	if (!el) return
+
+	el.innerHTML = `
+		<div style="
+			display:flex; flex-direction:column; align-items:center;
+			justify-content:center; height:100vh; font-family:sans-serif;
+			background:#F9FAFB; color:#111827; text-align:center; padding:24px;
+		">
+			<svg width="48" height="48" fill="none" stroke="#6B7280" stroke-width="1.5"
+				viewBox="0 0 24 24" style="margin-bottom:16px;">
+				<path stroke-linecap="round" stroke-linejoin="round"
+					d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0
+					2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697
+					16.126ZM12 15.75h.007v.008H12v-.008Z"/>
+			</svg>
+			<h2 style="margin:0 0 8px; font-size:18px; font-weight:600;">
+				POS gagal memuat
+			</h2>
+			<p style="margin:0 0 24px; color:#6B7280; font-size:14px; max-width:320px;">
+				Server mungkin sedang tidak tersedia. Data transaksi Anda tetap aman.
+			</p>
+			<button
+				onclick="location.reload()"
+				style="
+					padding:10px 28px; background:#4F46E5; color:#fff;
+					border:none; border-radius:8px; font-size:14px;
+					font-weight:600; cursor:pointer; letter-spacing:.01em;
+				">
+				Coba Lagi
+			</button>
+		</div>
+	`
+})

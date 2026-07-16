@@ -78,7 +78,12 @@ export default defineConfig({
 			scope: "/",
 			injectRegister: null,
 			injectManifest: {
-				globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+				// html is intentionally excluded: pos_next/public/pos/index.html is a
+				// Jinja template (frappe-ui jinjaBootData: true).  Precaching it raw
+				// causes "Unexpected token '%'" when the SW serves it without Frappe's
+				// Jinja rendering — blank white screen.  Instead, sw.js caches the
+				// server-rendered version at runtime (see RENDERED_SHELL_CACHE logic).
+				globPatterns: ["**/*.{js,css,ico,png,svg,woff,woff2}"],
 				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
 			},
 			includeAssets: ["favicon.png", "icon.svg", "icon-maskable.svg"],

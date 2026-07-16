@@ -1,13 +1,28 @@
 /**
  * Custom Service Worker — injectManifest mode
  *
- * Key fix over the previous generateSW approach: Workbox's built-in
- * navigateFallback only activates on network *errors* (throws), not on
- * 5xx HTTP responses (502 "Bad Gateway" etc.).  When Nginx is up but
- * Frappe is down the old SW would return the 502 page to the browser,
- * causing a blank white screen.  This custom navHandler falls back to
- * the cached app shell whenever the server returns 5xx, so the Vue app
- * always loads regardless of server status.
+ * Why this exists (the blank-white-screen problem):
+ * -------------------------------------------------
+ * frappe-ui with `jinjaBootData: true` generates pos_next/public/pos/index.html
+ * with raw Jinja template tags:
+ *
+ *   {% for key in boot %}
+ *   window["{{ key }}"] = {{ boot[key] | tojson }};
+ *   {% endfor %}
+ *
+ * Frappe's HTTP server renders those tags before delivering the page.
+ * If `html` is included in VitePWA's globPatterns, the SW precaches the
+ * *raw* unrendered file.  Serving it offline causes:
+ *
+ *   Uncaught SyntaxError: Unexpected token '%'
+ *   → Vue app fails to initialize → blank white screen
+ *
+ * Two-layer fix:
+ * 1. `html` is removed from globPatterns in vite.config.js (not precached).
+ * 2. This file caches the server-rendered HTML at runtime (RENDERED_SHELL_CACHE)
+ *    and serves it when the server is down.  If the user has never been online
+ *    with this SW version, a hardcoded fallback HTML (no Jinja tags) is served
+ *    instead, loading the same JS/CSS chunks from the precache.
  */
 
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching"
@@ -17,7 +32,6 @@ import { CacheableResponsePlugin } from "workbox-cacheable-response"
 import { ExpirationPlugin } from "workbox-expiration"
 
 // ── Auto-update ───────────────────────────────────────────────────────────────
-// VitePWA (autoUpdate mode) posts SKIP_WAITING when a new SW is waiting.
 self.addEventListener("message", (event) => {
 	if (event.data?.type === "SKIP_WAITING") self.skipWaiting()
 })
@@ -26,21 +40,105 @@ self.addEventListener("activate", (event) => {
 	event.waitUntil(self.clients.claim())
 })
 
-// ── Precache all build assets ─────────────────────────────────────────────────
-// self.__WB_MANIFEST is replaced by VitePWA at build time with the full asset list.
+// ── Precache build assets (html excluded — see module comment) ─────────────────
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
 
 // ── Navigation handler ────────────────────────────────────────────────────────
-// Serves the cached app shell (index.html) even when the server returns a
-// "server down" status code (502, 503, 520 …).  Without this custom handler
-// those responses would be forwarded to the browser as-is, showing a blank page.
-
-const APP_SHELL_URL = "/assets/pos_next/pos/index.html"
+// Cache name for the last successfully Jinja-rendered HTML page.
+const RENDERED_SHELL_CACHE = "pos-rendered-shell-v1"
+// Key used to store/retrieve the rendered shell (always the root POS URL).
+const RENDERED_SHELL_KEY = "/pos"
+// HTTP status codes that indicate Frappe/Gunicorn is down but nginx is up.
 const SERVER_DOWN_STATUSES = new Set([502, 503, 520, 521, 522, 523, 524])
+// Abort navigation fetch after this many ms to avoid indefinite spinner.
 const NAV_TIMEOUT_MS = 10_000
 
+/**
+ * Build a minimal HTML document from the precache manifest.
+ *
+ * This is the "last resort" fallback used only when the user has NEVER
+ * successfully loaded the POS with this SW version (rendered-shell cache is
+ * empty).  It sets the same window globals that Frappe's Jinja rendering
+ * would inject, loads all precached CSS/JS, and lets Vue boot normally.
+ *
+ * The window globals here are intentionally minimal — the Vue app reads most
+ * settings from localStorage/IndexedDB after boot and will override these.
+ */
+function buildOfflineFallbackHtml() {
+	const manifest = /** @type {Array<{url:string}>} */ (self.__WB_MANIFEST || [])
+
+	// Collect CSS files from the build asset folder
+	const cssLinks = manifest
+		.filter((e) => {
+			const u = String(e.url)
+			return u.includes("/assets/") && u.endsWith(".css")
+		})
+		.map((e) => `  <link rel="stylesheet" href="${e.url}">`)
+		.join("\n")
+
+	// Collect the main JS entry chunk.
+	// Vite names the main entry after the HTML stem: index-HASH.js or main-HASH.js.
+	// Worker bundles (offlineWorker etc.) are excluded.
+	const jsEntry = manifest
+		.filter((e) => {
+			const u = String(e.url)
+			return (
+				u.includes("/assets/") &&
+				u.endsWith(".js") &&
+				!u.includes("/workers/") &&
+				/\/(index|main)-[^/]+\.js$/.test(u)
+			)
+		})
+		.map((e) => `  <script type="module" src="${e.url}"></script>`)
+		.join("\n")
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<meta name="theme-color" content="#4F46E5">
+<title>NURSA POS</title>
+<script>
+/* Minimal boot globals — replaces Frappe Jinja {% for key in boot %} injection.
+   The Vue app reads these at startup; cached POS settings (localStorage /
+   IndexedDB) take over after the first API round-trip succeeds. */
+window["lang"] = "en";
+window["sysdefaults"] = {
+  "currency": "IDR",
+  "date_format": "dd-mm-yyyy",
+  "time_format": "HH:mm:ss",
+  "float_precision": 3,
+  "currency_precision": 2
+};
+window["sitename"] = location.hostname;
+window["frappe"] = window["frappe"] || {};
+/* Read CSRF token from session cookie so API calls stay authenticated. */
+(function () {
+  try {
+    var jar = {};
+    document.cookie.split("; ").filter(Boolean).forEach(function (p) {
+      var kv = p.split("=");
+      jar[decodeURIComponent(kv[0])] = decodeURIComponent(kv.slice(1).join("="));
+    });
+    window["csrf_token"] = jar["csrf_token"] || "unauthorized";
+  } catch (e) {
+    window["csrf_token"] = "unauthorized";
+  }
+}());
+</script>
+${cssLinks}
+</head>
+<body>
+<div id="app"></div>
+${jsEntry}
+</body>
+</html>`
+}
+
 async function navHandler({ request }) {
+	// ── Try network first ───────────────────────────────────────────────────
 	try {
 		const controller = new AbortController()
 		const timerId = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS)
@@ -51,24 +149,41 @@ async function navHandler({ request }) {
 			clearTimeout(timerId)
 		}
 
-		// Live server response is healthy — pass it through.
-		if (response.ok) return response
-
-		// Server returned a "server down" code — fall through to cached shell.
-		if (!SERVER_DOWN_STATUSES.has(response.status)) {
-			// Other non-OK responses (404, 401 …) pass through as-is.
+		if (response.ok) {
+			// Server is healthy and Jinja has rendered the HTML.
+			// Store the rendered copy so we can serve it when offline later.
+			caches
+				.open(RENDERED_SHELL_CACHE)
+				.then((cache) => cache.put(RENDERED_SHELL_KEY, response.clone()))
+				.catch(() => {})
 			return response
 		}
+
+		// Non-5xx error (e.g. 404): pass through as-is.
+		if (!SERVER_DOWN_STATUSES.has(response.status)) return response
+
+		// Fall through to offline path for 5xx server-down codes.
 	} catch {
-		// Network error or AbortError (timeout) — fall through to cached shell.
+		// Network failure or AbortError (timeout): fall through to offline path.
 	}
 
-	// Return cached app shell so the Vue SPA can boot and show an offline UI.
-	const cached = await caches.match(APP_SHELL_URL)
-	if (cached) return cached
+	// ── Offline path ────────────────────────────────────────────────────────
+	// 1. Serve the last cached rendered HTML (Jinja already processed — safe).
+	try {
+		const cache = await caches.open(RENDERED_SHELL_CACHE)
+		const cached = await cache.match(RENDERED_SHELL_KEY)
+		if (cached) return cached
+	} catch {
+		// Cache API failure — continue to hardcoded fallback.
+	}
 
-	// Last resort: generic error (the precache should always have index.html).
-	return Response.error()
+	// 2. No cached rendered HTML (user has never loaded the POS online with
+	//    this SW version).  Serve the hardcoded fallback that bootstraps Vue
+	//    without any Jinja tags.
+	return new Response(buildOfflineFallbackHtml(), {
+		status: 200,
+		headers: { "Content-Type": "text/html; charset=utf-8" },
+	})
 }
 
 registerRoute(
@@ -102,7 +217,7 @@ registerRoute(
 	}),
 )
 
-// POS static assets (CacheFirst, 30 days)
+// POS static assets — JS, CSS, images bundled by Vite (CacheFirst, 30 days)
 registerRoute(
 	/\/assets\/pos_next\/pos\/.*/i,
 	new CacheFirst({
@@ -113,7 +228,7 @@ registerRoute(
 	}),
 )
 
-// Product images (StaleWhileRevalidate, 7 days)
+// Product images uploaded to Frappe /files/ (StaleWhileRevalidate, 7 days)
 registerRoute(
 	/\/files\/.*\.(jpg|jpeg|png|gif|webp|svg)$/i,
 	new StaleWhileRevalidate({
