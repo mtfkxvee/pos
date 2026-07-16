@@ -145,8 +145,12 @@
 							'p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors relative group touch-manipulation',
 							isSyncing ? 'animate-pulse' : ''
 						]"
-						:title="isOffline ? __('Offline ({0} pending)', [pendingInvoicesCount]) : __('Online - Click to sync')"
-						:aria-label="isOffline ? __('Offline mode active') : __('Online mode active')"
+						:title="isOffline
+							? (offlineReason
+								? (pendingInvoicesCount > 0 ? offlineReason + ' · ' + pendingInvoicesCount + ' pending' : offlineReason)
+								: __('Offline ({0} pending)', [pendingInvoicesCount]))
+							: __('Online - Click to sync')"
+						:aria-label="isOffline ? (offlineReason || __('Offline mode active')) : __('Online mode active')"
 					>
 						<svg
 							v-if="!isOffline"
@@ -432,6 +436,10 @@ const props = defineProps({
 	isOffline: {
 		type: Boolean,
 		default: false,
+	},
+	offlineReason: {
+		type: String,
+		default: "",
 	},
 	isSyncing: {
 		type: Boolean,

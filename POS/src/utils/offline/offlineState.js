@@ -238,6 +238,10 @@ class NetworkMonitor {
 		const startTime = performance.now()
 		let success = false
 		let latency = 0
+		// true when we got an HTTP response but with a server-error status (5xx)
+		let serverReturnedError = false
+		// Statuses indicating server process is down (Nginx up, Frappe down)
+		const SERVER_DOWN_STATUSES = new Set([502, 503, 520, 521, 522, 523, 524])
 
 		// Try ping with retries
 		for (let attempt = 1; attempt <= CONFIG.PING_RETRY_COUNT; attempt++) {
@@ -269,11 +273,19 @@ class NetworkMonitor {
 						text.length < 100
 					) {
 						success = true
+						serverReturnedError = false
 						break
 					} else {
 						// Possible captive portal
 						log.warn("Possible captive portal detected")
 					}
+				} else if (SERVER_DOWN_STATUSES.has(response.status)) {
+					// Server process is down (e.g. Frappe returned 502 via Nginx).
+					// Don't retry — declare offline immediately without waiting for
+					// the normal consecutive-failure threshold.
+					serverReturnedError = true
+					log.warn(`Ping returned ${response.status} — server is down`)
+					break
 				}
 			} catch (error) {
 				if (error.name === "AbortError") {
@@ -309,7 +321,7 @@ class NetworkMonitor {
 					log.info(
 						`Server online (${CONFIG.ONLINE_THRESHOLD} consecutive successes, latency: ${latency}ms)`,
 					)
-					offlineState.setServerOnline(true)
+					offlineState.setServerOnline(true, { serverDown: false })
 					this._broadcastState(offlineState.getState())
 				}
 			}
@@ -317,13 +329,23 @@ class NetworkMonitor {
 			this._consecutiveSuccesses = 0
 			this._consecutiveFailures++
 
-			// Check if we've reached offline threshold
-			if (this._consecutiveFailures >= CONFIG.OFFLINE_THRESHOLD) {
+			// 5xx response: declare server down immediately (no threshold needed).
+			// Network errors/timeouts still use the normal threshold to avoid
+			// false positives from a single flaky packet.
+			if (serverReturnedError) {
+				if (offlineState._serverOnline || !offlineState._isServerDown) {
+					log.warn("Server returned 5xx — marking as server down immediately")
+					offlineState.setServerOnline(false, { serverDown: true })
+					this._broadcastState(offlineState.getState())
+				}
+				this._backoffMultiplier = Math.min(this._backoffMultiplier * 1.5, 10)
+			} else if (this._consecutiveFailures >= CONFIG.OFFLINE_THRESHOLD) {
+				// Normal network failure threshold reached
 				if (offlineState._serverOnline) {
 					log.warn(
 						`Server offline (${CONFIG.OFFLINE_THRESHOLD} consecutive failures)`,
 					)
-					offlineState.setServerOnline(false)
+					offlineState.setServerOnline(false, { serverDown: false })
 					this._broadcastState(offlineState.getState())
 				}
 				// Increase backoff
@@ -387,6 +409,9 @@ class OfflineStateManager {
 		this._browserOnline =
 			typeof navigator !== "undefined" ? navigator.onLine : true
 		this._initialized = false
+		// True when server is reachable but returned a 5xx ("server process down")
+		// vs false when the network itself is down.
+		this._isServerDown = false
 
 		// Listeners for state changes
 		this._listeners = new Set()
@@ -468,6 +493,14 @@ class OfflineStateManager {
 			changed = true
 		}
 
+		if (
+			state.isServerDown !== undefined &&
+			this.isServerDown !== state.isServerDown
+		) {
+			this._isServerDown = state.isServerDown
+			changed = true
+		}
+
 		if (changed) {
 			this._notifyChange("cross-tab")
 		}
@@ -493,6 +526,7 @@ class OfflineStateManager {
 			manualOffline: this._manualOffline,
 			serverOnline: this._serverOnline,
 			browserOnline: this._browserOnline,
+			isServerDown: this.isServerDown,
 			source,
 			transition:
 				this._previousIsOffline !== currentIsOffline
@@ -556,6 +590,14 @@ class OfflineStateManager {
 	}
 
 	/**
+	 * True when internet is up but the server process is returning 5xx errors.
+	 * Use to show "Server sedang tidak tersedia" instead of "Tidak ada koneksi".
+	 */
+	get isServerDown() {
+		return this._browserOnline && !this._serverOnline && this._isServerDown
+	}
+
+	/**
 	 * Get manual offline state
 	 */
 	get manualOffline() {
@@ -602,13 +644,24 @@ class OfflineStateManager {
 	}
 
 	/**
-	 * Update server online status
+	 * Update server online status.
+	 * @param {boolean} isOnline
+	 * @param {{ silent?: boolean, serverDown?: boolean }} options
+	 *   serverDown — set true when we have an HTTP 5xx response (server process
+	 *   is running but Frappe is down), false when the network itself failed.
 	 */
-	setServerOnline(isOnline, { silent = false } = {}) {
+	setServerOnline(isOnline, { silent = false, serverDown = false } = {}) {
 		const newValue = !!isOnline
-		if (this._serverOnline === newValue) return
+		const changed = this._serverOnline !== newValue || this._isServerDown !== serverDown && !newValue
+
+		if (!changed) return
 
 		this._serverOnline = newValue
+		if (!newValue) {
+			this._isServerDown = serverDown
+		} else {
+			this._isServerDown = false
+		}
 
 		if (!silent) {
 			this._notifyChange("server")
@@ -663,6 +716,7 @@ class OfflineStateManager {
 			manualOffline: this._manualOffline,
 			serverOnline: this._serverOnline,
 			browserOnline: this._browserOnline,
+			isServerDown: this.isServerDown,
 			quality: this._networkMonitor.getQuality(),
 		}
 	}
@@ -743,6 +797,7 @@ export const toggleManualOffline = () => offlineState.toggleManualOffline()
 export const getOfflineState = () => offlineState.getState()
 export const checkConnectivity = () => offlineState.checkConnectivity()
 export const getConnectionQuality = () => offlineState.getConnectionQuality()
+export const getIsServerDown = () => offlineState.isServerDown
 
 // Auto-initialize when module loads (if in browser context)
 if (typeof window !== "undefined") {

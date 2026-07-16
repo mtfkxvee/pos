@@ -17,6 +17,7 @@
 				:user-name="userName"
 				:user-image="userImage"
 				:is-offline="offlineStore.isOffline"
+				:offline-reason="offlineReason"
 				:is-syncing="offlineStore.isSyncing"
 				:pending-invoices-count="offlineStore.pendingInvoicesCount"
 				:is-any-dialog-open="uiStore.isAnyDialogOpen"
@@ -1097,6 +1098,7 @@ import { session } from "@/data/session";
 import { useUserData } from "@/data/user";
 import { parseError } from "@/utils/errorHandler";
 import { offlineWorker } from "@/utils/offline/workerClient";
+import { offlineState } from "@/utils/offline/offlineState";
 import { cacheInvoiceHistory, getCachedInvoiceHistory } from "@/utils/offline/sync";
 import { generateOfflineInvoiceId } from "@/utils/offline/invoiceId";
 import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/printInvoice";
@@ -1165,6 +1167,13 @@ const appVersion = "2.0.21";
 
 // User data composable
 const { userName, userImage } = useUserData();
+
+// Offline reason text — used by POSHeader to distinguish "server down" from "no internet"
+const offlineReason = computed(() => {
+	if (!offlineStore.isOffline) return ""
+	if (offlineStore.isServerDown) return __("Server sedang tidak tersedia")
+	return __("Tidak ada koneksi internet")
+});
 
 // Locale composable for RTL support
 const { isRTL } = useLocale();
@@ -1537,7 +1546,14 @@ onMounted(async () => {
 	}
 
 	async function initPOS() {
-		const hasShift = await shiftStore.checkShift();
+		const { hasShift, serverReachable } = await shiftStore.checkShift();
+
+		// If checkShift fell back to cached data, tell offlineState immediately
+		// so the preload step below uses the correct code path without waiting
+		// for the background ping to complete (which has a 150 ms debounce).
+		if (!serverReachable) {
+			offlineState.setServerOnline(false)
+		}
 
 		if (!hasShift) {
 			uiStore.showOpenShiftDialog = true;
@@ -1560,7 +1576,9 @@ onMounted(async () => {
 
 		const backgroundOps = Promise.allSettled([
 			cartStore.setDefaultCustomer(),
-			offlineStore.isOffline
+			// Use the singleton's synchronous getter so we react immediately to
+			// server-down state set above, before the Pinia ref (150 ms debounce) catches up.
+			offlineState.isOffline
 				? offlineStore.checkOfflineCacheAvailability()
 				: offlineStore.preloadDataForOffline(shiftStore.currentProfile),
 			draftsStore.updateDraftsCount(),

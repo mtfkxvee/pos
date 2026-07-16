@@ -72,8 +72,15 @@ export default defineConfig({
 		}),
 		VitePWA({
 			registerType: "autoUpdate",
+			strategies: "injectManifest",
+			srcDir: "src",
+			filename: "sw.js",
 			scope: "/",
 			injectRegister: null,
+			injectManifest: {
+				globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+			},
 			includeAssets: ["favicon.png", "icon.svg", "icon-maskable.svg"],
 			manifest: {
 				name: "POSNext",
@@ -111,88 +118,6 @@ export default defineConfig({
 						purpose: "maskable",
 					},
 				],
-			},
-			workbox: {
-				inlineWorkboxRuntime: true,
-				globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
-				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 3 MB
-				navigateFallback: "/assets/pos_next/pos/index.html",
-				navigateFallbackAllowlist: [/^\/pos/],
-				navigateFallbackDenylist: [/^\/api/, /^\/app/],
-				runtimeCaching: [
-					{
-						urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "google-fonts-cache",
-							expiration: {
-								maxEntries: 10,
-								maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
-					{
-						urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "gstatic-fonts-cache",
-							expiration: {
-								maxEntries: 10,
-								maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
-					{
-						urlPattern: /\/assets\/pos_next\/pos\/.*/i,
-						handler: "CacheFirst",
-						options: {
-							cacheName: "pos-assets-cache",
-							expiration: {
-								maxEntries: 500,
-								maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-							},
-						},
-					},
-					// Cache product images with StaleWhileRevalidate for better UX
-					{
-						urlPattern: /\/files\/.*\.(jpg|jpeg|png|gif|webp|svg)$/i,
-						handler: "StaleWhileRevalidate",
-						options: {
-							cacheName: "product-images-cache",
-							expiration: {
-								maxEntries: 200, // Cache up to 200 product images
-								maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
-					{
-						urlPattern: /\/api\/.*/i,
-						handler: "NetworkFirst",
-						options: {
-							cacheName: "api-cache",
-							networkTimeoutSeconds: 10,
-							expiration: {
-								maxEntries: 100,
-								maxAgeSeconds: 60 * 60 * 24, // 24 hours
-							},
-							cacheableResponse: {
-								statuses: [0, 200],
-							},
-						},
-					},
-				],
-				cleanupOutdatedCaches: true,
-				skipWaiting: true,
-				clientsClaim: true,
 			},
 			devOptions: {
 				enabled: true,

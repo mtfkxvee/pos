@@ -45,6 +45,9 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 	/** Current offline status - synced with offlineState singleton */
 	const isOffline = ref(offlineState.isOffline)
 
+	/** True when internet is up but server process is returning 5xx errors */
+	const isServerDown = ref(offlineState.isServerDown)
+
 	/** Number of invoices pending sync */
 	const pendingInvoicesCount = ref(0)
 
@@ -79,6 +82,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 
 		// Update reactive state
 		isOffline.value = nowOffline
+		isServerDown.value = state.isServerDown || false
 		connectionQuality.value =
 			state.quality || offlineState.getConnectionQuality()
 
@@ -418,6 +422,7 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 	return {
 		// State
 		isOffline,
+		isServerDown,
 		pendingInvoicesCount,
 		isSyncing,
 		pendingInvoicesList,
