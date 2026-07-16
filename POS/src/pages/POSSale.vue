@@ -1570,17 +1570,28 @@ onMounted(async () => {
 			stockStore.setWarehouse(shiftStore.profileWarehouse);
 		}
 
+		// Fast-path: server is down — skip all server-dependent calls (settings,
+		// tax rules) and go straight to offline mode using cached IndexedDB data.
+		// This prevents another 10-second wait after checkShift already detected
+		// that the server is unreachable.
+		if (!serverReachable) {
+			await Promise.allSettled([
+				cartStore.setDefaultCustomer(),
+				offlineStore.checkOfflineCacheAvailability(),
+				draftsStore.updateDraftsCount(),
+			]);
+			_initializedProfile = shiftStore.profileName;
+			return;
+		}
+
+		// Server is reachable — normal initialization path.
 		// Fire independent operations in parallel while settings load.
 		// Settings must complete before tax rules, but the rest are independent.
 		const settingsPromise = posSettingsStore.loadSettings(shiftStore.profileName);
 
 		const backgroundOps = Promise.allSettled([
 			cartStore.setDefaultCustomer(),
-			// Use the singleton's synchronous getter so we react immediately to
-			// server-down state set above, before the Pinia ref (150 ms debounce) catches up.
-			offlineState.isOffline
-				? offlineStore.checkOfflineCacheAvailability()
-				: offlineStore.preloadDataForOffline(shiftStore.currentProfile),
+			offlineStore.preloadDataForOffline(shiftStore.currentProfile),
 			draftsStore.updateDraftsCount(),
 		]);
 

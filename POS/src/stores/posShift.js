@@ -96,11 +96,42 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 	async function checkShift() {
 		let serverReachable = true
 		try {
-			await checkOpeningShift.fetch()
+			// When cached shift data exists, race the fetch against a 3-second timeout.
+			// Without this, the SW's NetworkFirst 10-second timeout causes a blank loading
+			// screen for 10 s every time the server is down but the user has prior data.
+			const hasCachedData = !!localStorage.getItem("pos_shift_data")
+			const fetchPromise = checkOpeningShift.fetch()
+			if (hasCachedData) {
+				await Promise.race([
+					fetchPromise,
+					new Promise((_, rej) =>
+						setTimeout(() => rej(new Error("server_timeout")), 3000),
+					),
+				])
+			} else {
+				await fetchPromise
+			}
 		} catch {
-			// onError in useShift.js already loaded localStorage cache into shiftState.
-			// If we now have a cached shift, proceed offline — don't rethrow.
 			serverReachable = false
+			// If the 3-second timeout fired, onError in useShift.js may not have run yet
+			// (the actual fetch is still pending).  Load the cache manually so
+			// hasOpenShift.value is correct before we check it below.
+			if (!hasOpenShift.value) {
+				const raw = localStorage.getItem("pos_shift_data")
+				if (raw) {
+					try {
+						const data = JSON.parse(raw)
+						shiftState.value = {
+							pos_opening_shift: data.pos_opening_shift,
+							pos_profile: data.pos_profile,
+							company: data.company,
+							isOpen: true,
+							_initialElapsedMs: data._initialElapsedMs || 0,
+							_receivedAt: data._receivedAt || Date.now(),
+						}
+					} catch {}
+				}
+			}
 			if (!hasOpenShift.value) {
 				throw new Error("Tidak ada data shift (offline dan tidak ada cache)")
 			}
