@@ -99,43 +99,82 @@ const SERVER_DOWN_STATUSES = new Set([502, 503, 520, 521, 522, 523, 524])
 const NAV_TIMEOUT_MS = 10_000
 
 /**
- * Build a minimal HTML document from the precache manifest.
+ * Build a minimal HTML document to boot the Vue app when the server is down
+ * and no cached rendered shell is available.
  *
- * This is the "last resort" fallback used only when the user has NEVER
- * successfully loaded the POS with this SW version (rendered-shell cache is
- * empty).  It sets the same window globals that Frappe's Jinja rendering
- * would inject, loads all precached CSS/JS, and lets Vue boot normally.
- *
- * The window globals here are intentionally minimal — the Vue app reads most
- * settings from localStorage/IndexedDB after boot and will override these.
+ * Strategy (most-reliable first):
+ * 1. Scan the actual SW caches to find installed CSS/JS by their real absolute
+ *    URLs — avoids any ambiguity about how WB_MANIFEST formats its paths.
+ * 2. Fall back to WB_MANIFEST entries, normalising relative URLs to absolute.
+ * 3. If assets can't be found at all, still render a retry UI so the user
+ *    never sees a blank screen.
  */
-function buildOfflineFallbackHtml() {
-	const manifest = /** @type {Array<{url:string}>} */ (WB_MANIFEST || [])
+async function buildOfflineFallbackHtml() {
+	let cssUrls = []
+	let entryJsUrl = ""
 
-	// Collect CSS files from the build asset folder
-	const cssLinks = manifest
-		.filter((e) => {
-			const u = String(e.url)
-			return u.includes("/assets/") && u.endsWith(".css")
-		})
-		.map((e) => `  <link rel="stylesheet" href="${e.url}">`)
-		.join("\n")
+	// Step 1 — scan real caches (absolute URLs, no format ambiguity).
+	try {
+		const cacheNames = await caches.keys()
+		const allUrls = []
+		for (const name of cacheNames) {
+			if (name === RENDERED_SHELL_CACHE) continue
+			const cache = await caches.open(name)
+			const requests = await cache.keys()
+			for (const req of requests) allUrls.push(req.url)
+		}
 
-	// Collect the main JS entry chunk.
-	// Vite names the main entry after the HTML stem: index-HASH.js or main-HASH.js.
-	// Worker bundles (offlineWorker etc.) are excluded.
-	const jsEntry = manifest
-		.filter((e) => {
-			const u = String(e.url)
-			return (
-				u.includes("/assets/") &&
+		cssUrls = [
+			...new Set(
+				allUrls.filter(
+					(u) =>
+						u.includes("pos_next/pos") &&
+						u.endsWith(".css") &&
+						!u.includes("sw."),
+				),
+			),
+		]
+
+		entryJsUrl =
+			allUrls.find(
+				(u) =>
+					u.includes("pos_next/pos") &&
+					u.endsWith(".js") &&
+					!u.includes("/workers/") &&
+					!u.includes("sw.") &&
+					/\/index-[^/]+\.js/.test(u),
+			) || ""
+	} catch {
+		// Cache API unavailable — fall through to manifest.
+	}
+
+	// Step 2 — fall back to WB_MANIFEST (normalise relative URLs).
+	if (!entryJsUrl) {
+		const manifest = /** @type {Array<{url:string}>} */ (WB_MANIFEST || [])
+		for (const entry of manifest) {
+			const raw = String(entry.url)
+			// Normalise: if the manifest emits relative paths (no leading "/"),
+			// prepend the known asset base so the browser resolves them correctly.
+			const u = raw.startsWith("/") ? raw : `/assets/pos_next/pos/${raw}`
+			if (u.endsWith(".css") && !u.includes("sw.")) {
+				cssUrls.push(u)
+			} else if (
 				u.endsWith(".js") &&
 				!u.includes("/workers/") &&
-				/\/(index|main)-[^/]+\.js$/.test(u)
-			)
-		})
-		.map((e) => `  <script type="module" src="${e.url}"></script>`)
-		.join("\n")
+				!u.includes("sw.") &&
+				/\/index-[^/]+\.js/.test(u) &&
+				!entryJsUrl
+			) {
+				entryJsUrl = u
+			}
+		}
+		cssUrls = [...new Set(cssUrls)]
+	}
+
+	const cssLinks = cssUrls.map((u) => `  <link rel="stylesheet" href="${u}">`).join("\n")
+	const jsScript = entryJsUrl
+		? `  <script type="module" src="${entryJsUrl}"></script>`
+		: ""
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -171,12 +210,27 @@ window["frappe"] = window["frappe"] || {};
     window["csrf_token"] = "unauthorized";
   }
 }());
+/* Last-resort: if Vue hasn't mounted within 12 s, show a retry button. */
+setTimeout(function () {
+  var app = document.getElementById("app");
+  if (app && app.children.length === 0) {
+    app.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+      'height:100vh;font-family:sans-serif;background:#F9FAFB;color:#111827;text-align:center;padding:24px;">' +
+      '<h2 style="margin:0 0 8px;font-size:18px;font-weight:600;">Server tidak tersedia</h2>' +
+      '<p style="margin:0 0 24px;color:#6B7280;font-size:14px;max-width:320px;">' +
+      'POS tidak dapat memuat karena server sedang offline. Data Anda tetap aman.</p>' +
+      '<button onclick="location.reload()" style="padding:10px 28px;background:#4F46E5;color:#fff;' +
+      'border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Coba Lagi</button>' +
+      '</div>';
+  }
+}, 12000);
 </script>
 ${cssLinks}
 </head>
 <body>
 <div id="app"></div>
-${jsEntry}
+${jsScript}
 </body>
 </html>`
 }
@@ -224,7 +278,7 @@ async function navHandler({ request }) {
 	// 2. No cached rendered HTML (user has never loaded the POS online with
 	//    this SW version).  Serve the hardcoded fallback that bootstraps Vue
 	//    without any Jinja tags.
-	return new Response(buildOfflineFallbackHtml(), {
+	return new Response(await buildOfflineFallbackHtml(), {
 		status: 200,
 		headers: { "Content-Type": "text/html; charset=utf-8" },
 	})
@@ -257,17 +311,6 @@ registerRoute(
 		plugins: [
 			new CacheableResponsePlugin({ statuses: [0, 200] }),
 			new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }),
-		],
-	}),
-)
-
-// POS static assets — JS, CSS, images bundled by Vite (CacheFirst, 30 days)
-registerRoute(
-	/\/assets\/pos_next\/pos\/.*/i,
-	new CacheFirst({
-		cacheName: "pos-assets-cache",
-		plugins: [
-			new ExpirationPlugin({ maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 }),
 		],
 	}),
 )
