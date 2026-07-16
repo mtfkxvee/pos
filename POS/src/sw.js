@@ -32,12 +32,52 @@ import { CacheableResponsePlugin } from "workbox-cacheable-response"
 import { ExpirationPlugin } from "workbox-expiration"
 
 // ── Auto-update ───────────────────────────────────────────────────────────────
+// Skip waiting immediately on install so the new SW takes over without
+// requiring a tab close — old SWs that precached raw Jinja HTML are replaced
+// the moment the new build is installed.
+self.addEventListener("install", () => {
+	self.skipWaiting()
+})
+
+// Also respond to the SKIP_WAITING message sent by workbox-window / our
+// manual registration code (belt-and-suspenders approach).
 self.addEventListener("message", (event) => {
 	if (event.data?.type === "SKIP_WAITING") self.skipWaiting()
 })
 
 self.addEventListener("activate", (event) => {
-	event.waitUntil(self.clients.claim())
+	event.waitUntil(
+		Promise.all([
+			// Take control of all existing clients immediately.
+			self.clients.claim(),
+			// Purge any cached HTML files from every cache (including old
+			// Workbox precaches that stored the raw Jinja template).
+			// This is the one-time migration that clears out the broken
+			// cached HTML so it can never be served as the app shell again.
+			caches.keys().then(async (names) => {
+				for (const name of names) {
+					// Leave our rendered-shell cache alone — it stores already-
+					// rendered HTML fetched from Frappe (safe to serve offline).
+					if (name === RENDERED_SHELL_CACHE) continue
+					try {
+						const cache = await caches.open(name)
+						const keys = await cache.keys()
+						for (const req of keys) {
+							// Delete any cached HTML: .html files and bare /pos navigation URLs
+							if (
+								req.url.endsWith(".html") ||
+								/\/pos\/?(\?.*)?$/.test(req.url)
+							) {
+								await cache.delete(req)
+							}
+						}
+					} catch {
+						// Individual cache errors are non-fatal
+					}
+				}
+			}),
+		]),
+	)
 })
 
 // ── Precache build assets (html excluded — see module comment) ─────────────────

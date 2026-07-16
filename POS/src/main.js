@@ -66,10 +66,12 @@ if ("serviceWorker" in navigator) {
 									newWorker.state === "installed" &&
 									navigator.serviceWorker.controller
 								) {
-									log.info("New content available, reloading...")
-									// Note: VitePWA autoUpdate will handle the actual skipWaiting automatically
-									// if generateSW autoUpdate is true in vite.config.js,
-									// but we can also manually reload if needed.
+									// Activate the new SW immediately — tell it to skip waiting.
+									// The SW's install handler already calls skipWaiting(), so this
+									// message is belt-and-suspenders for cases where the install
+									// handler ran before this listener was set up.
+									log.info("New content available, activating new service worker...")
+									newWorker.postMessage({ type: "SKIP_WAITING" })
 								}
 							})
 						}
