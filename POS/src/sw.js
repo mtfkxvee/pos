@@ -41,7 +41,11 @@ self.addEventListener("activate", (event) => {
 })
 
 // ── Precache build assets (html excluded — see module comment) ─────────────────
-precacheAndRoute(self.__WB_MANIFEST)
+// workbox-build's injectManifest requires self.__WB_MANIFEST to appear exactly
+// once in the source file.  Capture it here; buildOfflineFallbackHtml() reads
+// WB_MANIFEST (the variable), not self.__WB_MANIFEST a second time.
+const WB_MANIFEST = self.__WB_MANIFEST
+precacheAndRoute(WB_MANIFEST)
 cleanupOutdatedCaches()
 
 // ── Navigation handler ────────────────────────────────────────────────────────
@@ -66,7 +70,7 @@ const NAV_TIMEOUT_MS = 10_000
  * settings from localStorage/IndexedDB after boot and will override these.
  */
 function buildOfflineFallbackHtml() {
-	const manifest = /** @type {Array<{url:string}>} */ (self.__WB_MANIFEST || [])
+	const manifest = /** @type {Array<{url:string}>} */ (WB_MANIFEST || [])
 
 	// Collect CSS files from the build asset folder
 	const cssLinks = manifest
