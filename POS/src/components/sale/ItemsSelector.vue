@@ -154,29 +154,12 @@
 							'w-full text-[11px] sm:text-sm border rounded-lg px-2 sm:px-3 py-2 ps-7 sm:ps-10 pe-16 sm:pe-24 focus:outline-none transition-all',
 							autoAddEnabled
 								? 'border-blue-400 bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-								: scannerEnabled
-								? 'border-green-400 bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent'
 								: 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
 						]"
 						:aria-label="__('Search items')"
 					/>
-					<!-- Barcode Scan Icon and Auto-Add Toggle -->
+					<!-- Auto-Add Toggle -->
 					<div class="absolute inset-y-0 end-0 pe-1 sm:pe-2 flex items-center gap-0.5">
-						<button
-							@click="toggleBarcodeScanner"
-							:class="[
-								'p-1 sm:p-1.5 rounded transition-[background-color] duration-75 touch-manipulation',
-								scannerEnabled
-									? 'bg-green-100 hover:bg-green-200 active:bg-green-300 text-green-700'
-									: 'hover:bg-gray-100 active:bg-gray-200 text-gray-600'
-							]"
-							:title="scannerEnabled ? __('Barcode Scanner: ON (Click to disable)') : __('Barcode Scanner: OFF (Click to enable)')"
-							:aria-label="scannerEnabled ? __('Disable barcode scanner') : __('Enable barcode scanner')"
-						>
-							<svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-							</svg>
-						</button>
 						<button
 							@click="toggleAutoAdd"
 							:class="[
@@ -936,7 +919,6 @@ const viewMode = ref("grid")
 const lastKeyTime = ref(0)
 const barcodeBuffer = ref("")
 const searchInputRef = ref(null)
-const scannerEnabled = ref(false)
 const autoAddEnabled = ref(false)
 const itemThreshold = ref(50) // Threshold for auto-switching to list view
 const userManuallySetView = ref(false) // Track if user manually changed view mode
@@ -991,7 +973,6 @@ const totalPages = computed(() => {
 
 const SEARCH_PLACEHOLDERS = Object.freeze({
 	auto: __("Auto-Add ON - Type or scan barcode"),
-	scanner: __("Scanner ON - Enable Auto for automatic addition"),
 	default: __("Search by item code, name or scan barcode"),
 })
 
@@ -1034,11 +1015,6 @@ const searchMode = computed(() => {
 	if (autoAddEnabled.value) {
 		return "auto"
 	}
-
-	if (scannerEnabled.value) {
-		return "scanner"
-	}
-
 	return "default"
 })
 
@@ -1178,28 +1154,33 @@ function handleKeyDown(event) {
 	const currentTime = Date.now()
 	const timeDiff = currentTime - lastKeyTime.value
 
-	// If Enter/newline is pressed, trigger barcode search
+	// If Enter/newline is pressed, decide: scan vs manual keyboard
 	if (event.key === "Enter") {
 		event.preventDefault()
 
-		// Auto-add if Auto-Add mode is enabled (regardless of manual typing vs scanner)
-		if (autoAddEnabled.value) {
-			// Auto-add enabled - add item directly to cart
-			handleBarcodeSearch(true) // Pass true to indicate auto-add
-		} else {
-			// Auto-add disabled - normal search behavior
-			handleBarcodeSearch(false)
-		}
-
-		// Reset detection
-		barcodeBuffer.value = ""
-		scannerInputDetected.value = false
-
-		// Clear auto-search timer since Enter was pressed
+		// Clear auto-search timer immediately
 		if (autoSearchTimer.value) {
 			clearTimeout(autoSearchTimer.value)
 			autoSearchTimer.value = null
 		}
+
+		// Barcode scan detection: all chars arrived < 50ms apart AND length ≥ 5
+		const isScan = barcodeBuffer.value.length >= 5 && scannerInputDetected.value
+
+		if (isScan) {
+			// Scanner: exact match lookup → add to cart (with auto-add if enabled)
+			handleBarcodeSearch(autoAddEnabled.value)
+		} else {
+			// Manual keyboard Enter: trigger immediate LIKE search (no add-to-cart)
+			const term = searchTerm.value?.trim()
+			if (term) {
+				itemStore.searchItems(term, true) // bypass debounce, show results
+			}
+		}
+
+		// Reset detection state
+		barcodeBuffer.value = ""
+		scannerInputDetected.value = false
 
 		return
 	}
@@ -1225,7 +1206,7 @@ function handleKeyDown(event) {
 // Handle search input with instant reactivity
 function handleSearchInput(event) {
 	const value = event.target.value
-	itemStore.setSearchTerm(value, scannerInputDetected.value)
+	itemStore.setSearchTerm(value) // always 400ms debounce; scanner handled on Enter
 
 	// Clear any existing timer
 	if (autoSearchTimer.value) {
@@ -1242,9 +1223,9 @@ function handleSearchInput(event) {
 	}
 }
 
-// Handle click on search input — only clear if scanner/auto-add is active
+// Handle click on search input — clear previous scan result if auto-add is active
 function handleSearchClick() {
-	if (scannerEnabled.value || autoAddEnabled.value) {
+	if (autoAddEnabled.value) {
 		itemStore.clearSearch()
 	}
 }
@@ -1356,22 +1337,14 @@ function handleItemClick(itemCode) {
 
 async function handleBarcodeSearch(forceAutoAdd = false) {
 	const barcode = searchTerm.value.trim()
+	if (!barcode) return
 
-	if (!barcode) {
-		return
-	}
-
-	// Auto-add if explicitly requested (from scanner newline detection)
-	// OR if both scanner and auto-add modes are enabled
-	const shouldAutoAdd =
-		forceAutoAdd || (scannerEnabled.value && autoAddEnabled.value)
+	const shouldAutoAdd = forceAutoAdd || autoAddEnabled.value
 
 	try {
-		// First try exact barcode lookup via API
+		// Exact match: tabItem Barcode or item_code
 		const item = await itemStore.searchByBarcode(barcode)
-
 		if (item) {
-			// Item found by barcode - validate stock and add to cart
 			if (selectItem(item, shouldAutoAdd)) {
 				itemStore.clearSearch()
 			}
@@ -1381,65 +1354,13 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 		console.error("Barcode API error:", error)
 	}
 
-	// Fallback: If only one item matches in filtered results, auto-select it
-	if (filteredItems.value.length === 1) {
-		if (selectItem(filteredItems.value[0], shouldAutoAdd)) {
-			itemStore.clearSearch()
-		}
-	} else if (filteredItems.value.length === 0) {
-		showWarning(
-			__("Item Not Found: No item found with barcode: {0}", [barcode]),
-		)
-
-		// If scanner mode is enabled, clear search immediately for next scan
-		if (shouldAutoAdd) {
-			itemStore.clearSearch()
-		}
-	} else {
-		if (shouldAutoAdd) {
-			// In scanner mode, don't show manual selection - just notify
-			showWarning(
-				__(
-					"Multiple Items Found: {0} items match barcode. Please refine search.",
-					[filteredItems.value.length],
-				),
-			)
-		} else {
-			showWarning(
-				__("Multiple Items Found: {0} items match. Please select one.", [
-					filteredItems.value.length,
-				]),
-			)
-		}
-	}
+	// No exact match — fall back to LIKE search (400ms debounce, shows results)
+	itemStore.searchItems(barcode, false)
 }
 
-function toggleBarcodeScanner() {
-	scannerEnabled.value = !scannerEnabled.value
-
-	if (scannerEnabled.value) {
-		// Auto-enable auto-add when scanner is enabled
-		autoAddEnabled.value = true
-
-		// Focus on search input when enabling scanner
-		const input = searchInputRef.value || document.getElementById("item-search")
-		if (input) {
-			input.focus()
-		}
-	} else {
-		// Disable auto-add when scanner is disabled
-		autoAddEnabled.value = false
-	}
-}
 
 function toggleAutoAdd() {
-	// Auto-add works independently - no need for scanner mode
 	autoAddEnabled.value = !autoAddEnabled.value
-
-	// Auto-enable scanner mode when auto-add is enabled
-	if (autoAddEnabled.value && !scannerEnabled.value) {
-		scannerEnabled.value = true
-	}
 
 	// Clear any pending timer when toggling off
 	if (!autoAddEnabled.value && autoSearchTimer.value) {
@@ -1448,11 +1369,8 @@ function toggleAutoAdd() {
 	}
 
 	if (autoAddEnabled.value) {
-		// Focus on search input
 		const input = searchInputRef.value || document.getElementById("item-search")
-		if (input) {
-			input.focus()
-		}
+		if (input) input.focus()
 	}
 }
 
