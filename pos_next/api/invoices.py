@@ -4006,6 +4006,24 @@ def apply_offers(invoice_data, selected_offers=None):
                 seen_free.add(key)
                 deduped_free_items.append(fi)
 
+        # Ensure item_name is present on every free item.  The custom-rule path
+        # builds entries with only item_code/qty/uom/rate and never sets item_name,
+        # causing a blank item name in the cart row.  Batch-fetch the missing names.
+        missing_name_codes = list({
+            fi.item_code for fi in deduped_free_items
+            if fi.get("item_code") and not fi.get("item_name")
+        })
+        if missing_name_codes:
+            rows = frappe.get_all(
+                "Item",
+                filters={"name": ["in", missing_name_codes]},
+                fields=["name", "item_name"],
+            )
+            item_name_map = {r.name: r.item_name for r in rows}
+            for fi in deduped_free_items:
+                if not fi.get("item_name"):
+                    fi.item_name = item_name_map.get(fi.item_code, fi.item_code)
+
         return {
             "items": [dict(item) for item in prepared_items],
             "free_items": [dict(item) for item in deduped_free_items],
