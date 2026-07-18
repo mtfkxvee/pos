@@ -1063,20 +1063,18 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 
 		# Add search conditions if search term provided
 		if effective_search_term and effective_search_term.strip():
-			# Split search term into words for fuzzy matching
-			search_words = [word.strip() for word in effective_search_term.split() if word.strip()]
-
-			# Word-order independent: all words must appear somewhere in item fields
+			# Phrase match: treat the entire input as one phrase so "lur ayam" only matches
+			# items containing "lur ayam" as a contiguous substring, not scattered words
 			search_text = "CONCAT(COALESCE(i.name, ''), ' ', COALESCE(i.item_name, ''), ' ', COALESCE(i.description, ''))"
-			word_conditions = " AND ".join([f"{search_text} LIKE %s"] * len(search_words))
+			phrase_match = f"%{effective_search_term}%"
 
 			# Also match if barcode contains the search term
 			barcode_condition = "ib.barcode LIKE %s"
 
-			# Combine: match item fields OR match barcode
-			conditions.append(f"(({word_conditions}) OR {barcode_condition})")
-			params.extend([f"%{word}%" for word in search_words])
-			params.append(f"%{effective_search_term}%")  # For barcode matching
+			# Combine: match item fields (phrase) OR match barcode
+			conditions.append(f"(({search_text} LIKE %s) OR {barcode_condition})")
+			params.append(phrase_match)
+			params.append(phrase_match)  # For barcode matching
 
 			# Relevance scoring with case-insensitive comparison
 			# Exact barcode match gets highest priority, use MAX() for grouping
