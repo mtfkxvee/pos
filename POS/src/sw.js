@@ -56,18 +56,20 @@ self.addEventListener("activate", (event) => {
 			// cached HTML so it can never be served as the app shell again.
 			caches.keys().then(async (names) => {
 				for (const name of names) {
-					// Leave our rendered-shell cache alone — it stores already-
-					// rendered HTML fetched from Frappe (safe to serve offline).
+					// Leave our rendered-shell cache alone.
 					if (name === RENDERED_SHELL_CACHE) continue
+					// Only purge stale HTML from Workbox precache buckets.
+					// Runtime caches (api-cache, product-images-cache, etc.) never
+					// hold raw Jinja HTML, and restricting to precache avoids any
+					// risk of accidentally deleting the /pos key from other caches.
+					if (!name.includes("-precache-")) continue
 					try {
 						const cache = await caches.open(name)
 						const keys = await cache.keys()
 						for (const req of keys) {
-							// Delete any cached HTML: .html files and bare /pos navigation URLs
-							if (
-								req.url.endsWith(".html") ||
-								/\/pos\/?(\?.*)?$/.test(req.url)
-							) {
+							// Delete only .html file entries — not bare /pos navigation
+							// URLs, which might be the rendered-shell key in disguise.
+							if (req.url.endsWith(".html")) {
 								await cache.delete(req)
 							}
 						}
