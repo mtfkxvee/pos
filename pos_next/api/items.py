@@ -1081,6 +1081,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 			# Relevance scoring with case-insensitive comparison
 			# Exact barcode match gets highest priority, use MAX() for grouping
 			prefix_pattern = f"{effective_search_term}%"
+			phrase_pattern = f"%{effective_search_term}%"
 			relevance = f"""
 				MAX(CASE
 					WHEN ib.barcode = %s THEN 1500
@@ -1089,10 +1090,11 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 					WHEN LOWER(i.name) = LOWER(%s) THEN 900
 					WHEN LOWER(i.item_name) LIKE LOWER(%s) THEN 500
 					WHEN LOWER(i.name) LIKE LOWER(%s) THEN 400
+					WHEN LOWER(i.item_name) LIKE LOWER(%s) THEN 200
 					ELSE 100
 				END)
 			"""
-			score_params = [effective_search_term, prefix_pattern, effective_search_term, effective_search_term, prefix_pattern, prefix_pattern]
+			score_params = [effective_search_term, prefix_pattern, effective_search_term, effective_search_term, prefix_pattern, prefix_pattern, phrase_pattern]
 			order_by = f"{relevance} DESC, i.item_name ASC"
 		else:
 			# No search term - simple ordering

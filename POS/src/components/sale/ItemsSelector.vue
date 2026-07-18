@@ -150,33 +150,9 @@
 						@click="handleSearchClick"
 						type="text"
 						:placeholder="searchPlaceholder"
-						:class="[
-							'w-full text-[11px] sm:text-sm border rounded-lg px-2 sm:px-3 py-2 ps-7 sm:ps-10 pe-16 sm:pe-24 focus:outline-none transition-all',
-							autoAddEnabled
-								? 'border-blue-400 bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-								: 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-						]"
+						class="w-full text-[11px] sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-2 ps-7 sm:ps-10 pe-2 sm:pe-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
 						:aria-label="__('Search items')"
 					/>
-					<!-- Auto-Add Toggle -->
-					<div class="absolute inset-y-0 end-0 pe-1 sm:pe-2 flex items-center gap-0.5">
-						<button
-							@click="toggleAutoAdd"
-							:class="[
-								'p-1 sm:p-1.5 rounded transition-[background-color] duration-75 flex items-center gap-0.5 text-[9px] sm:text-xs font-medium px-1 sm:px-2 touch-manipulation',
-								autoAddEnabled
-									? 'bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-700'
-									: 'hover:bg-gray-100 active:bg-gray-200 text-gray-600'
-							]"
-							:title="autoAddEnabled ? __('Auto-Add: ON - Press Enter to add items to cart') : __('Auto-Add: OFF - Click to enable automatic cart addition on Enter')"
-							:aria-label="autoAddEnabled ? __('Disable auto-add') : __('Enable auto-add')"
-						>
-							<svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-							</svg>
-							<span class="hidden xs:inline">{{ __('Auto') }}</span>
-						</button>
-					</div>
 				</div>
 				<div class="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 flex-shrink-0">
 					<button
@@ -919,11 +895,9 @@ const viewMode = ref("grid")
 const lastKeyTime = ref(0)
 const barcodeBuffer = ref("")
 const searchInputRef = ref(null)
-const autoAddEnabled = ref(false)
 const itemThreshold = ref(50) // Threshold for auto-switching to list view
 const userManuallySetView = ref(false) // Track if user manually changed view mode
 const scannerInputDetected = ref(false) // Track if current input is from scanner
-const autoSearchTimer = ref(null) // Timer for auto-search when typing stops
 const lastAutoSwitchCount = ref(0)
 const showSortDropdown = ref(false) // Sort dropdown visibility
 const skipPageReset = ref(false) // Skip page reset when navigating via pagination
@@ -972,8 +946,7 @@ const totalPages = computed(() => {
 })
 
 const SEARCH_PLACEHOLDERS = Object.freeze({
-	auto: __("Auto-Add ON - Type or scan barcode"),
-	default: __("Search by item code, name or scan barcode"),
+	default: __("Scan barcode or type keyword + Enter"),
 })
 
 // Sort configuration
@@ -1011,12 +984,7 @@ const SORT_ICONS = Object.freeze({
 	inactive: "M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4",
 })
 
-const searchMode = computed(() => {
-	if (autoAddEnabled.value) {
-		return "auto"
-	}
-	return "default"
-})
+const searchMode = computed(() => "default")
 
 const searchPlaceholder = computed(() => SEARCH_PLACEHOLDERS[searchMode.value])
 
@@ -1158,18 +1126,12 @@ function handleKeyDown(event) {
 	if (event.key === "Enter") {
 		event.preventDefault()
 
-		// Clear auto-search timer immediately
-		if (autoSearchTimer.value) {
-			clearTimeout(autoSearchTimer.value)
-			autoSearchTimer.value = null
-		}
-
 		// Barcode scan detection: all chars arrived < 50ms apart AND length ≥ 5
 		const isScan = barcodeBuffer.value.length >= 5 && scannerInputDetected.value
 
 		if (isScan) {
-			// Scanner: exact match lookup → add to cart (with auto-add if enabled)
-			handleBarcodeSearch(autoAddEnabled.value)
+			// Scanner: exact match lookup → always add to cart immediately
+			handleBarcodeSearch(true)
 		} else {
 			// Manual keyboard Enter: trigger immediate LIKE search (no add-to-cart)
 			const term = searchTerm.value?.trim()
@@ -1203,32 +1165,14 @@ function handleKeyDown(event) {
 	lastKeyTime.value = currentTime
 }
 
-// Handle search input with instant reactivity
+// Handle search input — update reactive term only, no server request while typing.
+// Search fires on Enter (handleKeyDown) — either exact-match (scanner) or LIKE (manual).
 function handleSearchInput(event) {
-	const value = event.target.value
-	itemStore.setSearchTerm(value) // always 400ms debounce; scanner handled on Enter
-
-	// Clear any existing timer
-	if (autoSearchTimer.value) {
-		clearTimeout(autoSearchTimer.value)
-		autoSearchTimer.value = null
-	}
-
-	// If Auto-Add is enabled and user is typing, automatically trigger search after they stop
-	if (autoAddEnabled.value && value.trim().length > 0) {
-		// Wait 500ms after user stops typing, then auto-search and add
-		autoSearchTimer.value = setTimeout(() => {
-			handleBarcodeSearch(true) // Auto-add mode
-		}, 500) // 500ms delay after typing stops
-	}
+	itemStore.searchTerm = event.target.value
 }
 
-// Handle click on search input — clear previous scan result if auto-add is active
-function handleSearchClick() {
-	if (autoAddEnabled.value) {
-		itemStore.clearSearch()
-	}
-}
+// No-op click handler kept for future use (e.g. mobile UX tweaks).
+function handleSearchClick() {}
 
 // Create optimized click handlers for better touch response
 const optimizedClickHandlers = new Map()
@@ -1339,7 +1283,7 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 	const barcode = searchTerm.value.trim()
 	if (!barcode) return
 
-	const shouldAutoAdd = forceAutoAdd || autoAddEnabled.value
+	const shouldAutoAdd = forceAutoAdd
 
 	try {
 		// Exact match: tabItem Barcode or item_code
@@ -1354,25 +1298,11 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 		console.error("Barcode API error:", error)
 	}
 
-	// No exact match — fall back to LIKE search (400ms debounce, shows results)
-	itemStore.searchItems(barcode, false)
+	// No exact match — fall back to LIKE search, show results immediately
+	itemStore.searchItems(barcode, true)
 }
 
 
-function toggleAutoAdd() {
-	autoAddEnabled.value = !autoAddEnabled.value
-
-	// Clear any pending timer when toggling off
-	if (!autoAddEnabled.value && autoSearchTimer.value) {
-		clearTimeout(autoSearchTimer.value)
-		autoSearchTimer.value = null
-	}
-
-	if (autoAddEnabled.value) {
-		const input = searchInputRef.value || document.getElementById("item-search")
-		if (input) input.focus()
-	}
-}
 
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency)
