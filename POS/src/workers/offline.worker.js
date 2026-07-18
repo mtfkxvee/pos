@@ -523,10 +523,9 @@ async function searchCachedItems(searchTerm = "", limit = 50, offset = 0) {
 		}
 
 		const term = searchTerm.toLowerCase().trim()
-		const searchWords = term.split(/\s+/).filter(Boolean)
 
-		// Optimize: if single word and matches exact barcode, return early
-		if (searchWords.length === 1) {
+		// Optimize: if no spaces (single token), check exact barcode match first
+		if (!term.includes(" ")) {
 			const barcodeResults = await db
 				.table("items")
 				.where("barcodes")
@@ -542,8 +541,8 @@ async function searchCachedItems(searchTerm = "", limit = 50, offset = 0) {
 			}
 		}
 
-		// Full database scan with substring matching
-		// Dexie iterator acts efficiently by stopping once `limit` is reached.
+		// Full database scan with phrase matching — treat entire input as one substring
+		// so "lur ayam" only matches items containing "lur ayam" contiguously
 		let results = []
 
 		await db
@@ -552,8 +551,7 @@ async function searchCachedItems(searchTerm = "", limit = 50, offset = 0) {
 				if (item.disabled || item.variant_of) return false
 				const searchable =
 					`${item.item_code || ""} ${item.item_name || ""} ${item.description || ""}`.toLowerCase()
-				// All words must match
-				return searchWords.every((word) => searchable.includes(word))
+				return searchable.includes(term)
 			})
 			.limit(limit * 3) // Fetch slightly more to sort and get the best matches
 			.each((item) => {
