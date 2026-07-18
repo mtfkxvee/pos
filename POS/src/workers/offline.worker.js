@@ -560,12 +560,14 @@ async function searchCachedItems(searchTerm = "", limit = 50, offset = 0) {
 				else if (item.item_code?.toLowerCase() === term) score = 900
 				else if (item.item_name?.toLowerCase().startsWith(term)) score = 500
 				else if (item.item_code?.toLowerCase().startsWith(term)) score = 400
+				else if (item.item_name?.toLowerCase().includes(term)) score = 200
 
 				results.push({ item, score })
 			})
 
+		// Primary: relevance score desc. Secondary: item_name asc — matches server ORDER BY
 		results = results
-			.sort((a, b) => b.score - a.score)
+			.sort((a, b) => b.score - a.score || (a.item.item_name || "").localeCompare(b.item.item_name || ""))
 			.slice(0, limit)
 			.map(({ item }) => item)
 
