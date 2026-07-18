@@ -715,7 +715,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				: [],
 			// Transaction-level pricing rules return a separate discount amount
 			// (not per-item) so ERPNext can apply it at validate time without double-discount
-			transactionDiscountAmount: Number.parseFloat(payload.transaction_discount_amount) || 0,
+			transactionDiscountAmount: Math.round(Number.parseFloat(payload.transaction_discount_amount) || 0),
 		}
 	}
 
