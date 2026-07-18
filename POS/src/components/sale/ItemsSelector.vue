@@ -150,9 +150,53 @@
 						@click="handleSearchClick"
 						type="text"
 						:placeholder="searchPlaceholder"
-						class="w-full text-[11px] sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-2 ps-7 sm:ps-10 pe-2 sm:pe-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+						:class="[
+							'w-full text-[11px] sm:text-sm border rounded-lg px-2 sm:px-3 py-2 ps-7 sm:ps-10 pe-20 sm:pe-32 focus:outline-none transition-all',
+							autoAddEnabled
+								? 'border-blue-400 bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+								: enterToSearchEnabled
+									? 'border-green-400 bg-green-50 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+									: 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+						]"
 						:aria-label="__('Search items')"
 					/>
+					<!-- Toggle buttons: Enter-to-Search + Auto-Add -->
+					<div class="absolute inset-y-0 end-0 pe-1 sm:pe-2 flex items-center gap-0.5">
+						<!-- Enter-to-Search toggle -->
+						<button
+							@click="toggleEnterToSearch"
+							:class="[
+								'p-1 sm:p-1.5 rounded transition-[background-color] duration-75 flex items-center gap-0.5 text-[9px] sm:text-xs font-medium px-1 sm:px-2 touch-manipulation',
+								enterToSearchEnabled
+									? 'bg-green-100 hover:bg-green-200 active:bg-green-300 text-green-700'
+									: 'hover:bg-gray-100 active:bg-gray-200 text-gray-500'
+							]"
+							:title="enterToSearchEnabled ? __('Enter-to-Search: ON — tekan Enter untuk cari') : __('Enter-to-Search: OFF — cari otomatis saat mengetik')"
+							:aria-label="enterToSearchEnabled ? __('Nonaktifkan enter-to-search') : __('Aktifkan enter-to-search')"
+						>
+							<svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 5v6a2 2 0 01-2 2H3m4-4l-4 4 4 4"/>
+							</svg>
+							<span class="hidden xs:inline">{{ __('Enter') }}</span>
+						</button>
+						<!-- Auto-Add toggle -->
+						<button
+							@click="toggleAutoAdd"
+							:class="[
+								'p-1 sm:p-1.5 rounded transition-[background-color] duration-75 flex items-center gap-0.5 text-[9px] sm:text-xs font-medium px-1 sm:px-2 touch-manipulation',
+								autoAddEnabled
+									? 'bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-700'
+									: 'hover:bg-gray-100 active:bg-gray-200 text-gray-600'
+							]"
+							:title="autoAddEnabled ? __('Auto-Add: ON — tekan Enter untuk tambah ke keranjang') : __('Auto-Add: OFF — klik untuk aktifkan tambah otomatis')"
+							:aria-label="autoAddEnabled ? __('Nonaktifkan auto-add') : __('Aktifkan auto-add')"
+						>
+							<svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+							</svg>
+							<span class="hidden xs:inline">{{ __('Auto') }}</span>
+						</button>
+					</div>
 				</div>
 				<div class="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 flex-shrink-0">
 					<button
@@ -895,6 +939,9 @@ const viewMode = ref("grid")
 const lastKeyTime = ref(0)
 const barcodeBuffer = ref("")
 const searchInputRef = ref(null)
+const autoAddEnabled = ref(false)
+const enterToSearchEnabled = ref(true) // Enter-to-search ON by default
+const autoSearchTimer = ref(null)
 const itemThreshold = ref(50) // Threshold for auto-switching to list view
 const userManuallySetView = ref(false) // Track if user manually changed view mode
 const scannerInputDetected = ref(false) // Track if current input is from scanner
@@ -946,7 +993,9 @@ const totalPages = computed(() => {
 })
 
 const SEARCH_PLACEHOLDERS = Object.freeze({
-	default: __("Scan barcode or type keyword + Enter"),
+	autoAdd:     __("Auto-Add ON — ketik atau scan barcode"),
+	enterSearch: __("Ketik keyword lalu tekan Enter untuk cari"),
+	default:     __("Cari nama/kode item atau scan barcode"),
 })
 
 // Sort configuration
@@ -984,7 +1033,11 @@ const SORT_ICONS = Object.freeze({
 	inactive: "M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4",
 })
 
-const searchMode = computed(() => "default")
+const searchMode = computed(() => {
+	if (autoAddEnabled.value) return "autoAdd"
+	if (enterToSearchEnabled.value) return "enterSearch"
+	return "default"
+})
 
 const searchPlaceholder = computed(() => SEARCH_PLACEHOLDERS[searchMode.value])
 
@@ -1130,8 +1183,8 @@ function handleKeyDown(event) {
 		const isScan = barcodeBuffer.value.length >= 5 && scannerInputDetected.value
 
 		if (isScan) {
-			// Scanner: exact match lookup → always add to cart immediately
-			handleBarcodeSearch(true)
+			// Scanner: exact match lookup → add to cart when Auto-Add is on
+			handleBarcodeSearch(autoAddEnabled.value)
 		} else {
 			// Manual keyboard Enter: trigger immediate LIKE search (no add-to-cart)
 			const term = searchTerm.value?.trim()
@@ -1165,14 +1218,37 @@ function handleKeyDown(event) {
 	lastKeyTime.value = currentTime
 }
 
-// Handle search input — update reactive term only, no server request while typing.
-// Search fires on Enter (handleKeyDown) — either exact-match (scanner) or LIKE (manual).
+// Handle search input.
+// - enterToSearchEnabled ON : only update the term; server request fires on Enter
+// - enterToSearchEnabled OFF: fall through to 400ms debounced search (live mode)
+// - autoAddEnabled ON       : schedule an exact-match + auto-add after 500ms pause
 function handleSearchInput(event) {
-	itemStore.searchTerm = event.target.value
+	const value = event.target.value
+	itemStore.searchTerm = value // always update display
+
+	if (autoSearchTimer.value) {
+		clearTimeout(autoSearchTimer.value)
+		autoSearchTimer.value = null
+	}
+
+	if (autoAddEnabled.value && value.trim().length > 0) {
+		// Auto-Add mode: trigger exact-match → cart-add after user pauses typing
+		autoSearchTimer.value = setTimeout(() => {
+			handleBarcodeSearch(true)
+		}, 500)
+	} else if (!enterToSearchEnabled.value) {
+		// Live-search mode: debounce 400ms on every keystroke
+		itemStore.setSearchTerm(value)
+	}
+	// else: Enter-to-search mode — no server call while typing
 }
 
-// No-op click handler kept for future use (e.g. mobile UX tweaks).
-function handleSearchClick() {}
+// Clear previous scan result when clicking the field while Auto-Add is active
+function handleSearchClick() {
+	if (autoAddEnabled.value) {
+		itemStore.clearSearch()
+	}
+}
 
 // Create optimized click handlers for better touch response
 const optimizedClickHandlers = new Map()
@@ -1283,7 +1359,7 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 	const barcode = searchTerm.value.trim()
 	if (!barcode) return
 
-	const shouldAutoAdd = forceAutoAdd
+	const shouldAutoAdd = forceAutoAdd || autoAddEnabled.value
 
 	try {
 		// Exact match: tabItem Barcode or item_code
@@ -1303,6 +1379,24 @@ async function handleBarcodeSearch(forceAutoAdd = false) {
 }
 
 
+
+function toggleAutoAdd() {
+	autoAddEnabled.value = !autoAddEnabled.value
+
+	if (!autoAddEnabled.value && autoSearchTimer.value) {
+		clearTimeout(autoSearchTimer.value)
+		autoSearchTimer.value = null
+	}
+
+	if (autoAddEnabled.value) {
+		const input = searchInputRef.value || document.getElementById("item-search")
+		if (input) input.focus()
+	}
+}
+
+function toggleEnterToSearch() {
+	enterToSearchEnabled.value = !enterToSearchEnabled.value
+}
 
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency)
