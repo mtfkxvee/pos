@@ -6,7 +6,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - frappe may not be installed during setup
     frappe = None
 
-__version__ = "1.16.83"
+__version__ = "1.16.84"
 
 
 def console(*data):

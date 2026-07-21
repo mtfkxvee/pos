@@ -1231,8 +1231,8 @@ function handleSearchInput(event) {
 		autoSearchTimer.value = null
 	}
 
-	if (autoAddEnabled.value && value.trim().length > 0) {
-		// Auto-Add mode: trigger exact-match → cart-add after user pauses typing
+	if (autoAddEnabled.value && !enterToSearchEnabled.value && value.trim().length > 0) {
+		// Auto-Add mode (Enter-to-Search OFF): trigger exact-match → cart-add after 500ms pause
 		autoSearchTimer.value = setTimeout(() => {
 			handleBarcodeSearch(true)
 		}, 500)
@@ -1240,7 +1240,7 @@ function handleSearchInput(event) {
 		// Live-search mode: debounce 400ms on every keystroke
 		itemStore.setSearchTerm(value)
 	}
-	// else: Enter-to-search mode — no server call while typing
+	// else: Enter-to-search mode (ON) — no server call while typing, regardless of Auto-Add
 }
 
 // Clear previous scan result when clicking the field while Auto-Add is active
