@@ -1183,6 +1183,12 @@ function handleKeyDown(event) {
 		const isScan = barcodeBuffer.value.length >= 5 && scannerInputDetected.value
 
 		if (isScan) {
+			// Cancel any pending auto-search timer — scanner Enter takes over so
+			// the 500ms delayed handleBarcodeSearch must not fire a second time.
+			if (autoSearchTimer.value) {
+				clearTimeout(autoSearchTimer.value)
+				autoSearchTimer.value = null
+			}
 			// Scanner: exact match lookup → add to cart when Auto-Add is on
 			handleBarcodeSearch(autoAddEnabled.value)
 		} else {
