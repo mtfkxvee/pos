@@ -724,9 +724,9 @@ def update_invoice(data):
         if invoice_doc.base_grand_total is None:
             invoice_doc.base_grand_total = 0.0
 
-        # Round grand total to nearest 100 when a discount is applied.
-        # Check both invoice-level discount AND item-level discounts so that
-        # backend rounding matches the frontend (which rounds when totalDiscount > 0).
+        # Anchor grand_total to ui_grand_total (primary path), or fall back to
+        # round-to-nearest-100 for bare offline invoices that don't send it.
+        # Only runs when a discount is present (invoice-level or item-level).
         # Exclude is_free_item lines — their discount_amount/100% represents the
         # "free" nature of a B1G1 item, not a real cashier-applied discount, and
         # including them would trigger rounding for B1G1 invoices that the UI
@@ -738,27 +738,42 @@ def update_invoice(data):
         )
         if not invoice_doc.get("is_return") and (_discount_amount > 0 or _has_item_discount):
             gt = flt(invoice_doc.grand_total)
-            # Use round-half-up (matches JS Math.round on the frontend), NOT
-            # Python's built-in round() which uses banker's rounding (round-half-to-even).
-            # When gt lands exactly on a .50 boundary (e.g. 252450 -> 2524.5), Python's
-            # round() and JS's Math.round() can disagree on the rounding direction —
-            # producing a +/-100 grand total mismatch and a stray +/-50 folded into
-            # discount_amount. math.floor(x + 0.5) replicates Math.round for positive x.
-            rounded_gt = math.floor(gt / 100 + 0.5) * 100
-            # Record rounding details (used by the grand total mismatch log to
-            # show exactly what value was rounded and by how much).
-            invoice_doc.flags.pos_next_rounding_info = {
-                "rule": "Round to nearest 100 when discount applied",
-                "before_rounding": gt,
-                "expected_rounded": rounded_gt,
-                "applied": rounded_gt != gt,
-                "difference": gt - rounded_gt,
-            }
-            if rounded_gt != gt:
-                rounding_diff = gt - rounded_gt  # positive = round down, negative = round up
-                invoice_doc.discount_amount = flt(invoice_doc.discount_amount) + rounding_diff
-                invoice_doc.grand_total = rounded_gt
-                invoice_doc.base_grand_total = rounded_gt
+            ui_gt = flt(data.get("ui_grand_total") or 0) if data else 0
+            if ui_gt > 0 and abs(ui_gt - gt) <= 1000:
+                # Anchor grand_total to what the UI showed (= what the customer paid).
+                # This absorbs any accumulated float-rounding that makes ERPNext's
+                # net_total differ slightly from the frontend's, which would otherwise
+                # cause the independent round-to-100 to land on a different 100-boundary
+                # and produce a grand_total that differs by 200 from the cashier's screen.
+                target_discount = flt(invoice_doc.net_total) - ui_gt
+                invoice_doc.flags.pos_next_rounding_info = {
+                    "rule": "Anchor grand_total to UI display value",
+                    "before_rounding": gt,
+                    "expected_rounded": ui_gt,
+                    "applied": ui_gt != gt,
+                    "difference": gt - ui_gt,
+                }
+                if ui_gt != gt and target_discount >= 0:
+                    invoice_doc.discount_amount = target_discount
+                    invoice_doc.grand_total = ui_gt
+                    invoice_doc.base_grand_total = ui_gt
+            else:
+                # Fallback for bare offline invoices that don't send ui_grand_total.
+                # Use round-half-up (matches JS Math.round on the frontend), NOT
+                # Python's built-in round() which uses banker's rounding.
+                rounded_gt = math.floor(gt / 100 + 0.5) * 100
+                invoice_doc.flags.pos_next_rounding_info = {
+                    "rule": "Round to nearest 100 when discount applied",
+                    "before_rounding": gt,
+                    "expected_rounded": rounded_gt,
+                    "applied": rounded_gt != gt,
+                    "difference": gt - rounded_gt,
+                }
+                if rounded_gt != gt:
+                    rounding_diff = gt - rounded_gt  # positive = round down, negative = round up
+                    invoice_doc.discount_amount = flt(invoice_doc.discount_amount) + rounding_diff
+                    invoice_doc.grand_total = rounded_gt
+                    invoice_doc.base_grand_total = rounded_gt
 
         # Set accounts for payment methods before saving
         for payment in invoice_doc.payments:
