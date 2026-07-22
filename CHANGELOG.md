@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.33] - 2026-07-22
+
+### Added
+- **Speed Mode — Dialog Status Download**
+  - Dialog `SpeedModeNotReadyDialog` menggantikan toast generik saat Speed Mode belum siap — menampilkan tiap pengecekan (katalog barang, pelanggan, penawaran, metode pembayaran) lengkap dengan ikon status dan progress bar live
+  - Tombol **Download** per-item di dialog — jika salah satu data belum tersedia (misal metode pembayaran), kasir bisa langsung trigger re-download dari dialog tanpa keluar POS
+  - Badge biru berdenyut (pulsing) di tombol ⚡ saat katalog sedang didownload di latar belakang
+  - Label tahap sync otomatis muncul di samping ikon ⚡ selama proses berlangsung
+
+### Fixed
+- **`DISCOUNT_CALCULATION_ERROR` — Grand Total Mismatch ±100/±200**
+  - `additional_discount_amount` tersimpan salah (misal 700 bukan 726) karena backend membulatkan ke ratusan terdekat secara independen dari frontend, sehingga `grand_total` berbeda ±100–200 dari yang ditampilkan kasir
+  - Perbaikan: `grand_total` sekarang di-anchor ke `ui_grand_total` yang dikirim frontend — `discount_amount` dihitung sebagai `net_total − ui_grand_total` sehingga perbedaan net_total backend vs frontend terabsorb secara otomatis
+
+- **Pelanggan Offline (OFL-CUST) — Tampilan & Sync**
+  - Invoice yang dibuat offline menampilkan ID sementara (`OFL-CUST-1784705877471`) alih-alih nama asli di layar View Invoice
+  - Sync gagal dengan `LinkValidationError` karena backend membuat customer baru menggunakan temp ID sebagai nama
+  - Perbaikan: `customer_name` sekarang disertakan dalam data invoice untuk semua invoice ke depan; lookup IndexedDB asinkron ditambahkan untuk invoice lama yang sudah tersangkut di antrean; backend fallback menggunakan nama asli dari `invoice_doc.customer_name` / `data.customer_name`
+
 ## [2.2.32] - 2026-07-22
 
 ### Added
@@ -1115,6 +1134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stock tracking
 
 [Unreleased]: https://github.com/BrainWise-DEV/POSNext/compare/v2.2.33...HEAD
+[2.2.33]: https://github.com/BrainWise-DEV/POSNext/compare/v2.2.32...v2.2.33
 [2.2.32]: https://github.com/BrainWise-DEV/POSNext/compare/v1.15.0...v2.2.32
 [1.15.0]: https://github.com/BrainWise-DEV/POSNext/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/BrainWise-DEV/POSNext/compare/v1.13.0...v1.14.0
