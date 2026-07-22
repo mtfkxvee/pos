@@ -93,7 +93,7 @@
 							<div class="flex-1 min-w-0">
 								<div class="flex flex-wrap items-center gap-2">
 									<h4 class="font-semibold text-gray-900 text-sm sm:text-base truncate">
-										{{ invoice.data.customer || __('Walk-in Customer') }}
+										{{ resolvedCustomerName(invoice) }}
 									</h4>
 									<span
 										v-if="invoice.retry_count > 0"
@@ -198,7 +198,7 @@
 			<div v-if="selectedInvoice" class="flex flex-col gap-3 sm:flex flex-col gap-4">
 				<div class="bg-gray-50 p-3 sm:p-4 rounded-lg">
 					<h4 class="font-semibold text-gray-900 mb-2 text-sm sm:text-base">{{ __('Customer') }}</h4>
-					<p class="text-sm sm:text-base">{{ selectedInvoice.data.customer || __('Walk-in Customer') }}</p>
+					<p class="text-sm sm:text-base">{{ resolvedCustomerName(selectedInvoice) }}</p>
 				</div>
 
 				<div class="bg-gray-50 p-3 sm:p-4 rounded-lg">
@@ -299,6 +299,7 @@ import {
 	exportBackupToFile,
 	importBackupFromFile,
 } from "@/utils/offline/backup"
+import { db } from "@/utils/offline/db"
 import { Button, Dialog } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 
@@ -346,6 +347,48 @@ const invoiceToDelete = ref(null)
 const fileInput = ref(null)
 const importResult = ref(null)
 
+// customer_name resolution cache: OFL-CUST-* → real name from IndexedDB
+const customerNameCache = ref({})
+
+function resolvedCustomerName(invoice) {
+	const d = invoice?.data
+	if (!d) return __("Walk-in Customer")
+	// Prefer explicit customer_name field (set on new invoices post-fix)
+	if (d.customer_name) return d.customer_name
+	// For legacy stuck invoices with only the temp ID, use the pre-resolved cache
+	const cached = customerNameCache.value[d.customer]
+	if (cached) return cached
+	return d.customer || __("Walk-in Customer")
+}
+
+async function resolveOfflineCustomerNames(invList) {
+	const tempIds = [...new Set(
+		invList
+			.map((inv) => inv.data?.customer)
+			.filter((c) => c && c.startsWith("OFL-CUST-") && !customerNameCache.value[c]),
+	)]
+	if (!tempIds.length) return
+	try {
+		const rows = await db.customers
+			.filter((c) => tempIds.includes(c.name))
+			.toArray()
+		for (const row of rows) {
+			if (row.customer_name) customerNameCache.value[row.name] = row.customer_name
+		}
+		// Also check customer_queue for ones not yet in customers table
+		const queued = await db.customer_queue
+			.filter((q) => tempIds.includes(q.data?.name))
+			.toArray()
+		for (const q of queued) {
+			if (q.data?.name && q.data?.customer_name) {
+				customerNameCache.value[q.data.name] = q.data.customer_name
+			}
+		}
+	} catch {
+		// Non-fatal — display falls back to temp ID
+	}
+}
+
 // Load invoices when dialog opens
 watch(show, async (newVal) => {
 	if (newVal) {
@@ -358,14 +401,15 @@ watch(
 	() => props.pendingInvoices,
 	(newInvoices) => {
 		invoices.value = newInvoices
+		resolveOfflineCustomerNames(newInvoices)
 	},
 )
 
 async function loadInvoices() {
 	loading.value = true
 	try {
-		// Get invoices from parent component
 		invoices.value = props.pendingInvoices
+		resolveOfflineCustomerNames(props.pendingInvoices)
 	} catch (error) {
 		console.error("Error loading offline invoices:", error)
 	} finally {

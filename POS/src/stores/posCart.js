@@ -518,6 +518,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			pos_profile: posProfile.value,
 			customer:
 				customer.value?.name || customer.value || currentProfile?.customer,
+			// customer_name carries the human-readable name alongside the link key.
+			// Critically needed when customer is an offline-only temp record (OFL-CUST-*)
+			// so the backend can create a properly named Customer fallback during sync.
+			customer_name: customer.value?.customer_name || null,
 			company: currentProfile?.company,
 			selling_price_list: currentProfile?.selling_price_list,
 			currency: currentProfile?.currency,

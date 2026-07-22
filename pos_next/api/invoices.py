@@ -545,12 +545,29 @@ def update_invoice(data):
                 invoice_doc.customer = found_customer
             else:
                 try:
+                    # Prefer the human-readable name from the doc/data fields over
+                    # the temp OFL-CUST-* key.  The frontend sets customer_name
+                    # on the invoice payload; ERPNext also copies it onto invoice_doc
+                    # during load when the field is present in the submitted dict.
+                    real_name = (
+                        invoice_doc.get("customer_name")
+                        or data.get("customer_name")
+                        or invoice.get("customer_name")
+                        or customer_name  # last resort: temp ID string
+                    )
+                    # Resolve customer_group — try POS Profile default, fall back to first group
+                    cust_group = (
+                        frappe.db.get_value("POS Profile", pos_profile, "customer_group")
+                        if pos_profile
+                        else None
+                    ) or frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
+                    territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
                     cust = frappe.get_doc(
                         {
                             "doctype": "Customer",
-                            "customer_name": customer_name,
-                            "customer_group": "All Customer Groups",
-                            "territory": "All Territories",
+                            "customer_name": real_name,
+                            "customer_group": cust_group,
+                            "territory": territory,
                             "customer_type": "Individual",
                         }
                     )
