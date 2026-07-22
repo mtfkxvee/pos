@@ -115,7 +115,13 @@
 							'p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors relative flex items-center gap-1 touch-manipulation',
 							speedModeSyncing ? 'animate-pulse' : ''
 						]"
-						:title="speedModeSyncing ? __('Syncing - cannot turn off Speed Mode yet') : (speedModeActive ? __('Speed Mode active - tap to turn off') : __('Activate Speed Mode'))"
+						:title="speedModeSyncing
+							? __('Syncing - cannot turn off Speed Mode yet')
+							: speedModeActive
+								? __('Speed Mode active - tap to turn off')
+								: cacheSyncing
+									? __('Speed Mode belum siap — katalog sedang didownload')
+									: __('Activate Speed Mode')"
 						:aria-label="speedModeActive ? __('Speed Mode active') : __('Speed Mode off')"
 					>
 						<svg
@@ -130,6 +136,14 @@
 						>
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
 						</svg>
+						<!-- Download-in-progress badge: appears on the ⚡ when catalog sync is
+						     running and Speed Mode is not yet active. Tells cashier "belum siap,
+						     masih download" without any click required. -->
+						<span
+							v-if="cacheSyncing && !speedModeActive"
+							class="absolute -top-0.5 -end-0.5 w-2 h-2 rounded-full bg-blue-500 animate-pulse"
+							:title="__('Katalog sedang didownload...')"
+						/>
 						<span
 							v-if="speedModeSyncing && speedModeSyncStage"
 							class="hidden sm:inline text-[10px] text-amber-600 font-medium leading-none whitespace-nowrap max-w-[120px] truncate"

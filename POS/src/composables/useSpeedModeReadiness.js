@@ -19,24 +19,46 @@ export async function getSpeedModeReadiness(posProfile) {
 	const stats = await posSyncStore.getCacheStats()
 	const paymentMethods = await getCachedPaymentMethods(posProfile)
 
-	const missing = []
-	if (!stats?.cacheReady || !stats?.items) missing.push(__("Katalog barang"))
-	if (!stats?.customers) missing.push(__("Daftar pelanggan"))
-	if (!offersStore.hasFetched) missing.push(__("Promo / aturan harga"))
-	if (!paymentMethods?.length) missing.push(__("Metode pembayaran"))
-
-	// Item catalog must be 100% downloaded before allowing offline-only checkout -
-	// a partial catalog would mean items are unexpectedly "not found" while offline.
 	const syncProgress = itemStore.cacheStats?.syncProgress
-	if (itemStore.cacheSyncing || (syncProgress != null && syncProgress < 100)) {
-		missing.push(
-			syncProgress != null
-				? __("Sinkronisasi katalog barang sedang berjalan ({0}%)", [syncProgress])
-				: __("Sinkronisasi katalog barang sedang berjalan"),
-		)
+	const catalogSyncing =
+		itemStore.cacheSyncing || (syncProgress != null && syncProgress < 100)
+
+	const checks = []
+
+	// Item catalog — can be "syncing" (still downloading) or "missing" (never cached)
+	if (catalogSyncing) {
+		checks.push({
+			key: "items",
+			label: __("Katalog barang"),
+			status: "syncing",
+			progress: syncProgress,
+		})
+	} else if (!stats?.cacheReady || !stats?.items) {
+		checks.push({ key: "items", label: __("Katalog barang"), status: "missing" })
+	} else {
+		checks.push({ key: "items", label: __("Katalog barang"), status: "ok" })
 	}
 
-	return { ready: missing.length === 0, missing }
+	checks.push({
+		key: "customers",
+		label: __("Daftar pelanggan"),
+		status: stats?.customers ? "ok" : "missing",
+	})
+	checks.push({
+		key: "offers",
+		label: __("Promo / aturan harga"),
+		status: offersStore.hasFetched ? "ok" : "missing",
+	})
+	checks.push({
+		key: "payments",
+		label: __("Metode pembayaran"),
+		status: paymentMethods?.length ? "ok" : "missing",
+	})
+
+	const ready = checks.every((c) => c.status === "ok")
+	const missing = checks.filter((c) => c.status !== "ok").map((c) => c.label)
+
+	return { ready, missing, checks }
 }
 
 /**

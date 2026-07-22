@@ -518,6 +518,11 @@
 			@confirm="speedModeStore.activate()"
 		/>
 
+		<SpeedModeNotReadyDialog
+			v-model="showSpeedModeNotReadyDialog"
+			:initial-checks="speedModeNotReadyChecks"
+		/>
+
 			<!-- Customer Selection Dialog -->
 			<CustomerDialog
 				v-model="uiStore.showCustomerDialog"
@@ -1123,6 +1128,7 @@ import { usePOSUIStore } from "@/stores/posUI";
 import { useSpeedModeStore } from "@/stores/posSpeedMode";
 import SyncStatusDialog from "@/components/pos/SyncStatusDialog.vue";
 import SpeedModeInfoDialog from "@/components/sale/SpeedModeInfoDialog.vue";
+import SpeedModeNotReadyDialog from "@/components/sale/SpeedModeNotReadyDialog.vue";
 import { getSpeedModeReadiness } from "@/composables/useSpeedModeReadiness";
 import { logger } from "@/utils/logger";
 
@@ -1235,6 +1241,8 @@ const showDiscountAuthDialog = ref(false);
 
 // Speed Mode dialogs
 const showSpeedModeInfoDialog = ref(false);
+const showSpeedModeNotReadyDialog = ref(false);
+const speedModeNotReadyChecks = ref([]);
 
 // Warehouse availability dialog state
 const showWarehouseDialog = ref(false)
@@ -3058,9 +3066,10 @@ async function handleSpeedModeClick() {
 		return;
 	}
 
-	const { ready, missing } = await getSpeedModeReadiness(shiftStore.profileName);
+	const { ready, checks } = await getSpeedModeReadiness(shiftStore.profileName);
 	if (!ready) {
-		showWarning(__("Speed Mode belum siap. Yang belum tersedia: {0}", [missing.join(", ")]));
+		speedModeNotReadyChecks.value = checks;
+		showSpeedModeNotReadyDialog.value = true;
 		return;
 	}
 	showSpeedModeInfoDialog.value = true;
