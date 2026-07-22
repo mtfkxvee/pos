@@ -7,6 +7,173 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.32] - 2026-07-22
+
+### Added
+- **Speed Mode (Offline Toggle)**
+  - New ⚡ Speed Mode button in POS header — cashier can switch to fully-offline checkout
+  - Incremental item catalog sync with live progress bar in header
+  - Blue pulsing badge on ⚡ button while catalog is downloading
+  - `SpeedModeNotReadyDialog` replaces generic toast — shows each readiness check (catalog, customers, offers, payment methods) with status icon and live progress
+  - Per-check **Download** button inside the dialog to re-fetch missing data (payment methods, offers, customers) without leaving the POS screen
+  - Block Speed Mode deactivation during an active sync; connectivity check on activation
+  - Auto-sync stage label displayed next to lightning icon during background sync
+
+- **Offline Enhancements**
+  - Offline customer creation with `OFL-CUST-{timestamp}` temp ID, auto-sync on reconnect
+  - Offline receipt printing: custom 58mm/80mm thermal layout matching online print format
+  - Offline invoice ID that persists to ERPNext after sync (custom naming via `frappe.rename_doc`)
+  - Offline pending invoices list shows Print and Return buttons
+  - Offline Invoice History: view saved transactions while disconnected
+  - Offline cart dialog shows offline-saved transactions
+  - Auto-fallback to offline queue on retryable online errors
+  - Save cart as draft on transient online submit failure instead of queuing offline
+  - Boot into offline mode in ~3 s instead of 10–20 s when server is down
+  - Disaster recovery backup for pending transactions
+  - Promo transaction discount included in offline invoice payload
+  - Local date (not UTC) used for offline invoice `posting_date`
+  - Block shift close when offline invoices are still pending sync
+
+- **Discount & Compliment System**
+  - New Discount dialog in payment screen: apply percentage or fixed amount discount
+  - New Compliment (gratis) dialog: mark transaction as compliment with configurable reason stored on Sales Invoice
+  - Discount authorization password per POS Profile (up to 3 passwords); prompts every time
+  - Stack discount and compliment additively for combined reductions
+  - Round grand total to nearest 100 when discount is applied
+  - Discount reason (`custom_compliment_reason`) stored on Sales Invoice for audit
+
+- **Loyalty Points**
+  - Loyalty points redemption integrated directly (no wallet dependency)
+  - Show loyalty redemption even when points balance is zero
+  - Loyalty points earned and total balance printed on receipt
+  - Reverse earned loyalty points on POS returns
+  - Confirmation dialog before redeeming points; cap points to avoid overpayment
+  - Cache loyalty program conversion factor in POS Settings for offline use
+
+- **Promotions & Pricing Rules**
+  - Buy 1 Get 1 Free (Other Item) offer handling
+  - `validate_applied_rule` support — manual offer activation required
+  - Orange pulsing badge on Offers button for pending manual offers
+  - Expand item group eligibility to include descendant groups (nested set hierarchy)
+  - Expand warehouse hierarchy for pricing rule evaluation
+  - Promotional Scheme missed rules evaluated directly when ERPNext engine skips them
+  - Transaction-level promo discount amount shown in payment dialog
+  - Transaction-level promo discount routed to `custom_discount_account` via GL adjustment
+  - Pricing rule item discounts routed to `custom_discount_account` in GL entries
+  - Pricing rule audit trail (`pricing_rule_details`) populated on submit
+  - Reset prepared_items discounts before recalculation to prevent doubling
+  - Always rebuild item cache after applying item-level promos
+  - Promo recalculation frozen while payment dialog is open
+  - Re-evaluate promo discounts when loading a draft
+  - Expand offers to include Product-type (free item) pricing rules
+  - Warehouse filtering added to `get_offers`
+  - Resolve root customer group so offers apply to all customers regardless of group
+
+- **Journal Entry**
+  - Journal Entry feature in POS sidebar — create, view, edit, cancel, delete
+  - Account balance shown when credit account is selected
+  - Accounts resolved from POS Profile on backend
+
+- **Invoice Management**
+  - Server-side search across Invoice Management tabs (customer, date range, status, product)
+  - Lazy-load Invoice History with unlimited pagination
+  - Return button in Invoice Management history tab
+  - Offline transactions visible in Invoice History when offline
+  - Log `get_invoices`/`get_unpaid_invoices`/`get_pos_draft_invoices` failures to ERPNext error log
+
+- **Closing Shift**
+  - Visitor count field in POS Closing Shift with pre-close warning if empty
+  - Edit visitor count on a submitted POS Closing from the sidebar
+  - POS Closing History with reprint, accessible below Journal Entry
+  - Show only active payment methods in close-shift reconciliation
+  - Show Saldo Awal / Dipotong / Saldo Akhir per payment method when returns exist
+  - Transaction count in shift report; remove BrainWise branding from shift report
+  - `grand_total` used instead of `net_total` for closing shift net_total
+
+- **UI / UX**
+  - Payment methods grouped into Cash / Debit / Transfer categories
+  - Auto-scroll cart to bottom when a new item is added
+  - F1 focuses item search; End key triggers payment from search input
+  - Keyboard shortcuts: checkout, hold, drafts, quick amounts, Delete to clear payment
+  - Remarks field in payment dialog, synced to ERPNext invoice
+  - Pin items per POS Profile — pinned items always appear at top of catalog
+  - Pin Category picker: show all item groups + search to set filter bar pins
+  - Remove edit customer button from cart header
+  - Barcode displayed on product rows in item catalog
+  - Item group filter bar from POS Profile
+  - Auto-detect barcode scanner (no manual toggle)
+  - Enter-to-Search mode with configurable Auto-Add toggle
+  - Phrase-ranking in search: exact phrase scores higher than partial word matches
+  - Pay on Account warning with countdown; fix zero-total completion with loyalty points
+  - Warn cashier when selling below item cost (valuation rate check from Bin per warehouse)
+  - Friendly error messages replacing technical stack traces across all `onError` handlers
+  - Retry loading payment methods when dialog opens if cache is empty
+
+- **Delivery Note (Surat Jalan)**
+  - Generate Delivery Note from POS invoice directly in Invoice Management
+
+- **Returns**
+  - Allow decimal return quantity for fractional items (e.g. 0.5 kg)
+  - Use original stored rate for return items to pass ERPNext validation
+  - Use `min(net_rate, rate)` so refund matches discounted price
+  - Normalize payment records to match grand_total after submission
+  - Zero outstanding_amount on both return and original invoice after POS return
+  - Force-write payment records to DB after submit for correct closing shift deduction
+  - Copy `debit_to` from original invoice for return invoices
+
+- **PWA / Service Worker**
+  - Serve cached app shell on 5xx server errors — no more blank white screen
+  - Skip cached Jinja HTML on activate to prevent stale shell
+  - Restrict navigate fallback to `/pos/` only
+  - Force frontend hard-refresh when a new build is deployed
+  - `skipWaiting` on install + purge cached Jinja HTML on activate
+
+- **Scripts & Tooling**
+  - `recalculate_closing_shift` script to fix missing invoices in closed shifts
+  - Production build script added
+
+### Changed
+- **Rebranding**: all "POS Next" references replaced with **NURSA POS** across UI, logs, and login screen
+- **Customer search**: online-only search mode added alongside offline; searches by kode pelanggan
+- **Customer form**: added address (ERPNext Address doctype) and date of birth fields; removed territory field
+- **Customer creation**: requires `custom_kode_pelanggan` field; shows friendly duplicate-code error
+- **Offline customer**: `customer_name` included in invoice data; `OFL-CUST` name replaced with real name at sync
+- **Item sync pagination**: bulk fetch paginated to prevent server timeout
+- **Customer fetch**: 1000-row cap removed — download all customers
+- **Closing shift reconciliation**: shows only cash in Rupiah; hides zero payments in print report
+- **Return invoice**: always requires refund payment method; customer credit option removed
+- **UOM rate**: fall back to dialog-computed rate / `uom_prices` when API returns 0
+- **Search debounce**: 400 ms for manual typing, no debounce for barcode scanner
+- **Stable search sort**: secondary `item_name ASC` sort in offline cache matches server `ORDER BY`
+- **`price_list_rate` sent** to backend when discount present to prevent double-discount
+
+### Fixed
+- **Grand Total Mismatch**: anchor `grand_total` to `ui_grand_total` — absorbs net_total discrepancy between frontend and backend; eliminates ±100/±200 mismatch errors
+- **`DISCOUNT_CALCULATION_ERROR`**: `discount_amount` was stored incorrectly when round-to-100 rounding differed from UI; fixed by using `ui_grand_total` as target
+- **`LinkValidationError` on OFL-CUST sync**: backend fallback customer creation now uses real customer name from invoice data, not the temp ID
+- **Free items**: item_name missing from free item cart row; deduplicate free items; skip free items in offer condition evaluation; unroll free_qty into separate rows for offline sync; pass `is_free_item=1` to ERPNext
+- **`ignore_pricing_rule=1`**: set before save in `submit_invoice`; snapshot/restore item rates across all validate cycles
+- **Payment dialog**: payment methods not appearing when offline due to empty cache; retry on open
+- **Shift closing**: auto-set `closing_amount = expected_amount` for non-cash payments; fix `ValidationError` + idempotency; fix 50-record invoice limit (load all without N+1)
+- **Draft invoices**: map `qty→quantity` and customer string→object on server draft load; strip promo data before saving draft; restore `item_group`/`customer_group` on reopen; delete server draft after checkout
+- **Invoice outstanding**: `set_status()` called after direct `outstanding_amount` writes so submitted POS invoices show Paid instead of Partly Paid
+- **Credit sale**: `custom_receiveable` enforced via `before_submit` hook; correct `debit_to` for credit/pay-on-account sales only
+- **Customer credit balance**: fix double-counting after linked return
+- **Offers**: reset `promoTransactionDiscount` when transaction-level offer removed; clear when all offers removed; `MultiplePricingRuleConflict` caught and falls through to post-process
+- **Loyalty redemption**: account lookup fixed; clear error thrown if unconfigured; POS Settings queried per `pos_profile`; stop ERPNext native loyalty reversal from blocking POS returns
+- **Cost center**: set from POS Profile on Payment Entry; fallback to company cost center
+- **Payments**: `cost_center` from POS Profile on Payment Entry; no overpayment for non-cash methods
+- **Search**: Enter-to-Search takes priority over Auto-Add 500ms timer; cancel auto-add timer on scanner Enter to prevent double-add; phrase-only matching (no word-split flash); stable sort
+- **Service Worker**: restrict activate cleanup to precache only; fix `self.__WB_MANIFEST` appearing more than once
+- **PWA offline**: boot ~3 s instead of 10–20 s; fix navigate fallback breaking offline refresh
+- **Discount dialog**: use store currency instead of USD for amounts; use `shiftStore.profileCurrency` for calculated display
+- **Barcode**: populate barcodes from `GROUP_CONCAT` barcode field in item cache
+- **Pin items**: guarantee `filteredItems` recomputes when pinned items load after `allItems`; items on page 2+ appear at top when pinned
+- **Valuation**: source `valuation_rate` from `tabBin` per warehouse; fallback to `last_purchase_rate`
+- **Income account**: force company default `income_account` on all regular invoice items
+- **Offline sync**: fix race condition where concurrent DB wipe caused missing search results; fix customer sync when offline customer already exists in ERPNext; apply member promo for new offline customers; prevent duplicate kode pelanggan
+- **Error log noise**: suppress missing Signature error; stop noisy POS settings reload and barcode-not-found logs
+
 ## [1.15.0] - 2026-02-06
 
 ### Added
@@ -947,7 +1114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shift management
 - Stock tracking
 
-[Unreleased]: https://github.com/BrainWise-DEV/POSNext/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/BrainWise-DEV/POSNext/compare/v2.2.33...HEAD
+[2.2.32]: https://github.com/BrainWise-DEV/POSNext/compare/v1.15.0...v2.2.32
 [1.15.0]: https://github.com/BrainWise-DEV/POSNext/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/BrainWise-DEV/POSNext/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/BrainWise-DEV/POSNext/compare/v1.12.0...v1.13.0
