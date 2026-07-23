@@ -708,9 +708,30 @@ const syncInvoiceToServer = async (invoice, retryCount = 0) => {
 	// Prepare and submit
 	const invoiceData = normalizeInvoiceForSync(invoice.data, offlineId)
 
+	// If customer is still an OFL-CUST temp ID, resolve the real name from
+	// local cache so the backend can create/find the customer correctly.
+	if (invoiceData.customer?.startsWith("OFL-CUST-") && !invoiceData.customer_name) {
+		try {
+			const cached = await db.customers.get(invoiceData.customer)
+			if (cached?.customer_name) {
+				invoiceData.customer_name = cached.customer_name
+			} else {
+				const queued = await db.customer_queue
+					.filter((e) => e.data?.name === invoiceData.customer)
+					.first()
+				if (queued?.data?.customer_name) {
+					invoiceData.customer_name = queued.data.customer_name
+				}
+			}
+		} catch (_) {}
+	}
+
 	try {
 		const response = await call("pos_next.api.invoices.submit_invoice", {
-			data: JSON.stringify({ invoice: invoiceData, data: {} }),
+			data: JSON.stringify({
+				invoice: invoiceData,
+				data: { customer_name: invoiceData.customer_name || null },
+			}),
 		})
 
 		if (response.message || response.name) {
