@@ -708,19 +708,39 @@ const syncInvoiceToServer = async (invoice, retryCount = 0) => {
 	// Prepare and submit
 	const invoiceData = normalizeInvoiceForSync(invoice.data, offlineId)
 
-	// If customer is still an OFL-CUST temp ID, resolve the real name from
-	// local cache so the backend can create/find the customer correctly.
-	if (invoiceData.customer?.startsWith("OFL-CUST-") && !invoiceData.customer_name) {
+	// If customer is still an OFL-CUST temp ID, resolve before sending to server.
+	// ERPNext will reject with LinkValidationError if the temp ID is sent as-is.
+	let offlineCustomerMeta = {}
+	if (invoiceData.customer?.startsWith("OFL-CUST-")) {
 		try {
-			const cached = await db.customers.get(invoiceData.customer)
-			if (cached?.customer_name) {
-				invoiceData.customer_name = cached.customer_name
+			// First check customer_queue — includes entries already synced to server
+			const queued = await db.customer_queue
+				.filter((e) => e.data?.name === invoiceData.customer)
+				.first()
+
+			if (queued?.server_customer) {
+				// Customer was synced — the invoice update may have been missed (race).
+				// Use the real server ID directly.
+				invoiceData.customer = queued.server_customer
+				invoiceData.customer_name =
+					invoiceData.customer_name || queued.data?.customer_name
+			} else if (queued?.data) {
+				// Customer not yet synced — pass full offline data so backend can
+				// find or create the correct customer (by kode, mobile, or name).
+				invoiceData.customer_name =
+					invoiceData.customer_name || queued.data.customer_name
+				offlineCustomerMeta = {
+					customer_name: queued.data.customer_name || null,
+					mobile_no: queued.data.mobile_no || null,
+					custom_kode_pelanggan: queued.data.custom_kode_pelanggan || null,
+				}
 			} else {
-				const queued = await db.customer_queue
-					.filter((e) => e.data?.name === invoiceData.customer)
-					.first()
-				if (queued?.data?.customer_name) {
-					invoiceData.customer_name = queued.data.customer_name
+				// customer_queue entry gone — try local customer cache
+				const cached = await db.customers.get(invoiceData.customer)
+				if (cached?.customer_name) {
+					invoiceData.customer_name =
+						invoiceData.customer_name || cached.customer_name
+					offlineCustomerMeta = { customer_name: cached.customer_name }
 				}
 			}
 		} catch (_) {}
@@ -730,7 +750,10 @@ const syncInvoiceToServer = async (invoice, retryCount = 0) => {
 		const response = await call("pos_next.api.invoices.submit_invoice", {
 			data: JSON.stringify({
 				invoice: invoiceData,
-				data: { customer_name: invoiceData.customer_name || null },
+				data: {
+					customer_name: invoiceData.customer_name || null,
+					...offlineCustomerMeta,
+				},
 			}),
 		})
 

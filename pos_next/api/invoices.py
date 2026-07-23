@@ -528,55 +528,87 @@ def update_invoice(data):
             if not validation.get("valid"):
                 frappe.throw(validation.get("message"))
 
-        # Ensure customer exists
+        # Ensure customer exists — OFL-CUST-* temp IDs are never real ERPNext records.
+        # Try to resolve via every available hint before attempting to create a new one.
         customer_name = invoice_doc.get("customer")
         if customer_name and not frappe.db.exists("Customer", customer_name):
             found_customer = None
 
-            # Fallback: find existing customer by kode_pelanggan (offline sync edge case where
-            # the temp OFL-CUST-* reference could not be replaced before invoice submission)
-            kode = invoice_doc.get("custom_kode_pelanggan")
+            # 1. Match by kode pelanggan (most specific)
+            kode = data.get("custom_kode_pelanggan") or invoice_doc.get("custom_kode_pelanggan")
             if kode:
                 found_customer = frappe.db.get_value(
                     "Customer", {"custom_kode_pelanggan": kode}, "name"
                 )
 
+            # 2. Match by mobile number (passed from offline customer_queue data)
+            if not found_customer:
+                mobile = data.get("mobile_no") or invoice_doc.get("mobile_no")
+                if mobile:
+                    found_customer = frappe.db.get_value(
+                        "Customer", {"mobile_no": mobile}, "name"
+                    )
+
+            # 3. Match by customer_name (exact, only if it's not a temp ID)
+            if not found_customer:
+                real_name = (
+                    invoice_doc.get("customer_name")
+                    or data.get("customer_name")
+                    or invoice.get("customer_name")
+                )
+                if real_name and not real_name.startswith("OFL-CUST-"):
+                    found_customer = frappe.db.get_value(
+                        "Customer", {"customer_name": real_name}, "name"
+                    )
+
             if found_customer:
                 invoice_doc.customer = found_customer
+                invoice_doc.customer_name = frappe.db.get_value(
+                    "Customer", found_customer, "customer_name"
+                ) or found_customer
             else:
+                # Create a new customer using the real name from offline data
+                real_name = (
+                    invoice_doc.get("customer_name")
+                    or data.get("customer_name")
+                    or invoice.get("customer_name")
+                    or customer_name
+                )
+                cust_group = (
+                    frappe.db.get_value("POS Profile", pos_profile, "customer_group")
+                    if pos_profile
+                    else None
+                ) or frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
+                territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
                 try:
-                    # Prefer the human-readable name from the doc/data fields over
-                    # the temp OFL-CUST-* key.  The frontend sets customer_name
-                    # on the invoice payload; ERPNext also copies it onto invoice_doc
-                    # during load when the field is present in the submitted dict.
-                    real_name = (
-                        invoice_doc.get("customer_name")
-                        or data.get("customer_name")
-                        or invoice.get("customer_name")
-                        or customer_name  # last resort: temp ID string
-                    )
-                    # Resolve customer_group — try POS Profile default, fall back to first group
-                    cust_group = (
-                        frappe.db.get_value("POS Profile", pos_profile, "customer_group")
-                        if pos_profile
-                        else None
-                    ) or frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "All Customer Groups"
-                    territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "All Territories"
-                    cust = frappe.get_doc(
-                        {
-                            "doctype": "Customer",
-                            "customer_name": real_name,
-                            "customer_group": cust_group,
-                            "territory": territory,
-                            "customer_type": "Individual",
-                        }
-                    )
+                    cust = frappe.get_doc({
+                        "doctype": "Customer",
+                        "customer_name": real_name,
+                        "customer_group": cust_group,
+                        "territory": territory,
+                        "customer_type": "Individual",
+                    })
                     cust.flags.ignore_permissions = True
                     cust.insert()
                     invoice_doc.customer = cust.name
                     invoice_doc.customer_name = cust.customer_name
                 except Exception as e:
-                    frappe.log_error(f"Failed to create customer {customer_name}: {e}")
+                    # Insert failed (e.g. duplicate name) — try one more time to find by name
+                    fallback = frappe.db.get_value(
+                        "Customer", {"customer_name": real_name}, "name"
+                    )
+                    if fallback:
+                        invoice_doc.customer = fallback
+                        invoice_doc.customer_name = real_name
+                    else:
+                        frappe.log_error(
+                            f"OFL-CUST resolution failed for {customer_name}: {e}",
+                            "POS Offline Customer Sync",
+                        )
+                        frappe.throw(
+                            f"Tidak dapat menemukan atau membuat pelanggan untuk invoice offline ini. "
+                            f"Nama: {real_name}. Error: {e}"
+                        )
 
         # Disable automatic pricing rules (we handle discounts manually from POS).
         # Also set pos_next_ignore_pricing_rule flag so our set_pos_fields() override
