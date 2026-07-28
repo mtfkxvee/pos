@@ -41,6 +41,50 @@ def get_csrf_token():
 
 
 @frappe.whitelist()
+def generate_device_api_key():
+	"""
+	Generate (or rotate) the Frappe API key/secret for the CURRENTLY LOGGED IN
+	user only, for use by a POS Desktop device as a long-lived credential.
+
+	Frappe's own `frappe.core.doctype.user.user.generate_keys` is restricted to
+	System Manager (`frappe.only_for("System Manager")`), so a regular cashier
+	account cannot call it for themselves. This wraps the same logic, scoped
+	strictly to `frappe.session.user` — it never accepts a `user` parameter and
+	can never be used to generate keys for anyone else.
+
+	Security notes:
+	- Requires an authenticated (non-Guest) session — i.e. the caller must have
+	  just logged in via the normal cookie-session login flow.
+	- The returned api_secret is only ever available at generation time (same
+	  behavior as core Frappe) — it is hashed/opaque in storage afterwards, so
+	  losing it means generating a new one (which invalidates the old secret).
+	- Calling this again for the same user ROTATES the secret (old one stops
+	  working). The desktop app should only call this once during first-time
+	  device setup and persist the result (encrypted) itself.
+	"""
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
+
+	if not frappe.db.get_value("User", frappe.session.user, "enabled"):
+		frappe.throw(_("User is disabled"), frappe.AuthenticationError)
+
+	user = frappe.session.user
+	user_doc = frappe.get_doc("User", user)
+
+	api_secret = frappe.generate_hash(length=15)
+	if not user_doc.api_key:
+		user_doc.api_key = frappe.generate_hash(length=15)
+	user_doc.api_secret = api_secret
+	user_doc.save(ignore_permissions=True)
+
+	return {
+		"user": user,
+		"api_key": user_doc.api_key,
+		"api_secret": api_secret,
+	}
+
+
+@frappe.whitelist()
 def get_app_build_info():
 	"""
 	Return the build version of the currently deployed frontend assets.
