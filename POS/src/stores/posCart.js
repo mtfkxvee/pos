@@ -376,6 +376,20 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return
 		}
 
+		// Block checkout until promo data is loaded.
+		// If offers haven't been fetched yet and we're online, the backend will
+		// compute grand_total without pricing rules, causing a mismatch between
+		// what the cashier saw and what gets recorded. Don't allow submission
+		// until offersStore signals that the promo catalogue is ready.
+		if (!offlineState.isOffline && !offersStore.hasFetched) {
+			showWarning(
+				__(
+					"Data promo belum terdownload. Tunggu sebentar atau buka menu Speed Mode untuk mendownload promo terlebih dahulu.",
+				),
+			)
+			return
+		}
+
 		// Snapshot the grand total EXACTLY as the cashier sees/confirms it in the
 		// payment dialog (cartStore.grandTotal === adjustedGrandTotal), BEFORE any
 		// mutation below. adjustedGrandTotal is a computed that derives from

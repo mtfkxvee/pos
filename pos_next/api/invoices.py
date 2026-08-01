@@ -1991,6 +1991,17 @@ def submit_invoice(invoice=None, data=None):
         invoice_doc.flags.ignore_pricing_rule = True
         invoice_doc.flags.pos_next_ignore_pricing_rule = True
 
+        # Lock grand_total to what the cashier confirmed (ui_grand_total).
+        # ERPNext's validate() → calculate_taxes_and_totals() recalculates
+        # grand_total on every save/submit cycle, overriding the anchoring done
+        # in update_invoice(). Setting this flag here (on the in-memory object
+        # before save()) makes it survive both the pre-submit save() AND submit()
+        # — same Python object — so CustomSalesInvoice.validate() can enforce it
+        # regardless of how many recalculation cycles ERPNext runs.
+        _ui_gt_lock = flt(invoice.get("ui_grand_total") or 0)
+        if _ui_gt_lock > 0 and not cint(invoice_doc.get("is_return")):
+            invoice_doc.flags.pos_next_ui_grand_total = _ui_gt_lock
+
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True

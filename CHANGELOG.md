@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.34] - 2026-08-02
+
+### Fixed
+- **Grand Total Mismatch — Perbaikan Permanen**
+  - Root cause: `submit_invoice()` me-reload dokumen dari DB lalu memanggil `save()` dan `submit()` yang masing-masing memicu `validate()` → `calculate_taxes_and_totals()` — setiap siklus ini meng-override anchoring yang sudah dilakukan di `update_invoice()`
+  - Perbaikan backend: `submit_invoice()` menyetel flag `pos_next_ui_grand_total` pada objek dokumen di memori (sebelum `save()`), sehingga bertahan di seluruh siklus save+submit. `CustomSalesInvoice.validate()` membaca flag ini di akhir siklus dan memaksa `grand_total = ui_grand_total` serta menyesuaikan `discount_amount` dan `outstanding_amount`
+  - Perbaikan frontend: checkout diblokir jika data promo belum terdownload saat online — mencegah mismatch kategori `PROMO_ITEM_NOT_APPLIED` sebelum sampai ke backend
+
 ## [2.2.33] - 2026-07-22
 
 ### Added

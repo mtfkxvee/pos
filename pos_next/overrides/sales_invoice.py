@@ -218,6 +218,35 @@ class CustomSalesInvoice(SalesInvoice):
 			)
 			self.set_status()
 
+		# Grand total lock: submit_invoice() sets pos_next_ui_grand_total on the
+		# in-memory doc before save() so this flag survives both the pre-submit
+		# save() and the submit() call (same Python object). If ERPNext's
+		# calculate_taxes_and_totals() produced a grand_total that doesn't match
+		# what the cashier confirmed, force it to the UI value here — this is the
+		# last line of defence that wins over all recalculation cycles.
+		_locked_gt = self.flags.get("pos_next_ui_grand_total")
+		if _locked_gt and cint(self.is_pos) and not cint(self.is_return):
+			_locked_gt = flt(_locked_gt)
+			if abs(flt(self.grand_total) - _locked_gt) > 1:
+				_target_da = flt(self.net_total) - _locked_gt
+				if _target_da >= 0:
+					self.discount_amount = _target_da
+					self.additional_discount_percentage = 0
+				self.grand_total = _locked_gt
+				self.base_grand_total = _locked_gt
+				_total_paid = sum(
+					flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
+					for p in (self.get("payments") or [])
+				)
+				self.outstanding_amount = max(
+					0,
+					_locked_gt
+					- _total_paid
+					- flt(self.loyalty_amount or 0)
+					- flt(self.write_off_amount or 0),
+				)
+				self.set_status()
+
 	def get_gl_entries(self, warehouse_account=None):
 		"""
 		Override to add discount GL entries:
