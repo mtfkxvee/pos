@@ -1998,7 +1998,7 @@ def submit_invoice(invoice=None, data=None):
         # before save()) makes it survive both the pre-submit save() AND submit()
         # — same Python object — so CustomSalesInvoice.validate() can enforce it
         # regardless of how many recalculation cycles ERPNext runs.
-        _ui_gt_lock = flt(invoice.get("ui_grand_total") or 0)
+        _ui_gt_lock = flt(data.get("ui_grand_total") or 0)
         if _ui_gt_lock > 0 and not cint(invoice_doc.get("is_return")):
             invoice_doc.flags.pos_next_ui_grand_total = _ui_gt_lock
 
