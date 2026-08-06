@@ -155,8 +155,10 @@ class CustomSalesInvoice(SalesInvoice):
 			# and does not call validate() or apply pricing rules.
 			self.calculate_taxes_and_totals()
 
-		# Restore payments if cleared by super().validate()
-		if db_payment_count and not self.get("payments"):
+		# Restore payments if cleared by super().validate().
+		# Skip if submit_invoice already locked in correct amounts (pos_next_payments_locked)
+		# — restoring from DB would overwrite the just-applied split payment amounts.
+		if db_payment_count and not self.get("payments") and not self.flags.get("pos_next_payments_locked"):
 			try:
 				db_payments = frappe.get_all(
 					"Sales Invoice Payment",

@@ -748,6 +748,36 @@ def update_invoice(data):
         # Populate missing fields (company, currency, accounts, etc.)
         invoice_doc.set_missing_values()
 
+        # Re-apply split payment amounts after set_missing_values().
+        # ERPNext's set_pos_fields(for_validate=False) — called internally by
+        # set_missing_values() — clears the payments child table and repopulates
+        # it from the POS Profile defaults.  Any payment method marked default=1
+        # in the POS Profile gets amount = outstanding_amount (= grand_total at
+        # that point, because paid_amount was reset to 0).  When multiple payment
+        # methods are both marked default, ALL of them get amount = grand_total —
+        # exactly the split-payment bug where each row shows grand_total instead
+        # of the cashier's actual partial amount.
+        # Fix: rebuild payments from the frontend's authoritative amounts.
+        _split_payments = data.get("payments") or []
+        if _split_payments and doctype == "Sales Invoice" and not invoice_doc.get("is_return"):
+            _split_map = {}
+            for _p in _split_payments:
+                _mop = _p.get("mode_of_payment") if isinstance(_p, dict) else getattr(_p, "mode_of_payment", None)
+                _amt = flt(_p.get("amount", 0) if isinstance(_p, dict) else getattr(_p, "amount", 0))
+                if _mop and _amt > 0:
+                    _split_map[_mop] = _split_map.get(_mop, 0) + _amt
+            if _split_map:
+                invoice_doc.set("payments", [])
+                for _mop, _amt in _split_map.items():
+                    _acct_info = get_payment_account(_mop, invoice_doc.company)
+                    invoice_doc.append("payments", {
+                        "mode_of_payment": _mop,
+                        "amount": _amt,
+                        "base_amount": _amt,
+                        "type": "Cash",
+                        "account": _acct_info.get("account") if _acct_info else "",
+                    })
+
         # Re-enforce discount AFTER set_missing_values() which may reset it.
         # Include any manual per-item discounts folded into the invoice-level total.
         _discount_amount = flt(data.get("discount_amount") or 0) + _manual_item_discount_total
@@ -1764,6 +1794,9 @@ def submit_invoice(invoice=None, data=None):
                         "type": "Cash",
                         "account": account_info.get("account") if account_info else "",
                     })
+                # Signal validate() not to restore stale DB payments — we already
+                # have the correct amounts from the frontend here.
+                invoice_doc.flags.pos_next_payments_locked = True
 
         # Set accounts for all payment methods before saving
         if doctype == "Sales Invoice" and hasattr(invoice_doc, "payments"):
