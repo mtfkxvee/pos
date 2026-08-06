@@ -459,6 +459,7 @@ import {
 import { offlineWorker } from "@/utils/offline/workerClient"
 import { logger } from "@/utils/logger"
 import { usePOSEvents } from "@/composables/usePOSEvents"
+import { usePOSSettingsStore } from "@/stores/posSettings"
 import TranslatedHTML from "../common/TranslatedHTML.vue"
 
 const log = logger.create("POSSettings")
@@ -468,6 +469,7 @@ const {
 	emitStockSyncConfigured,
 } = usePOSEvents()
 const { showSuccess, showError } = useToast()
+const posSettingsStore = usePOSSettingsStore()
 
 const props = defineProps({
 	modelValue: Boolean,
@@ -753,6 +755,10 @@ async function saveSettings() {
 		// Detect and emit settings changes through event system
 		// This will notify all listeners (POSSale, stock store, cart store, etc.)
 		detectSettingsChanges(settings.value, oldSettings)
+
+		// Sync Pinia store so gated components (e.g. InvoiceHistoryDialog) reflect
+		// the new settings without requiring a page reload or re-save
+		posSettingsStore.reloadSettings()
 
 		// IMPORTANT: Page reload for critical stock policy change
 		// The allow_negative_stock setting affects deep stock validation logic
