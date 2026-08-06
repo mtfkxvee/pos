@@ -106,6 +106,16 @@
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
 										</svg>
 									</button>
+									<!-- Cup Label Print Button (purple, distinct from green invoice print) -->
+									<button
+										@click="openLabelDialog(invoice)"
+										class="p-1.5 hover:bg-purple-50 rounded transition-colors"
+										:title="__('Print Cup Labels')"
+									>
+										<svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A2 2 0 013 9.382V5a2 2 0 012-2z"/>
+										</svg>
+									</button>
 									<button
 										v-if="canCreateReturn(invoice)"
 										@click="openReturnModal(invoice)"
@@ -146,6 +156,86 @@
 		:preselected-invoice="selectedInvoiceForReturn"
 		@return-created="handleReturnCreated"
 	/>
+
+	<!-- Cup Label Print Dialog -->
+	<Dialog
+		v-model="showLabelDialog"
+		:options="{ title: __('Print Cup Labels'), size: 'sm' }"
+	>
+		<template #body-content>
+			<div class="flex flex-col gap-3">
+				<!-- Loading state -->
+				<div v-if="labelLoading" class="text-center py-6">
+					<div class="animate-spin h-6 w-6 border-b-2 border-purple-500 rounded-full mx-auto"></div>
+					<p class="mt-2 text-xs text-gray-500">{{ __('Loading items...') }}</p>
+				</div>
+
+				<!-- Empty state -->
+				<div v-else-if="labelItems.length === 0" class="text-center py-6 text-gray-400 text-sm">
+					{{ __('No items found in this invoice.') }}
+				</div>
+
+				<!-- Item checklist -->
+				<div v-else class="flex flex-col gap-1">
+					<p class="text-xs text-gray-500 mb-1">
+						{{ __('Pilih item yang akan dicetak labelnya:') }}
+					</p>
+
+					<!-- Select All / None -->
+					<div class="flex items-center gap-2 pb-2 border-b border-gray-100">
+						<button
+							class="text-xs text-purple-600 hover:underline"
+							@click="setAllLabels(true)"
+						>{{ __('Pilih Semua') }}</button>
+						<span class="text-gray-300">|</span>
+						<button
+							class="text-xs text-gray-500 hover:underline"
+							@click="setAllLabels(false)"
+						>{{ __('Batal Semua') }}</button>
+					</div>
+
+					<label
+						v-for="(item, idx) in labelItems"
+						:key="idx"
+						class="flex items-start gap-3 p-2 rounded-lg cursor-pointer hover:bg-purple-50 transition-colors select-none"
+					>
+						<input
+							type="checkbox"
+							v-model="item.checked"
+							class="mt-0.5 w-4 h-4 rounded accent-purple-600 cursor-pointer flex-shrink-0"
+						/>
+						<div class="flex-1 min-w-0">
+							<p class="text-sm font-medium text-gray-900 leading-snug">{{ item.item_name }}</p>
+							<p class="text-xs text-gray-400">
+								{{ __('Qty') }}: {{ item.qty }}
+								<span v-if="labelCopies(item) > 1" class="text-purple-500 ml-1">
+									→ {{ labelCopies(item) }} label
+								</span>
+							</p>
+							<p v-if="labelRemarks" class="text-xs text-purple-700 mt-0.5 italic truncate">
+								{{ labelRemarks }}
+							</p>
+						</div>
+					</label>
+				</div>
+			</div>
+		</template>
+
+		<template #actions>
+			<div class="flex gap-2 w-full justify-end">
+				<Button variant="subtle" @click="showLabelDialog = false">
+					{{ __('Batal') }}
+				</Button>
+				<button
+					:disabled="labelLoading || !labelItems.some(i => i.checked)"
+					class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+					@click="printLabels"
+				>
+					{{ __('Print Label') }}
+				</button>
+			</div>
+		</template>
+	</Dialog>
 </template>
 
 <script setup>
@@ -199,6 +289,12 @@ const hasMore = ref(true)
 // Return dialog state
 const showReturnDialog = ref(false)
 const selectedInvoiceForReturn = ref(null)
+
+// Label print dialog state
+const showLabelDialog = ref(false)
+const labelLoading = ref(false)
+const labelItems = ref([])   // [{ item_name, qty, checked }]
+const labelRemarks = ref("")
 
 // Track if we're loading more (appending) vs fresh load (replacing)
 const isLoadingMore = ref(false)
@@ -375,5 +471,137 @@ function formatDateTime(date, time) {
 		return `${dateStr} ${time}`
 	}
 	return dateStr
+}
+
+// ── Cup Label Print ──────────────────────────────────────────────────────────
+
+async function openLabelDialog(invoice) {
+	labelItems.value = []
+	labelRemarks.value = ""
+	labelLoading.value = true
+	showLabelDialog.value = true
+
+	try {
+		const res = await fetch(
+			`/api/resource/Sales%20Invoice/${encodeURIComponent(invoice.name)}`,
+		)
+		const json = await res.json()
+		const doc = json.data || {}
+
+		labelRemarks.value = doc.remarks || ""
+		labelItems.value = (doc.items || [])
+			.filter((item) => !item.is_free_item)
+			.map((item) => ({
+				item_name: item.item_name || item.item_code || "",
+				qty: item.qty || 1,
+				checked: true,
+			}))
+	} catch {
+		showError(__("Gagal memuat item invoice"))
+		showLabelDialog.value = false
+	} finally {
+		labelLoading.value = false
+	}
+}
+
+// How many label copies to print for one item line
+function labelCopies(item) {
+	const qty = Number(item.qty) || 1
+	return qty < 1 ? 1 : Math.ceil(qty)
+}
+
+function setAllLabels(checked) {
+	labelItems.value.forEach((item) => {
+		item.checked = checked
+	})
+}
+
+function escapeHtml(text) {
+	return String(text || "")
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+}
+
+function printLabels() {
+	const selected = labelItems.value.filter((i) => i.checked)
+	if (!selected.length) return
+
+	const remarks = labelRemarks.value || ""
+
+	// Build one <div class="label"> per physical cup (copies = ceil(qty))
+	const labelsHtml = selected
+		.flatMap((item) => {
+			const copies = labelCopies(item)
+			return Array.from({ length: copies }, () => `
+				<div class="label">
+					<div class="item-name">${escapeHtml(item.item_name)}</div>
+					${remarks ? `<div class="remarks">${escapeHtml(remarks)}</div>` : ""}
+				</div>
+			`)
+		})
+		.join("")
+
+	const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: 58mm 44mm;
+    margin: 0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', Courier, monospace; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 44mm;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 3mm 3mm;
+    overflow: hidden;
+  }
+  .label:last-child { page-break-after: avoid; }
+  .item-name {
+    font-size: 14pt;
+    font-weight: bold;
+    line-height: 1.25;
+    word-break: break-word;
+    hyphens: auto;
+    max-width: 100%;
+  }
+  .remarks {
+    font-size: 10pt;
+    margin-top: 3mm;
+    line-height: 1.3;
+    word-break: break-word;
+    max-width: 100%;
+  }
+</style>
+</head>
+<body>
+${labelsHtml}
+</body>
+</html>`
+
+	const win = window.open("", "_blank", "width=400,height=300")
+	if (!win) {
+		showError(__("Popup diblokir. Izinkan popup untuk mencetak label."))
+		return
+	}
+	win.document.write(html)
+	win.document.close()
+	win.focus()
+	// Small delay so the browser fully renders before the print dialog opens
+	setTimeout(() => {
+		win.print()
+		win.close()
+	}, 250)
+
+	showLabelDialog.value = false
 }
 </script>
