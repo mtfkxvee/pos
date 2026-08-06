@@ -2,6 +2,7 @@ import { call } from "@/utils/apiWrapper"
 import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
+import { getBTPrinterName, printReceiptBT } from "@/utils/bluetoothPrinter"
 
 const log = logger.create("PrintInvoice")
 
@@ -18,6 +19,18 @@ export async function printInvoice(
 	letterhead = null,
 	paperSize = null,
 ) {
+	// If a Bluetooth printer is paired (cup label mode), route all receipt
+	// printing through BLE instead of window.open (which fails on Android).
+	if (getBTPrinterName()) {
+		try {
+			await printReceiptBT(invoiceData)
+			return true
+		} catch (err) {
+			log.warn("BLE receipt print failed, falling back to window.open:", err)
+			// fall through to window.open path
+		}
+	}
+
 	let format = printFormat
 	try {
 		if (!invoiceData || !invoiceData.name) {
@@ -116,7 +129,17 @@ export async function printInvoice(
  * @param {Object} invoiceData
  * @param {string} printFormat - "58 PRINTER" or "80 PRINTER"
  */
-export function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
+export async function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
+	// If BT printer paired, use BLE instead of window.open (Android-compatible)
+	if (getBTPrinterName()) {
+		try {
+			await printReceiptBT(invoiceData)
+			return
+		} catch (err) {
+			log.warn("BLE receipt print failed, falling back to window.open:", err)
+		}
+	}
+
 	const is80mm = printFormat && printFormat.includes("80")
 	const paperWidth = is80mm ? "80mm" : "58mm"
 	const windowWidth = is80mm ? "350" : "220"
