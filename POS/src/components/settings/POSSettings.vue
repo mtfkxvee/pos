@@ -363,6 +363,11 @@
 												:label="__('Silent Print')"
 												:description="__('Print without confirmation')"
 											/>
+											<CheckboxField
+												v-model="settings.allow_cup_label_print"
+												:label="__('Allow Cup Label Print')"
+												:description="__('Tampilkan tombol cetak label cup (58×44mm) di Invoice History')"
+											/>
 										</div>
 									</div>
 								</div>
@@ -441,6 +446,7 @@ const settings = ref({
 	allow_write_off_change: 0,
 	allow_partial_payment: 0,
 	silent_print: 0,
+	allow_cup_label_print: 0,
 	allow_negative_stock: 0,
 	allow_zero_valuation: 0,
 	tax_inclusive: 0,

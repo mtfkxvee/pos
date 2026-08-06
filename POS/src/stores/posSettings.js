@@ -52,6 +52,7 @@ const DEFAULT_SETTINGS = {
 	// Printing
 	allow_print_last_invoice: 0,
 	silent_print: 0,
+	allow_cup_label_print: 0,
 	// Delivery
 	use_delivery_charges: 0,
 	auto_set_delivery_charges: 0,
@@ -199,6 +200,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		Boolean(settings.value.allow_print_last_invoice),
 	)
 	const silentPrint = computed(() => Boolean(settings.value.silent_print))
+	const allowCupLabelPrint = computed(() =>
+		Boolean(settings.value.allow_cup_label_print),
+	)
 
 	// Computed - Delivery
 	const useDeliveryCharges = computed(() =>
@@ -429,6 +433,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		// Computed - Printing
 		allowPrintLastInvoice,
 		silentPrint,
+		allowCupLabelPrint,
 
 		// Computed - Delivery
 		useDeliveryCharges,

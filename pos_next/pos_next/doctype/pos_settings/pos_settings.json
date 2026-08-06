@@ -56,6 +56,7 @@
         "section_break_printing",
         "allow_print_last_invoice",
         "silent_print",
+        "allow_cup_label_print",
         "section_break_delivery",
         "use_delivery_charges",
         "auto_set_delivery_charges",
@@ -421,6 +422,13 @@
             "fieldname": "silent_print",
             "fieldtype": "Check",
             "label": "Enable Silent Print"
+        },
+        {
+            "default": "0",
+            "description": "Tampilkan tombol cetak label cup (58x44mm) di Invoice History",
+            "fieldname": "allow_cup_label_print",
+            "fieldtype": "Check",
+            "label": "Allow Cup Label Print"
         },
         {
             "collapsible": 1,

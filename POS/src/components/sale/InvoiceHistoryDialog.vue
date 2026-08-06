@@ -108,6 +108,7 @@
 									</button>
 									<!-- Cup Label Print Button (purple, distinct from green invoice print) -->
 									<button
+										v-if="settingsStore.allowCupLabelPrint"
 										@click="openLabelDialog(invoice)"
 										class="p-1.5 hover:bg-purple-50 rounded transition-colors"
 										:title="__('Print Cup Labels')"
@@ -251,11 +252,13 @@ import {
 	getCachedInvoiceHistory,
 	getOfflineInvoicesForHistory,
 } from "@/utils/offline/sync"
+import { usePOSSettingsStore } from "@/stores/posSettings"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue"
 
 const { showError } = useToast()
+const settingsStore = usePOSSettingsStore()
 
 const props = defineProps({
 	modelValue: Boolean,
