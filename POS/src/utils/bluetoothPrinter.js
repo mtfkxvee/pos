@@ -153,11 +153,10 @@ export async function printLabelBT(itemName, remarks, copies = 1) {
 export async function printReceiptBT(invoiceData) {
 	const char = await _ensureConnected()
 
-	// Fetch total loyalty balance from server if invoice has loyalty activity
+	// Fetch total loyalty balance from server for any customer
 	let totalLoyaltyPoints = null
 	const customer = invoiceData.customer
-	const hasLoyalty = invoiceData.loyalty_points || invoiceData.loyalty_amount || invoiceData.redeem_loyalty_points
-	if (customer && hasLoyalty) {
+	if (customer) {
 		try {
 			totalLoyaltyPoints = await call(
 				"pos_next.api.customers.get_customer_loyalty_balance",
@@ -211,19 +210,28 @@ function _buildReceipt(inv, totalLoyaltyPoints = null) {
 
 	// ── Header (centered) ──
 	push(0x1b, 0x61, 0x01)
-	push(0x1b, 0x45, 0x01) // bold
-	line(inv.company || "")
-	push(0x1b, 0x45, 0x00)
-
 	try {
 		const addr = getCachedCompanyAddress()
 		if (addr) {
+			if (addr.address_title) {
+				push(0x1b, 0x45, 0x01) // bold
+				line(addr.address_title)
+				push(0x1b, 0x45, 0x00)
+			}
 			if (addr.address_line1) line(addr.address_line1)
 			if (addr.address_line2) line(addr.address_line2)
 			const cityPhone = [addr.city, addr.phone].filter(Boolean).join(" | ")
 			if (cityPhone) line(cityPhone)
+		} else {
+			push(0x1b, 0x45, 0x01)
+			line(inv.company || "")
+			push(0x1b, 0x45, 0x00)
 		}
-	} catch {}
+	} catch {
+		push(0x1b, 0x45, 0x01)
+		line(inv.company || "")
+		push(0x1b, 0x45, 0x00)
+	}
 
 	push(0x1b, 0x61, 0x00) // left
 	sep()
@@ -296,7 +304,7 @@ function _buildReceipt(inv, totalLoyaltyPoints = null) {
 	// ── Loyalty Points ──
 	const loyaltyPoints = inv.loyalty_points || 0
 	const redeemLoyalty = inv.redeem_loyalty_points
-	const showLoyaltySection = loyaltyPoints > 0 || totalLoyaltyPoints > 0
+	const showLoyaltySection = loyaltyPoints > 0 || (totalLoyaltyPoints !== null && totalLoyaltyPoints > 0)
 	if (showLoyaltySection) {
 		sep()
 		push(0x1b, 0x61, 0x01) // center
