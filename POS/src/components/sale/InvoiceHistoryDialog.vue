@@ -253,6 +253,7 @@ import {
 	getOfflineInvoicesForHistory,
 } from "@/utils/offline/sync"
 import { usePOSSettingsStore } from "@/stores/posSettings"
+import { getBTPrinterName, printLabelBT } from "@/utils/bluetoothPrinter"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue"
@@ -526,12 +527,26 @@ function escapeHtml(text) {
 		.replace(/>/g, "&gt;")
 }
 
-function printLabels() {
+async function printLabels() {
 	const selected = labelItems.value.filter((i) => i.checked)
 	if (!selected.length) return
 
 	const remarks = labelRemarks.value || ""
 
+	// Use BLE if a printer is paired, otherwise fall back to window.open
+	if (getBTPrinterName()) {
+		showLabelDialog.value = false
+		try {
+			for (const item of selected) {
+				await printLabelBT(item.item_name, remarks, labelCopies(item))
+			}
+		} catch (err) {
+			showError(err.message || __("Gagal print ke Bluetooth printer"))
+		}
+		return
+	}
+
+	// ── Fallback: browser print window ────────────────────────────────────────
 	// Build one <div class="label"> per physical cup (copies = ceil(qty))
 	const labelsHtml = selected
 		.flatMap((item) => {

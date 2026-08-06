@@ -368,6 +368,58 @@
 												:label="__('Allow Cup Label Print')"
 												:description="__('Tampilkan tombol cetak label cup (58×44mm) di Invoice History')"
 											/>
+
+											<!-- Bluetooth Printer Pairing -->
+											<div v-if="settings.allow_cup_label_print" class="mt-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
+												<p class="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1">
+													<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+														<path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+													</svg>
+													{{ __('Bluetooth Printer (Android)') }}
+												</p>
+
+												<div v-if="!btSupported" class="text-xs text-gray-500">
+													{{ __('Browser tidak support Web Bluetooth. Gunakan Chrome di Android.') }}
+												</div>
+
+												<div v-else-if="btPrinterName" class="flex items-center justify-between gap-2">
+													<div class="flex items-center gap-1.5 min-w-0">
+														<svg class="w-4 h-4 text-purple-600 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+															<path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+														</svg>
+														<span class="text-xs font-medium text-purple-800 truncate">{{ btPrinterName }}</span>
+													</div>
+													<div class="flex gap-1 shrink-0">
+														<button
+															@click="pairBluetooth"
+															:disabled="btPairing"
+															class="text-xs px-2 py-1 rounded bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors disabled:opacity-50"
+														>{{ __('Ganti') }}</button>
+														<button
+															@click="unpairBluetooth"
+															class="text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+														>{{ __('Hapus') }}</button>
+													</div>
+												</div>
+
+												<div v-else>
+													<p class="text-xs text-gray-600 mb-2">{{ __('Belum ada printer yang dipasangkan.') }}</p>
+													<button
+														@click="pairBluetooth"
+														:disabled="btPairing"
+														class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
+													>
+														<svg v-if="btPairing" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+															<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+															<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+														</svg>
+														<svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+															<path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+														</svg>
+														{{ btPairing ? __('Mencari printer...') : __('Pair Printer Bluetooth') }}
+													</button>
+												</div>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -396,6 +448,7 @@ import CheckboxField from "@/components/settings/CheckboxField.vue"
 import NumberField from "@/components/settings/NumberField.vue"
 import SelectField from "@/components/settings/SelectField.vue"
 import { useToast } from "@/composables/useToast"
+import { isBTAvailable, pairBTPrinter, getBTPrinterName, removeBTPrinter } from "@/utils/bluetoothPrinter"
 import { Button, call, createResource } from "frappe-ui"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import {
@@ -431,6 +484,32 @@ const activeTab = ref("stock")
 const loading = ref(true)
 const saving = ref(false)
 const warehousesList = ref([])
+
+// ── Bluetooth Printer ────────────────────────────────────────────────────────
+const btSupported = isBTAvailable()
+const btPrinterName = ref(getBTPrinterName())
+const btPairing = ref(false)
+
+async function pairBluetooth() {
+	btPairing.value = true
+	try {
+		const name = await pairBTPrinter()
+		btPrinterName.value = name
+		showSuccess(__("Printer berhasil dipasangkan: ") + name)
+	} catch (err) {
+		if (err.name !== "NotFoundError") {
+			showError(err.message || __("Gagal pair printer"))
+		}
+	} finally {
+		btPairing.value = false
+	}
+}
+
+function unpairBluetooth() {
+	removeBTPrinter()
+	btPrinterName.value = null
+}
+// ────────────────────────────────────────────────────────────────────────────
 const selectedWarehouse = ref(props.currentWarehouse || "")
 const settings = ref({
 	pos_profile: props.posProfile || "",
