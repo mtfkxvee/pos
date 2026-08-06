@@ -3,6 +3,7 @@ import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
 import { getBTPrinterName, printReceiptBT } from "@/utils/bluetoothPrinter"
+import { usePOSSettingsStore } from "@/stores/posSettings"
 
 const log = logger.create("PrintInvoice")
 
@@ -21,7 +22,7 @@ export async function printInvoice(
 ) {
 	// If a Bluetooth printer is paired (cup label mode), route all receipt
 	// printing through BLE instead of window.open (which fails on Android).
-	if (getBTPrinterName()) {
+	if (getBTPrinterName() && usePOSSettingsStore().enableBluetoothPrinter) {
 		try {
 			await printReceiptBT(invoiceData)
 			return true
@@ -131,7 +132,7 @@ export async function printInvoice(
  */
 export async function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
 	// If BT printer paired, use BLE instead of window.open (Android-compatible)
-	if (getBTPrinterName()) {
+	if (getBTPrinterName() && usePOSSettingsStore().enableBluetoothPrinter) {
 		try {
 			await printReceiptBT(invoiceData)
 			return

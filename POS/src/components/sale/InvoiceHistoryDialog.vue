@@ -534,7 +534,7 @@ async function printLabels() {
 	const remarks = labelRemarks.value || ""
 
 	// Use BLE if a printer is paired, otherwise fall back to window.open
-	if (getBTPrinterName()) {
+	if (getBTPrinterName() && settingsStore.enableBluetoothPrinter) {
 		showLabelDialog.value = false
 		try {
 			for (const item of selected) {
