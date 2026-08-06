@@ -57,17 +57,13 @@ export async function printInvoice(
 
 		const printUrl = `/printview?${params.toString()}`
 
-		if (!is80mm) {
-			// 58mm: no CSS override needed — just let trigger_print handle it
-			params.append("trigger_print", "1")
-			const pw = window.open(`/printview?${params.toString()}`, "_blank", "width=800,height=600")
-			if (!pw) throw new Error("Failed to open print window. Please check your popup blocker settings.")
-			return true
-		}
-
-		// 80mm: open without trigger_print, inject CSS override, then print manually
-		const printWindow = window.open(printUrl, "_blank", "width=800,height=600")
-		if (!printWindow) throw new Error("Failed to open print window. Please check your popup blocker settings.")
+		// Open the Frappe printview.
+		// We do NOT rely on trigger_print=1 (Frappe skips it on some mobile UA)
+		// or cross-tab printWindow.print() (blocked on Android Chrome).
+		// Instead we wait for the page to load, then inject a same-origin <script>
+		// that calls window.print() from within the child tab itself.
+		const pw = window.open(printUrl, "_blank", "width=800,height=600")
+		if (!pw) throw new Error("Failed to open print window. Please check your popup blocker settings.")
 
 		await new Promise((resolve) => {
 			let done = false
@@ -75,27 +71,36 @@ export async function printInvoice(
 				if (done) return
 				done = true
 				try {
-					const style = printWindow.document.createElement("style")
-					style.textContent = `
-						@page { size: 80mm auto !important; margin: 0 !important; }
-						body, .print-format {
-							width: 80mm !important;
-							max-width: 80mm !important;
-						}
-					`
-					printWindow.document.head.appendChild(style)
+					// For 80mm: inject CSS width override
+					if (is80mm) {
+						const style = pw.document.createElement("style")
+						style.textContent = `
+							@page { size: 80mm auto !important; margin: 0 !important; }
+							body, .print-format {
+								width: 80mm !important;
+								max-width: 80mm !important;
+							}
+						`
+						pw.document.head.appendChild(style)
+					}
+					// Inject self-print script — runs inside the child tab, not cross-tab.
+					// This works on Android Chrome (same-origin DOM write) unlike pw.print().
+					const script = pw.document.createElement("script")
+					script.textContent = [
+						"setTimeout(function(){",
+						"  window.print();",
+						"  window.onafterprint = function(){ try{ window.close(); }catch(e){} };",
+						"}, 300);",
+					].join("")
+					pw.document.body.appendChild(script)
 				} catch (e) {
-					log.warn("Could not inject 80mm CSS override:", e)
+					log.warn("Could not inject print script:", e)
 				}
-				setTimeout(() => {
-					printWindow.focus()
-					printWindow.print()
-					resolve()
-				}, 300)
+				resolve()
 			}
-			printWindow.addEventListener("load", inject)
-			// Fallback if load event already fired or is slow
-			setTimeout(inject, 1500)
+			pw.addEventListener("load", inject)
+			// Fallback: if load already fired or is slow (Frappe can be >1s on mobile)
+			setTimeout(inject, 2000)
 		})
 
 		return true
@@ -244,6 +249,17 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 	<button onclick="window.print()" style="padding:10px 20px; font-size:14px; cursor:pointer;">Print</button>
 	<button onclick="window.close()" style="padding:10px 20px; font-size:14px; cursor:pointer; margin-left:10px;">Close</button>
 </div>
+<script>
+// Self-print: runs inside the tab, not cross-tab — works on Android Chrome.
+(function(){
+  function doPrint(){
+    window.print();
+    window.onafterprint = function(){ try{ window.close(); }catch(e){} };
+  }
+  if (document.readyState === 'complete') { setTimeout(doPrint, 200); }
+  else { window.addEventListener('load', function(){ setTimeout(doPrint, 200); }); }
+})();
+</script>
 </body>
 </html>`
 
@@ -251,17 +267,6 @@ ${invoiceData.terms ? `<p style="font-size:7px;">${invoiceData.terms}</p>` : ""}
 
 	printWindow.document.write(printContent)
 	printWindow.document.close()
-
-	// Auto print after load
-	printWindow.onload = () => {
-		printWindow.print()
-	}
-
-	// Match the online print flow: close the window automatically once the
-	// print dialog is dismissed, whether the user printed or cancelled.
-	printWindow.onafterprint = () => {
-		printWindow.close()
-	}
 }
 
 /**
@@ -559,15 +564,20 @@ export function printShiftClosing(closingData, paperSize = "80mm") {
 					${__("Close")}
 				</button>
 			</div>
+			<script>
+			(function(){
+			  function doPrint(){
+			    window.print();
+			    window.onafterprint = function(){ try{ window.close(); }catch(e){} };
+			  }
+			  if (document.readyState === 'complete') { setTimeout(doPrint, 200); }
+			  else { window.addEventListener('load', function(){ setTimeout(doPrint, 200); }); }
+			})();
+			</script>
 		</body>
 		</html>
 	`
 
 	printWindow.document.write(printContent)
 	printWindow.document.close()
-
-	// Auto print after load
-	printWindow.onload = () => {
-		printWindow.print()
-	}
 }
