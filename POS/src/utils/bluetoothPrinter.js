@@ -1,6 +1,7 @@
 // BLE thermal printer utility (58mm ESC/POS)
 // Supports common Chinese 58mm BLE printers (iWare, etc.)
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
+import { call } from "frappe-ui"
 
 const STORAGE_KEY = "pos_bt_printer_name"
 
@@ -151,7 +152,21 @@ export async function printLabelBT(itemName, remarks, copies = 1) {
 
 export async function printReceiptBT(invoiceData) {
 	const char = await _ensureConnected()
-	const data = _buildReceipt(invoiceData)
+
+	// Fetch total loyalty balance from server if invoice has loyalty activity
+	let totalLoyaltyPoints = null
+	const customer = invoiceData.customer
+	const hasLoyalty = invoiceData.loyalty_points || invoiceData.loyalty_amount || invoiceData.redeem_loyalty_points
+	if (customer && hasLoyalty) {
+		try {
+			totalLoyaltyPoints = await call(
+				"pos_next.api.customers.get_customer_loyalty_balance",
+				{ customer },
+			)
+		} catch { /* non-fatal */ }
+	}
+
+	const data = _buildReceipt(invoiceData, totalLoyaltyPoints)
 	await _writeChunked(char, data)
 }
 
@@ -177,7 +192,7 @@ function _center(str, cols = COLS) {
 	return " ".repeat(pad) + str
 }
 
-function _buildReceipt(inv) {
+function _buildReceipt(inv, totalLoyaltyPoints = null) {
 	const enc = new TextEncoder()
 	const b = []
 	const push = (...bytes) => b.push(...bytes)
@@ -194,13 +209,12 @@ function _buildReceipt(inv) {
 	// Init
 	push(0x1b, 0x40)
 
-	// ── Header ──
-	push(0x1b, 0x61, 0x01) // center
+	// ── Header (centered) ──
+	push(0x1b, 0x61, 0x01)
 	push(0x1b, 0x45, 0x01) // bold
 	line(inv.company || "")
-	push(0x1b, 0x45, 0x00) // bold off
+	push(0x1b, 0x45, 0x00)
 
-	// Company address from cache
 	try {
 		const addr = getCachedCompanyAddress()
 		if (addr) {
@@ -211,7 +225,7 @@ function _buildReceipt(inv) {
 		}
 	} catch {}
 
-	push(0x1b, 0x61, 0x00) // left align
+	push(0x1b, 0x61, 0x00) // left
 	sep()
 
 	// ── Invoice info ──
@@ -219,11 +233,11 @@ function _buildReceipt(inv) {
 	const postTime = (inv.posting_time || "").substring(0, 5)
 	const ownerShort = (inv.owner || "Kasir").substring(0, 8)
 	const customerRaw = inv.customer_name || inv.customer || "Guest"
-	const customer = customerRaw.split(" XSA")[0].split(" XPY")[0].split(" XS")[0].split(" - ")[0]
+	const customerName = customerRaw.split(" XSA")[0].split(" XPY")[0].split(" XS")[0].split(" - ")[0]
 
 	line(`No : ${inv.name || ""}`)
 	line(`Ksr: ${ownerShort}  Tgl: ${postDate} ${postTime}`)
-	line(`Pel: ${customer}`)
+	line(`Pel: ${customerName}`)
 	sep()
 
 	// ── Items ──
@@ -235,13 +249,22 @@ function _buildReceipt(inv) {
 		line(item.item_name || item.item_code || "")
 		line(_row(`  ${displayQty} x ${_num(rate)}`, _num(amount)))
 		if (item.discount_amount > 0) line(_row("  Diskon", `-${_num(item.discount_amount)}`))
+		if (item.serial_no) {
+			const sn = String(item.serial_no).replace(/\n/g, ", ")
+			line(`S/N: ${sn}`.substring(0, COLS))
+		}
 	}
 	sep()
 
 	// ── Totals ──
+	if (inv.show_inclusive_tax_in_print) {
+		line(_row("Total Excl. Tax", _num(inv.net_total)))
+	} else {
+		line(_row("Total", _num(inv.total)))
+	}
 	if (inv.taxes && inv.taxes.length) {
 		for (const tax of inv.taxes) {
-			if (!tax.included_in_print_rate) {
+			if (!tax.included_in_print_rate || inv.show_inclusive_tax_in_print) {
 				const desc = tax.description || ""
 				const label = desc.includes("%") ? desc : `${desc}@${tax.rate}%`
 				line(_row(label, _num(tax.tax_amount)))
@@ -251,29 +274,50 @@ function _buildReceipt(inv) {
 	if (inv.discount_amount > 0) line(_row("Diskon", `-${_num(inv.discount_amount)}`))
 	if (inv.loyalty_amount > 0) line(_row("Tukar Poin", `-${_num(inv.loyalty_amount)}`))
 
+	// Grand Total (double border effect with = lines)
 	sep("=")
 	push(0x1b, 0x45, 0x01) // bold
 	line(_row("Grand Total", `Rp${_num(inv.grand_total)}`))
 	push(0x1b, 0x45, 0x00)
 	sep("=")
 
+	if (inv.rounded_total) line(_row("Dibulatkan", `Rp${_num(inv.rounded_total)}`))
+
 	// ── Payments ──
 	for (const pay of (inv.payments || [])) {
 		line(_row(pay.mode_of_payment, _num(pay.amount)))
 	}
 	const paidAmount = inv.paid_amount || (inv.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0)
+	sep()
 	line(_row("Bayar", _num(paidAmount)))
 	if (inv.change_amount > 0) line(_row("Kembali", _num(inv.change_amount)))
 	if (inv.outstanding_amount > 0) line(_row("Sisa Tagihan", _num(inv.outstanding_amount)))
 
+	// ── Loyalty Points ──
+	const loyaltyPoints = inv.loyalty_points || 0
+	const redeemLoyalty = inv.redeem_loyalty_points
+	const showLoyaltySection = loyaltyPoints > 0 || totalLoyaltyPoints > 0
+	if (showLoyaltySection) {
+		sep()
+		push(0x1b, 0x61, 0x01) // center
+		line("-- LOYALTY POINTS --")
+		push(0x1b, 0x61, 0x00)
+		if (loyaltyPoints > 0 && !redeemLoyalty) line(_row("Poin Didapat", `+${loyaltyPoints}`))
+		if (loyaltyPoints > 0 && redeemLoyalty) line(_row("Poin Ditukar", `-${loyaltyPoints}`))
+		if (totalLoyaltyPoints !== null && totalLoyaltyPoints > 0) line(_row("Total Poin", String(totalLoyaltyPoints)))
+	}
+
+	// ── Footer ──
 	sep()
+	if (inv.terms) line(inv.terms.substring(0, COLS))
+	if (inv.remarks) line(`Ordered By: ${inv.remarks}`)
 	push(0x1b, 0x61, 0x01) // center
 	line("Terima kasih, sampai jumpa lagi.")
 	push(0x1b, 0x61, 0x00)
 
 	// Feed + cut
-	push(0x1b, 0x64, 0x04) // feed 4 lines
-	push(0x1d, 0x56, 0x00) // full cut (ignored if printer doesn't support)
+	push(0x1b, 0x64, 0x04)
+	push(0x1d, 0x56, 0x00)
 
 	return new Uint8Array(b)
 }

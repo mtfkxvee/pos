@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 	<!-- Full Page Overlay -->
 	<Transition name="fade">
 		<div
@@ -369,8 +369,14 @@
 												:description="__('Tampilkan tombol cetak label cup (58×44mm) di Invoice History')"
 											/>
 
+											<CheckboxField
+												v-model="settings.enable_bluetooth_printer"
+												:label="__('Enable Bluetooth Printer')"
+												:description="__('Aktifkan printer Bluetooth BLE 58mm untuk struk & label (Android Chrome)')"
+											/>
+
 											<!-- Bluetooth Printer Pairing -->
-											<div v-if="settings.allow_cup_label_print" class="mt-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
+											<div v-if="settings.enable_bluetooth_printer" class="mt-3 rounded-lg border border-purple-200 bg-purple-50 p-3">
 												<p class="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1">
 													<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
 														<path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
@@ -528,6 +534,7 @@ const settings = ref({
 	allow_partial_payment: 0,
 	silent_print: 0,
 	allow_cup_label_print: 0,
+	enable_bluetooth_printer: 0,
 	allow_negative_stock: 0,
 	allow_zero_valuation: 0,
 	tax_inclusive: 0,

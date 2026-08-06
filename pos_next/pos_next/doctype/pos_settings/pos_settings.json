@@ -57,6 +57,7 @@
         "allow_print_last_invoice",
         "silent_print",
         "allow_cup_label_print",
+        "enable_bluetooth_printer",
         "section_break_delivery",
         "use_delivery_charges",
         "auto_set_delivery_charges",
@@ -429,6 +430,13 @@
             "fieldname": "allow_cup_label_print",
             "fieldtype": "Check",
             "label": "Allow Cup Label Print"
+        },
+        {
+            "default": "0",
+            "description": "Aktifkan integrasi printer Bluetooth BLE 58mm. Setelah aktif, lakukan pairing di Settings.",
+            "fieldname": "enable_bluetooth_printer",
+            "fieldtype": "Check",
+            "label": "Enable Bluetooth Printer"
         },
         {
             "collapsible": 1,

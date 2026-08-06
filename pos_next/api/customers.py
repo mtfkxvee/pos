@@ -278,3 +278,21 @@ def get_loyalty_points(customer, company, loyalty_program=None):
     except Exception as e:
         frappe.log_error("Failed to get loyalty points", str(e))
         return None
+
+
+@frappe.whitelist()
+def get_customer_loyalty_balance(customer):
+    """Return total non-expired loyalty points for a customer (used in BLE receipt print)."""
+    try:
+        result = frappe.db.sql(
+            """
+            SELECT COALESCE(SUM(loyalty_points), 0) AS total
+            FROM `tabLoyalty Point Entry`
+            WHERE customer = %s
+              AND (expiry_date >= CURDATE() OR expiry_date IS NULL)
+            """,
+            customer,
+        )
+        return int(result[0][0]) if result else 0
+    except Exception:
+        return 0
