@@ -344,6 +344,11 @@
 												:description="__('Tandai setiap invoice dari profil ini dengan is_order = 1')"
 											/>
 											<CheckboxField
+												v-model="settings.enable_order_number"
+												:label="__('Enable Order Number')"
+												:description="__('Isi otomatis field order_number dengan nomor urut per hari. Counter reset tiap ganti hari.')"
+											/>
+											<CheckboxField
 												v-model="settings.allow_credit_sale"
 												:label="__('Allow Credit Sale')"
 												:description="__('Enable sales on credit')"
@@ -536,6 +541,7 @@ const settings = ref({
 	allow_credit_sale: 0,
 	allow_return: 0,
 	is_order: 0,
+	enable_order_number: 0,
 	allow_write_off_change: 0,
 	allow_partial_payment: 0,
 	silent_print: 0,

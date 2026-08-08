@@ -450,6 +450,7 @@ def update_invoice(data):
                 )
 
         # Create or update invoice
+        _is_new_invoice = not (data.get("name") and frappe.db.exists(doctype, data.get("name")))
         if data.get("name") and frappe.db.exists(doctype, data.get("name")):
             # Fetch and update existing draft
             invoice_doc = frappe.get_doc(doctype, data.get("name"))
@@ -713,6 +714,32 @@ def update_invoice(data):
                     invoice_doc.is_order = 1
             except Exception:
                 pass
+
+        # Auto-assign order_number with daily counter per POS Profile
+        if doctype == "Sales Invoice" and pos_profile and _is_new_invoice:
+            try:
+                if cint(frappe.db.get_value(
+                    "POS Settings", {"pos_profile": pos_profile, "enabled": 1}, "enable_order_number"
+                ) or 0):
+                    # Atomic increment; reset to 1 when date changes
+                    frappe.db.sql("""
+                        UPDATE `tabPOS Settings`
+                        SET
+                            last_order_number = LAST_INSERT_ID(
+                                CASE WHEN last_order_date < CURDATE() OR last_order_date IS NULL
+                                     THEN 1
+                                     ELSE last_order_number + 1
+                                END
+                            ),
+                            last_order_date = CURDATE()
+                        WHERE pos_profile = %s AND enabled = 1
+                    """, pos_profile)
+                    result = frappe.db.sql("SELECT LAST_INSERT_ID()")
+                    order_num = cint(result[0][0]) if result else None
+                    if order_num:
+                        invoice_doc.order_number = order_num
+            except Exception as e:
+                frappe.log_error(f"Failed to set order_number: {e}", "POS Order Number")
 
         # Auto-allow zero valuation rate for zero-price items if setting is enabled
         if doctype == "Sales Invoice" and pos_profile:

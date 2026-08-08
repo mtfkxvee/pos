@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS = {
 	display_discount_amount: 0,
 	// Operations
 	is_order: 0,
+	enable_order_number: 0,
 	allow_sales_order: 0,
 	allow_select_sales_order: 0,
 	create_only_sales_order: 0,
@@ -165,6 +166,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 
 	// Computed - Operations
 	const isOrder = computed(() => Boolean(settings.value.is_order))
+	const enableOrderNumber = computed(() => Boolean(settings.value.enable_order_number))
 	const allowSalesOrder = computed(() =>
 		Boolean(settings.value.allow_sales_order),
 	)
@@ -422,6 +424,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 
 		// Computed - Operations
 		isOrder,
+		enableOrderNumber,
 		allowSalesOrder,
 		allowSelectSalesOrder,
 		createOnlySalesOrder,

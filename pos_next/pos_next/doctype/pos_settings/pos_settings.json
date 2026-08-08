@@ -39,6 +39,9 @@
         "display_discount_amount",
         "section_break_operations",
         "is_order",
+        "enable_order_number",
+        "last_order_number",
+        "last_order_date",
         "allow_sales_order",
         "allow_select_sales_order",
         "create_only_sales_order",
@@ -310,6 +313,28 @@
             "fieldname": "is_order",
             "fieldtype": "Check",
             "label": "Is Order"
+        },
+        {
+            "default": "0",
+            "description": "Isi otomatis field order_number di Sales Invoice dengan nomor urut per hari. Counter reset tiap ganti hari.",
+            "fieldname": "enable_order_number",
+            "fieldtype": "Check",
+            "label": "Enable Order Number"
+        },
+        {
+            "default": "0",
+            "fieldname": "last_order_number",
+            "fieldtype": "Int",
+            "hidden": 1,
+            "label": "Last Order Number",
+            "read_only": 1
+        },
+        {
+            "fieldname": "last_order_date",
+            "fieldtype": "Date",
+            "hidden": 1,
+            "label": "Last Order Date",
+            "read_only": 1
         },
         {
             "default": "0",
