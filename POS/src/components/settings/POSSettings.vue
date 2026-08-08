@@ -339,6 +339,11 @@
 										</div>
 										<div class="flex flex-col gap-3">
 											<CheckboxField
+												v-model="settings.is_order"
+												:label="__('Is Order')"
+												:description="__('Tandai setiap invoice dari profil ini dengan is_order = 1')"
+											/>
+											<CheckboxField
 												v-model="settings.allow_credit_sale"
 												:label="__('Allow Credit Sale')"
 												:description="__('Enable sales on credit')"
@@ -530,6 +535,7 @@ const settings = ref({
 	disable_rounded_total: 1,
 	allow_credit_sale: 0,
 	allow_return: 0,
+	is_order: 0,
 	allow_write_off_change: 0,
 	allow_partial_payment: 0,
 	silent_print: 0,

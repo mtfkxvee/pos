@@ -38,6 +38,7 @@
         "display_discount_percentage",
         "display_discount_amount",
         "section_break_operations",
+        "is_order",
         "allow_sales_order",
         "allow_select_sales_order",
         "create_only_sales_order",
@@ -302,6 +303,13 @@
             "fieldname": "section_break_operations",
             "fieldtype": "Section Break",
             "label": "Operations"
+        },
+        {
+            "default": "0",
+            "description": "Tandai setiap Sales Invoice yang dibuat dari profil ini dengan is_order = 1",
+            "fieldname": "is_order",
+            "fieldtype": "Check",
+            "label": "Is Order"
         },
         {
             "default": "0",

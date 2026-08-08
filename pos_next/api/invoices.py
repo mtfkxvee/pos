@@ -704,6 +704,16 @@ def update_invoice(data):
             invoice_doc.is_pos = 1
             invoice_doc.update_stock = 1
 
+        # Mark invoice as order if is_order setting is enabled for this POS Profile
+        if doctype == "Sales Invoice" and pos_profile:
+            try:
+                if cint(frappe.db.get_value(
+                    "POS Settings", {"pos_profile": pos_profile, "enabled": 1}, "is_order"
+                ) or 0):
+                    invoice_doc.is_order = 1
+            except Exception:
+                pass
+
         # Auto-allow zero valuation rate for zero-price items if setting is enabled
         if doctype == "Sales Invoice" and pos_profile:
             try:
