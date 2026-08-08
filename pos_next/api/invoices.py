@@ -737,7 +737,7 @@ def update_invoice(data):
                     result = frappe.db.sql("SELECT LAST_INSERT_ID()")
                     order_num = cint(result[0][0]) if result else None
                     if order_num:
-                        invoice_doc.order_number = order_num
+                        invoice_doc.order_number = str(order_num).zfill(3)
             except Exception as e:
                 frappe.log_error(f"Failed to set order_number: {e}", "POS Order Number")
 
