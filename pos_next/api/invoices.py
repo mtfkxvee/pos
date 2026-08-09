@@ -2500,11 +2500,11 @@ def get_invoices(
 		params["status"] = status
 
 	if product:
+		# Non-correlated IN subquery: scans tabSales Invoice Item once, not once per invoice row
 		conditions.append("""
-			EXISTS (
-				SELECT 1 FROM `tabSales Invoice Item` sii
-				WHERE sii.parent = `tabSales Invoice`.name
-					AND (sii.item_code LIKE %(product)s OR sii.item_name LIKE %(product)s)
+			`tabSales Invoice`.name IN (
+				SELECT DISTINCT parent FROM `tabSales Invoice Item`
+				WHERE item_code LIKE %(product)s OR item_name LIKE %(product)s
 			)
 		""")
 		params["product"] = f"%{product}%"

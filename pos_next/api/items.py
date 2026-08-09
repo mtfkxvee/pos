@@ -1061,25 +1061,30 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 			f"i.{col.split(' as ')[0]}" for col in ITEM_RESULT_FIELDS
 		])
 
-		# Add search conditions if search term provided
+		# Build query based on whether a search term is provided
+		bin_warehouse = pos_profile_doc.warehouse or ""
+
 		if effective_search_term and effective_search_term.strip():
-			# Phrase match: treat the entire input as one phrase so "lur ayam" only matches
-			# items containing "lur ayam" as a contiguous substring, not scattered words
-			search_text = "CONCAT(COALESCE(i.name, ''), ' ', COALESCE(i.item_name, ''), ' ', COALESCE(i.description, ''))"
-			phrase_match = f"%{effective_search_term}%"
+			term = effective_search_term.strip()
+			prefix_pattern = f"{term}%"
+			phrase_pattern = f"%{term}%"
 
-			# Also match if barcode contains the search term
-			barcode_condition = "ib.barcode LIKE %s"
+			# Inner subquery: find candidate item codes using a mix of prefix (index-friendly)
+			# and substring matching, capped at 500 rows. This prevents the GROUP BY + filesort
+			# from running over the entire table — it only sorts the candidates.
+			base_where = " AND ".join(conditions)
+			inner_search = """(
+				i.name LIKE %s OR
+				i.item_name LIKE %s OR
+				i.name LIKE %s OR
+				i.item_name LIKE %s OR
+				ib.barcode = %s OR
+				ib.barcode LIKE %s
+			)"""
+			inner_where = f"{base_where} AND {inner_search}" if base_where else inner_search
+			inner_params = list(params) + [prefix_pattern, prefix_pattern, phrase_pattern, phrase_pattern, term, prefix_pattern]
 
-			# Combine: match item fields (phrase) OR match barcode
-			conditions.append(f"(({search_text} LIKE %s) OR {barcode_condition})")
-			params.append(phrase_match)
-			params.append(phrase_match)  # For barcode matching
-
-			# Relevance scoring with case-insensitive comparison
-			# Exact barcode match gets highest priority, use MAX() for grouping
-			prefix_pattern = f"{effective_search_term}%"
-			phrase_pattern = f"%{effective_search_term}%"
+			# Relevance scoring applied in outer GROUP BY
 			relevance = f"""
 				MAX(CASE
 					WHEN ib.barcode = %s THEN 1500
@@ -1092,33 +1097,49 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 					ELSE 100
 				END)
 			"""
-			score_params = [effective_search_term, prefix_pattern, effective_search_term, effective_search_term, prefix_pattern, prefix_pattern, phrase_pattern]
+			score_params = [term, prefix_pattern, term, term, prefix_pattern, prefix_pattern, phrase_pattern]
 			order_by = f"{relevance} DESC, i.item_name ASC"
+
+			query = f"""
+				SELECT {item_columns},
+					COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
+					GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
+					GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
+				FROM `tabItem` i
+				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
+				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
+				WHERE i.name IN (
+					SELECT DISTINCT i.name
+					FROM `tabItem` i
+					LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
+					WHERE {inner_where}
+					LIMIT 500
+				)
+				GROUP BY {group_by_columns}
+				ORDER BY {order_by}
+				LIMIT %s OFFSET %s
+			"""
+			all_params = tuple([bin_warehouse] + inner_params + score_params + [limit, start])
 		else:
-			# No search term - simple ordering
-			score_params = []
+			# No search term — simple sort, no relevance overhead
+			where_clause = " AND ".join(conditions)
 			order_by = "i.item_name ASC"
+			query = f"""
+				SELECT {item_columns},
+					COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
+					GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
+					GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
+				FROM `tabItem` i
+				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
+				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
+				WHERE {where_clause}
+				GROUP BY {group_by_columns}
+				ORDER BY {order_by}
+				LIMIT %s OFFSET %s
+			"""
+			all_params = tuple([bin_warehouse] + params + [limit, start])
 
-		where_clause = " AND ".join(conditions)
-
-		bin_warehouse = pos_profile_doc.warehouse or ""
-		query = f"""
-			SELECT {item_columns},
-				COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
-				GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
-				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
-			FROM `tabItem` i
-			LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-			LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
-			WHERE {where_clause}
-			GROUP BY {group_by_columns}
-			ORDER BY {order_by}
-			LIMIT %s OFFSET %s
-		"""
-
-		params.extend(score_params)
-		params.extend([limit, start])
-		items = frappe.db.sql(query, tuple([bin_warehouse] + params), as_dict=1)
+		items = frappe.db.sql(query, all_params, as_dict=1)
 
 		# Prepare maps for enrichment
 		item_codes = [item["item_code"] for item in items]
