@@ -69,7 +69,7 @@ export function useItems(posProfile, cartItems = ref([])) {
 					item.item_code?.toLowerCase().includes(term) ||
 					item.barcode?.toLowerCase().includes(term),
 			)
-			filtered = filtered.slice(0, 20)
+			filtered = filtered.slice(0, isOffline() ? 50 : 20)
 		}
 
 		// Adjust stock quantities based on cart items

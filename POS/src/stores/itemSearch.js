@@ -1745,8 +1745,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			searchDebounceTimer = setTimeout(async () => {
 				searching.value = true
 
-				// Get search limit once for this search operation
-				const searchLimit = performanceConfig.get("searchBatchSize") || 500
+				const cacheLimit = 50
+				const serverLimit = 20
 
 				try {
 					// CACHE-FIRST STRATEGY:
@@ -1757,7 +1757,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 					log.debug(`Searching cache for: "${term}"`)
 					const cached = await offlineWorker.searchCachedItems(
 						term,
-						searchLimit,
+						cacheLimit,
 					)
 
 					if (cached && cached.length > 0) {
@@ -1777,7 +1777,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 						search_term: term,
 						item_group: selectedItemGroup.value,
 						start: 0,
-						limit: searchLimit, // Dynamically adjusted based on device performance
+						limit: serverLimit,
 					})
 					const serverResults = response?.message || response || []
 
@@ -1806,7 +1806,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 						try {
 							const cached = await offlineWorker.searchCachedItems(
 								term,
-								searchLimit,
+								cacheLimit,
 							)
 							setSearchResults(cached || [])
 							resolve(cached || [])
