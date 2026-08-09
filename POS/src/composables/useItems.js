@@ -19,7 +19,7 @@ export function useItems(posProfile, cartItems = ref([])) {
 				search_term: searchTerm.value || null,
 				item_group: selectedItemGroup.value || null,
 				start: 0,
-				limit: 100,
+				limit: searchTerm.value ? 20 : 100,
 			}
 		},
 		auto: false,
@@ -69,6 +69,7 @@ export function useItems(posProfile, cartItems = ref([])) {
 					item.item_code?.toLowerCase().includes(term) ||
 					item.barcode?.toLowerCase().includes(term),
 			)
+			filtered = filtered.slice(0, 20)
 		}
 
 		// Adjust stock quantities based on cart items
