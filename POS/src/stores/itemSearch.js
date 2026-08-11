@@ -576,46 +576,39 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		// This ensures cache invalidates when data or filters change
 		const filterKey = `${selectedItemGroup.value || "all"}_${allItemsVersion.value}_${searchTerm.value || ""}`
 
-		// Step 3: Check cache for filtered results
+		// Step 3: Apply group filtering, with cache for non-search views only.
+		// Cache is intentionally skipped when searching: searchResults.value can
+		// update (server responds after local cache miss) while filterKey stays the
+		// same, so a cached empty list would hide the server results.
+		const isSearching = !!searchTerm.value?.trim()
 		let list
-		if (filterKey === lastFilterKey && filteredItemsCache.has(filterKey)) {
-			// Cache hit! Return cached filtered array (instant, <2ms)
-			list = filteredItemsCache.get(filterKey)
-		} else {
-			// LARGE CATALOG OPTIMIZATION: Items are already server-filtered
-			// setSelectedItemGroup() fetches items from server with group filter
-			// So client-side filtering is minimal (just a sanity check)
-			//
-			// For 65K+ item catalogs:
-			// - Server handles filtering via DB index (fast)
-			// - Client receives max 100 items (already filtered)
-			// - This client-side filter is just a safety net
 
+		const applyGroupFilter = (items) => {
 			if (selectedItemGroup.value) {
-				// User selected a specific item group tab
-				// Items are ALREADY server-filtered, but verify for safety
 				const groupsToFilter = getGroupsToFilter(selectedItemGroup.value)
-				list = sourceItems.filter((i) => groupsToFilter.has(i.item_group))
-			} else if (
-				profileItemGroups.value &&
-				profileItemGroups.value.length > 0
-			) {
-				// "All Items" tab - items fetched without group filter
-				// Still filter by allowed groups as sanity check
+				return items.filter((i) => groupsToFilter.has(i.item_group))
+			} else if (profileItemGroups.value && profileItemGroups.value.length > 0) {
 				const allowedGroups = new Set(
 					profileItemGroups.value.map((g) => g.item_group),
 				)
-				// Also include child groups in allowed set
 				itemGroups.value.forEach((g) => {
 					if (g.child_groups) {
 						g.child_groups.forEach((child) => allowedGroups.add(child))
 					}
 				})
-				list = sourceItems.filter((i) => allowedGroups.has(i.item_group))
-			} else {
-				// No filters - show all items as-is
-				list = sourceItems
+				return items.filter((i) => allowedGroups.has(i.item_group))
 			}
+			return items
+		}
+
+		if (isSearching) {
+			// Never cache search results — source can change mid-search
+			list = applyGroupFilter(sourceItems)
+		} else if (filterKey === lastFilterKey && filteredItemsCache.has(filterKey)) {
+			// Cache hit for non-search views (instant, <2ms)
+			list = filteredItemsCache.get(filterKey)
+		} else {
+			list = applyGroupFilter(sourceItems)
 
 			// Cache the filtered results for next time
 			filteredItemsCache.set(filterKey, list)
@@ -630,9 +623,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 
 		// Step 3b: Prepend pinned item details when not searching
 		// These are fetched upfront so they appear even if not yet in the lazy-loaded list
-		const isSearchingNow = !!searchTerm.value?.trim()
 		let sourceList = list
-		if (!isSearchingNow && pinnedItemDetails.value.length > 0) {
+		if (!isSearching && pinnedItemDetails.value.length > 0) {
 			const listCodes = new Set(list.map((i) => i.item_code))
 			const extraPinned = pinnedItemDetails.value.filter(
 				(i) => !listCodes.has(i.item_code),
@@ -658,7 +650,6 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		})
 
 		// Step 5: Sorting — pinned items first (when not searching), then user sort
-		const isSearching = !!searchTerm.value?.trim()
 		const hasPinned = !isSearching && pinnedItems.value.size > 0
 
 		if (hasPinned || sortBy.value) {
