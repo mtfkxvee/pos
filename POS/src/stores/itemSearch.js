@@ -1,4 +1,4 @@
-import { call } from "@/utils/apiWrapper"
+﻿import { call } from "@/utils/apiWrapper"
 import { isOffline } from "@/utils/offline"
 import { offlineWorker } from "@/utils/offline/workerClient"
 import {
@@ -1912,17 +1912,24 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		log.debug("Sort filter cleared")
 	}
 
-	function _pinnedCacheKey(profile) {
-		return `pos_pinned_items_${profile}`
-	}
-
 	function _savePinnedCache(profile, list) {
-		try { localStorage.setItem(_pinnedCacheKey(profile), JSON.stringify(list)) } catch {}
+		try { localStorage.setItem(`pos_pinned_items_${profile}`, JSON.stringify(list)) } catch {}
 	}
 
 	function _loadPinnedCache(profile) {
 		try {
-			const raw = localStorage.getItem(_pinnedCacheKey(profile))
+			const raw = localStorage.getItem(`pos_pinned_items_${profile}`)
+			return raw ? JSON.parse(raw) : null
+		} catch { return null }
+	}
+
+	function _savePinnedDetails(profile, details) {
+		try { localStorage.setItem(`pos_pinned_details_${profile}`, JSON.stringify(details)) } catch {}
+	}
+
+	function _loadPinnedDetails(profile) {
+		try {
+			const raw = localStorage.getItem(`pos_pinned_details_${profile}`)
 			return raw ? JSON.parse(raw) : null
 		} catch { return null }
 	}
@@ -1935,11 +1942,17 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			return
 		}
 
-		// Restore from localStorage immediately so items appear at top on first render
-		// without waiting for the API response (eliminates flash on slow connections/devices)
-		const cached = _loadPinnedCache(profile)
-		if (cached && cached.length > 0) {
-			pinnedItems.value = new Set(cached)
+		// Restore codes AND full item details from localStorage immediately.
+		// This ensures page-2+ pinned items appear at top on first render
+		// without waiting for any API response.
+		const cachedCodes = _loadPinnedCache(profile)
+		const cachedDetails = _loadPinnedDetails(profile)
+		if (cachedCodes && cachedCodes.length > 0) {
+			pinnedItems.value = new Set(cachedCodes)
+			if (cachedDetails && cachedDetails.length > 0) {
+				pinnedItemDetails.value = cachedDetails
+				registerItems(cachedDetails, registeredAllItems)
+			}
 			pinnedItemsVersion.value += 1
 		}
 
@@ -1949,26 +1962,27 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			})
 			const list = result?.message || result || []
 			pinnedItems.value = new Set(list)
-			pinnedItemsVersion.value += 1
 			_savePinnedCache(profile, list)
 
 			if (list.length > 0) {
-				// Fetch full item details so pinned items appear at top even before lazy load reaches them
+				// Fetch fresh item details from server (confirms stale cache data)
 				const detailsResult = await call(
 					"pos_next.api.pinned_items.get_pinned_item_details",
 					{ pos_profile: profile, item_codes: JSON.stringify(list) },
 				)
 				pinnedItemDetails.value = detailsResult?.message || detailsResult || []
-				pinnedItemsVersion.value += 1
+				_savePinnedDetails(profile, pinnedItemDetails.value)
 				if (pinnedItemDetails.value.length > 0) {
 					registerItems(pinnedItemDetails.value, registeredAllItems)
 				}
 			} else {
 				pinnedItemDetails.value = []
+				_savePinnedDetails(profile, [])
 			}
+			pinnedItemsVersion.value += 1
 		} catch (e) {
 			log.warn("Failed to load pinned items from server, using cached list", e)
-			// pinnedItems already restored from localStorage above
+			// pinnedItems and pinnedItemDetails already restored from localStorage above
 		}
 	}
 
@@ -2015,6 +2029,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			} else {
 				pinnedItemDetails.value = []
 			}
+			_savePinnedDetails(profile, pinnedItemDetails.value)
 			pinnedItemsVersion.value += 1
 		} catch (e) {
 			log.warn("Failed to toggle pinned item", e)
