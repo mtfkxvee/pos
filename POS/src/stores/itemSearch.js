@@ -1921,6 +1921,21 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 		log.debug("Sort filter cleared")
 	}
 
+	function _pinnedCacheKey(profile) {
+		return `pos_pinned_items_${profile}`
+	}
+
+	function _savePinnedCache(profile, list) {
+		try { localStorage.setItem(_pinnedCacheKey(profile), JSON.stringify(list)) } catch {}
+	}
+
+	function _loadPinnedCache(profile) {
+		try {
+			const raw = localStorage.getItem(_pinnedCacheKey(profile))
+			return raw ? JSON.parse(raw) : null
+		} catch { return null }
+	}
+
 	async function loadPinnedItems(profile) {
 		if (!profile) {
 			pinnedItems.value = new Set()
@@ -1928,6 +1943,15 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			pinnedItemsVersion.value += 1
 			return
 		}
+
+		// Restore from localStorage immediately so items appear at top on first render
+		// without waiting for the API response (eliminates flash on slow connections/devices)
+		const cached = _loadPinnedCache(profile)
+		if (cached && cached.length > 0) {
+			pinnedItems.value = new Set(cached)
+			pinnedItemsVersion.value += 1
+		}
+
 		try {
 			const result = await call("pos_next.api.pinned_items.get_pinned_items", {
 				pos_profile: profile,
@@ -1935,6 +1959,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			const list = result?.message || result || []
 			pinnedItems.value = new Set(list)
 			pinnedItemsVersion.value += 1
+			_savePinnedCache(profile, list)
 
 			if (list.length > 0) {
 				// Fetch full item details so pinned items appear at top even before lazy load reaches them
@@ -1951,7 +1976,8 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 				pinnedItemDetails.value = []
 			}
 		} catch (e) {
-			log.warn("Failed to load pinned items", e)
+			log.warn("Failed to load pinned items from server, using cached list", e)
+			// pinnedItems already restored from localStorage above
 		}
 	}
 
@@ -1966,6 +1992,7 @@ export const useItemSearchStore = defineStore("itemSearch", () => {
 			const data = result?.message || result || {}
 			const list = data.pinned_items || []
 			pinnedItems.value = new Set(list)
+			_savePinnedCache(profile, list)
 
 			if (list.length > 0) {
 				const isPinned = list.includes(item_code)
