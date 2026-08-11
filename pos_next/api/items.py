@@ -1100,26 +1100,28 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 			score_params = [term, prefix_pattern, term, term, prefix_pattern, prefix_pattern, phrase_pattern]
 			order_by = f"{relevance} DESC, i.item_name ASC"
 
+			# Use derived table (not IN subquery) so LIMIT works on older MariaDB versions
 			query = f"""
 				SELECT {item_columns},
 					COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
 					GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 					GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
-				FROM `tabItem` i
-				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
-				WHERE i.name IN (
+				FROM (
 					SELECT DISTINCT i.name
 					FROM `tabItem` i
 					LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
 					WHERE {inner_where}
 					LIMIT 500
-				)
+				) cands
+				JOIN `tabItem` i ON i.name = cands.name
+				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
+				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
 				GROUP BY {group_by_columns}
 				ORDER BY {order_by}
 				LIMIT %s OFFSET %s
 			"""
-			all_params = tuple([bin_warehouse] + inner_params + score_params + [limit, start])
+			# inner_params first (for derived table), then bin_warehouse (outer JOIN), then scoring + pagination
+			all_params = tuple(inner_params + [bin_warehouse] + score_params + [limit, start])
 		else:
 			# No search term — simple sort, no relevance overhead
 			where_clause = " AND ".join(conditions)
