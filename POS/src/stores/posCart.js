@@ -604,7 +604,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				if (discountPct > 0) {
 					item.rate = roundCurrency(plr * (1 - discountPct / 100))
 				} else if (discountAmt > 0) {
-					item.rate = roundCurrency(Math.max(0, plr - discountAmt))
+					// apply_offers returns discount_amount as a LINE TOTAL (price_list_rate × qty × pct).
+					// Divide by qty to get per-unit discount before computing item.rate.
+					const qty = item.quantity || item.qty || 1
+					item.rate = roundCurrency(Math.max(0, plr - discountAmt / qty))
 				}
 			}
 			// Otherwise preserve existing manual discount
