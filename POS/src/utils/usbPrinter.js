@@ -219,35 +219,46 @@ function _buildLabelData(itemName, remarks) {
 	const now = new Date()
 	const hh = String(now.getHours()).padStart(2, "0")
 	const mm = String(now.getMinutes()).padStart(2, "0")
-
-	// TSPL strings cannot contain double quotes or newlines
 	const safe = (s) => String(s || "").replace(/"/g, "'").replace(/[\r\n]/g, " ").trim()
 
-	// Font "3" at xMult=1, yMult=2 → 24px wide × 48px tall per char
-	// 58mm ≈ 464 dots; 10px left margin → ~18 chars max width
-	const truncItem = safe(itemName).substring(0, 18)
+	// Label: 60mm × 40mm at 8 dots/mm = 480 × 320 dots
+	const LW = 480, LH = 320, M = 10
 
-	// TSPL command set — used by most 58mm gap/label thermal printers
+	// Standard TSPL built-in font widths (dots/char at xMult=1)
+	const FW = { "1": 12, "2": 24, "3": 24 }
+
+	// DIRECTION 1 inverts BOTH axes (origin moves to opposite corner).
+	// Physical top at margin physY with element height h → TSPL Y = LH - physY - h
+	// Physical left at margin M with text width w   → TSPL X = LW - M - w
+	const ty = (physY, h) => LH - physY - h
+	const tx = (font, len, xm = 1) => Math.max(M, LW - M - FW[font] * len * xm)
+
+	const truncItem = safe(itemName).substring(0, 19)
+
 	const cmds = [
-		"SIZE 58 mm,44 mm",
+		"SIZE 60 mm,40 mm",
 		"GAP 3 mm,0",
 		"SPEED 3",
 		"DENSITY 8",
-		"DIRECTION 0,0",
+		"DIRECTION 1,0",
 		"CODEPAGE UTF-8",
 		"CLS",
-		`TEXT 10,8,"2",0,1,1,"${safe("X-Sha grow")}"`,
-		"BAR 0,38,464,2",
-		`TEXT 10,44,"3",0,1,2,"${truncItem}"`,
+		// Header "X-Sha grow" — font "2" (24px/char wide, 24px tall) — physical top=8
+		`TEXT ${tx("2", 10)},${ty(8, 24)},"2",0,1,1,"X-Sha grow"`,
+		// Divider — physical y=40, 2px tall
+		`BAR 0,${ty(40, 2)},${LW},2`,
+		// Item — font "3" yMult=2 (24px wide, 48px tall) — physical top=44
+		`TEXT ${tx("3", truncItem.length)},${ty(44, 48)},"3",0,1,2,"${truncItem}"`,
 	]
 
-	// Remarks + time below item (item ends at y≈92)
-	let y = 100
+	// Remarks + time below item (item ends at physical y≈92)
+	let physY = 100
 	if (remarks?.trim()) {
-		cmds.push(`TEXT 10,${y},"1",0,1,1,"${safe(remarks).substring(0, 24)}"`)
-		y += 28
+		const rem = safe(remarks).substring(0, 26)
+		cmds.push(`TEXT ${tx("1", rem.length)},${ty(physY, 24)},"1",0,1,1,"${rem}"`)
+		physY += 28
 	}
-	cmds.push(`TEXT 10,${y},"2",0,1,1,"${hh}:${mm}"`)
+	cmds.push(`TEXT ${tx("2", 5)},${ty(physY, 24)},"2",0,1,1,"${hh}:${mm}"`)
 	cmds.push("PRINT 1,1")
 
 	return new TextEncoder().encode(cmds.join("\r\n") + "\r\n")
