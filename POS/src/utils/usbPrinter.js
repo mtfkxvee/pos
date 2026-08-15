@@ -216,32 +216,41 @@ export async function printReceiptUSB(invoiceData) {
 // ── Label print ───────────────────────────────────────────────────────────────
 
 function _buildLabelData(itemName, remarks) {
-	const enc = new TextEncoder()
-	const b = []
-	const push = (...bytes) => b.push(...bytes)
-	// Raw USB bypasses Windows driver CR+LF conversion — use \r\n explicitly
-	const line = (s) => b.push(...enc.encode(s + "\r\n"))
-
 	const now = new Date()
 	const hh = String(now.getHours()).padStart(2, "0")
 	const mm = String(now.getMinutes()).padStart(2, "0")
 
-	push(0x1b, 0x40)       // init
-	push(0x1b, 0x61, 0x01) // center
-	push(0x1d, 0x21, 0x00) // normal size
-	push(0x1b, 0x45, 0x00) // bold off
-	line("X-Sha grow")
-	line("--------------------------------")
-	push(0x1d, 0x21, 0x11) // double height + width
-	push(0x1b, 0x45, 0x01) // bold on
-	line(itemName)
-	push(0x1d, 0x21, 0x00) // normal
-	push(0x1b, 0x45, 0x00) // bold off
-	if (remarks?.trim()) line(remarks.trim())
-	line(`${hh}:${mm}`)
-	push(0x1b, 0x64, 0x03) // feed 3 lines
+	// TSPL strings cannot contain double quotes or newlines
+	const safe = (s) => String(s || "").replace(/"/g, "'").replace(/[\r\n]/g, " ").trim()
 
-	return new Uint8Array(b)
+	// Font "3" at xMult=1, yMult=2 → 24px wide × 48px tall per char
+	// 58mm ≈ 464 dots; 10px left margin → ~18 chars max width
+	const truncItem = safe(itemName).substring(0, 18)
+
+	// TSPL command set — used by most 58mm gap/label thermal printers
+	const cmds = [
+		"SIZE 58 mm,44 mm",
+		"GAP 3 mm,0",
+		"SPEED 3",
+		"DENSITY 8",
+		"DIRECTION 0,0",
+		"CODEPAGE UTF-8",
+		"CLS",
+		`TEXT 10,8,"2",0,1,1,"${safe("X-Sha grow")}"`,
+		"BAR 0,38,464,2",
+		`TEXT 10,44,"3",0,1,2,"${truncItem}"`,
+	]
+
+	// Remarks + time below item (item ends at y≈92)
+	let y = 100
+	if (remarks?.trim()) {
+		cmds.push(`TEXT 10,${y},"1",0,1,1,"${safe(remarks).substring(0, 24)}"`)
+		y += 28
+	}
+	cmds.push(`TEXT 10,${y},"2",0,1,1,"${hh}:${mm}"`)
+	cmds.push("PRINT 1,1")
+
+	return new TextEncoder().encode(cmds.join("\r\n") + "\r\n")
 }
 
 export async function printLabelUSB(itemName, remarks, copies = 1) {
