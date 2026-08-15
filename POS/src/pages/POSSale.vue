@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 	<div
 		class="flex flex-col bg-gray-50 overflow-x-hidden"
 		style="height: 100vh; max-height: 100vh"
@@ -512,6 +512,12 @@
 			:correct-passwords="posSettingsStore.discountPasswords"
 			@authorized="paymentDialogRef?.openDiscountDialog()"
 		/>
+
+	<!-- Auto cup label popup after transaction (USB printer mode) -->
+	<CupLabelDialog
+		v-model="showAutoLabelDialog"
+		:items="autoLabelItems"
+	/>
 
 		<SpeedModeInfoDialog
 			v-model="showSpeedModeInfoDialog"
@@ -1086,6 +1092,7 @@ import OffersDialog from "@/components/sale/OffersDialog.vue";
 import OfflineInvoicesDialog from "@/components/sale/OfflineInvoicesDialog.vue";
 import PaymentDialog from "@/components/sale/PaymentDialog.vue";
 import DiscountAuthDialog from "@/components/sale/DiscountAuthDialog.vue";
+import CupLabelDialog from "@/components/sale/CupLabelDialog.vue";
 import PromotionManagement from "@/components/sale/PromotionManagement.vue";
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
 import ValuationWarningDialog from "@/components/sale/ValuationWarningDialog.vue";
@@ -1238,6 +1245,10 @@ const showDeliveryNotes = ref(false);
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
 const showDiscountAuthDialog = ref(false);
+
+// Auto cup-label dialog after transaction (shown when USB printer label is enabled)
+const showAutoLabelDialog = ref(false);
+const autoLabelItems = ref([]);
 
 // Speed Mode dialogs
 const showSpeedModeInfoDialog = ref(false);
@@ -2363,6 +2374,13 @@ async function handlePaymentCompleted(paymentData) {
 			// Get item codes from cart before clearing
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
 
+			// Capture items for auto label popup before cart is cleared
+			const pendingLabelItems = posSettingsStore.enableUsbPrinter
+				? cartStore.invoiceItems
+					.filter((i) => !i.is_free_item)
+					.map((i) => ({ item_name: i.item_name || i.item_code, qty: i.quantity || i.qty || 1 }))
+				: [];
+
 			const result = await cartStore.submitInvoice();
 
 			if (result) {
@@ -2409,6 +2427,12 @@ async function handlePaymentCompleted(paymentData) {
 				}
 
 				await speedModeStore.recordTransaction(shiftStore.profileName);
+
+				// Auto-show cup label popup when USB printer is enabled
+				if (pendingLabelItems.length > 0) {
+					autoLabelItems.value = pendingLabelItems;
+					showAutoLabelDialog.value = true;
+				}
 			}
 		}
 	} catch (error) {

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 	<Dialog
 		v-model="show"
 		:options="{ title: __('Invoice History'), size: '5xl' }"
@@ -159,84 +159,12 @@
 	/>
 
 	<!-- Cup Label Print Dialog -->
-	<Dialog
+	<CupLabelDialog
 		v-model="showLabelDialog"
-		:options="{ title: __('Print Cup Labels'), size: 'sm' }"
-	>
-		<template #body-content>
-			<div class="flex flex-col gap-3">
-				<!-- Loading state -->
-				<div v-if="labelLoading" class="text-center py-6">
-					<div class="animate-spin h-6 w-6 border-b-2 border-purple-500 rounded-full mx-auto"></div>
-					<p class="mt-2 text-xs text-gray-500">{{ __('Loading items...') }}</p>
-				</div>
-
-				<!-- Empty state -->
-				<div v-else-if="labelItems.length === 0" class="text-center py-6 text-gray-400 text-sm">
-					{{ __('No items found in this invoice.') }}
-				</div>
-
-				<!-- Item checklist -->
-				<div v-else class="flex flex-col gap-1">
-					<p class="text-xs text-gray-500 mb-1">
-						{{ __('Pilih item yang akan dicetak labelnya:') }}
-					</p>
-
-					<!-- Select All / None -->
-					<div class="flex items-center gap-2 pb-2 border-b border-gray-100">
-						<button
-							class="text-xs text-purple-600 hover:underline"
-							@click="setAllLabels(true)"
-						>{{ __('Pilih Semua') }}</button>
-						<span class="text-gray-300">|</span>
-						<button
-							class="text-xs text-gray-500 hover:underline"
-							@click="setAllLabels(false)"
-						>{{ __('Batal Semua') }}</button>
-					</div>
-
-					<label
-						v-for="(item, idx) in labelItems"
-						:key="idx"
-						class="flex items-start gap-3 p-2 rounded-lg cursor-pointer hover:bg-purple-50 transition-colors select-none"
-					>
-						<input
-							type="checkbox"
-							v-model="item.checked"
-							class="mt-0.5 w-4 h-4 rounded accent-purple-600 cursor-pointer flex-shrink-0"
-						/>
-						<div class="flex-1 min-w-0">
-							<p class="text-sm font-medium text-gray-900 leading-snug">{{ item.item_name }}</p>
-							<p class="text-xs text-gray-400">
-								{{ __('Qty') }}: {{ item.qty }}
-								<span v-if="labelCopies(item) > 1" class="text-purple-500 ml-1">
-									→ {{ labelCopies(item) }} label
-								</span>
-							</p>
-							<p v-if="labelRemarks" class="text-xs text-purple-700 mt-0.5 italic truncate">
-								{{ labelRemarks }}
-							</p>
-						</div>
-					</label>
-				</div>
-			</div>
-		</template>
-
-		<template #actions>
-			<div class="flex gap-2 w-full justify-end">
-				<Button variant="subtle" @click="showLabelDialog = false">
-					{{ __('Batal') }}
-				</Button>
-				<button
-					:disabled="labelLoading || !labelItems.some(i => i.checked)"
-					class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-					@click="printLabels"
-				>
-					{{ __('Print Label') }}
-				</button>
-			</div>
-		</template>
-	</Dialog>
+		:items="labelItems"
+		:loading="labelLoading"
+		:remarks="labelRemarks"
+	/>
 </template>
 
 <script setup>
@@ -253,11 +181,10 @@ import {
 	getOfflineInvoicesForHistory,
 } from "@/utils/offline/sync"
 import { usePOSSettingsStore } from "@/stores/posSettings"
-import { getBTPrinterName, printLabelBT } from "@/utils/bluetoothPrinter"
-import { getUSBPrinterName, printLabelUSB } from "@/utils/usbPrinter"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue"
+import CupLabelDialog from "./CupLabelDialog.vue"
 
 const { showError } = useToast()
 const settingsStore = usePOSSettingsStore()
@@ -509,170 +436,4 @@ async function openLabelDialog(invoice) {
 	}
 }
 
-// How many label copies to print for one item line
-function labelCopies(item) {
-	const qty = Number(item.qty) || 1
-	return qty < 1 ? 1 : Math.ceil(qty)
-}
-
-function setAllLabels(checked) {
-	labelItems.value.forEach((item) => {
-		item.checked = checked
-	})
-}
-
-function escapeHtml(text) {
-	return String(text || "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-}
-
-async function printLabels() {
-	const selected = labelItems.value.filter((i) => i.checked)
-	if (!selected.length) return
-
-	const remarks = labelRemarks.value || ""
-
-	// Priority: USB → Bluetooth → browser fallback
-	if (getUSBPrinterName() && settingsStore.enableUsbPrinter) {
-		showLabelDialog.value = false
-		try {
-			for (const item of selected) {
-				await printLabelUSB(item.item_name, remarks, labelCopies(item))
-			}
-		} catch (err) {
-			showError(err.message || __("Gagal print ke USB printer"))
-		}
-		return
-	}
-
-	if (getBTPrinterName() && settingsStore.enableBluetoothPrinter) {
-		showLabelDialog.value = false
-		try {
-			for (const item of selected) {
-				await printLabelBT(item.item_name, remarks, labelCopies(item))
-			}
-		} catch (err) {
-			showError(err.message || __("Gagal print ke Bluetooth printer"))
-		}
-		return
-	}
-
-	// ── Fallback: browser print window ────────────────────────────────────────
-	const _now = new Date()
-	const _hh = String(_now.getHours()).padStart(2, "0")
-	const _mm = String(_now.getMinutes()).padStart(2, "0")
-	const timeStr = `${_hh}:${_mm}`
-
-	// B&W inline SVG of X-Sha grow logo
-	const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 58" class="logo">
-  <text x="110" y="22"
-    font-family="'Arial Black',Impact,Arial,sans-serif"
-    font-size="22" font-weight="900"
-    text-anchor="middle"
-    stroke="black" stroke-width="4" stroke-linejoin="round"
-    fill="white"
-    letter-spacing="4">X-Sha</text>
-  <text x="110" y="54"
-    font-family="'Arial Black',Impact,Arial,sans-serif"
-    font-size="34" font-weight="900"
-    text-anchor="middle"
-    fill="black"
-    letter-spacing="1">grow</text>
-</svg>`
-
-	// Build one <div class="label"> per physical cup (copies = ceil(qty))
-	const labelsHtml = selected
-		.flatMap((item) => {
-			const copies = labelCopies(item)
-			return Array.from({ length: copies }, () => `
-				<div class="label">
-					${logoSvg}
-					<div class="divider"></div>
-					<div class="item-name">${escapeHtml(item.item_name)}</div>
-					${remarks ? `<div class="remarks">${escapeHtml(remarks)}</div>` : ""}
-					<div class="time">${timeStr}</div>
-				</div>
-			`)
-		})
-		.join("")
-
-	const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  @page {
-    size: 58mm 44mm;
-    margin: 0;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Courier New', Courier, monospace; background: #fff; }
-  .label {
-    width: 58mm;
-    height: 44mm;
-    page-break-after: always;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 1.5mm 3mm 1.5mm;
-    overflow: hidden;
-    gap: 0.8mm;
-  }
-  .label:last-child { page-break-after: avoid; }
-  .logo {
-    width: 46mm;
-    height: auto;
-    display: block;
-    flex-shrink: 0;
-  }
-  .divider {
-    width: 90%;
-    border-top: 0.4mm solid #000;
-    flex-shrink: 0;
-  }
-  .item-name {
-    font-size: 13pt;
-    font-weight: bold;
-    line-height: 1.2;
-    word-break: break-word;
-    hyphens: auto;
-    max-width: 100%;
-  }
-  .remarks {
-    font-size: 9pt;
-    line-height: 1.3;
-    word-break: break-word;
-    max-width: 100%;
-  }
-  .time {
-    font-size: 8pt;
-    margin-top: auto;
-    color: #222;
-  }
-</style>
-</head>
-<body>
-${labelsHtml}
-</body>
-</html>`
-
-	const win = window.open("", "_blank", "width=400,height=300")
-	if (!win) {
-		showError(__("Popup diblokir. Izinkan popup untuk mencetak label."))
-		return
-	}
-	win.document.write(html)
-	win.document.close()
-	win.focus()
-	// Small delay so the browser fully renders before the print dialog opens
-	setTimeout(() => {
-		win.print()
-		win.close()
-	}, 250)
-
-	showLabelDialog.value = false
-}
 </script>
