@@ -165,7 +165,7 @@ export async function printReceiptBT(invoiceData) {
 		} catch { /* non-fatal */ }
 	}
 
-	const data = _buildReceipt(invoiceData, totalLoyaltyPoints)
+	const data = buildReceiptData(invoiceData, totalLoyaltyPoints)
 	await _writeChunked(char, data)
 }
 
@@ -191,7 +191,7 @@ function _center(str, cols = COLS) {
 	return " ".repeat(pad) + str
 }
 
-function _buildReceipt(inv, totalLoyaltyPoints = null) {
+export function buildReceiptData(inv, totalLoyaltyPoints = null) {
 	const enc = new TextEncoder()
 	const b = []
 	const push = (...bytes) => b.push(...bytes)

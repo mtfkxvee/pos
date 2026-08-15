@@ -3,6 +3,7 @@ import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
 import { getBTPrinterName, printReceiptBT } from "@/utils/bluetoothPrinter"
+import { getUSBReceiptPrinterName, printReceiptUSB } from "@/utils/usbPrinter"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 
 const log = logger.create("PrintInvoice")
@@ -20,15 +21,25 @@ export async function printInvoice(
 	letterhead = null,
 	paperSize = null,
 ) {
-	// If a Bluetooth printer is paired (cup label mode), route all receipt
-	// printing through BLE instead of window.open (which fails on Android).
-	if (getBTPrinterName() && usePOSSettingsStore().enableBluetoothPrinter) {
+	const store = usePOSSettingsStore()
+
+	// Priority 1: USB receipt printer (desktop)
+	if (getUSBReceiptPrinterName() && store.enableUsbPrinter) {
+		try {
+			await printReceiptUSB(invoiceData)
+			return true
+		} catch (err) {
+			log.warn("USB receipt print failed, falling back:", err)
+		}
+	}
+
+	// Priority 2: Bluetooth printer (Android)
+	if (getBTPrinterName() && store.enableBluetoothPrinter) {
 		try {
 			await printReceiptBT(invoiceData)
 			return true
 		} catch (err) {
 			log.warn("BLE receipt print failed, falling back to window.open:", err)
-			// fall through to window.open path
 		}
 	}
 
@@ -131,8 +142,18 @@ export async function printInvoice(
  * @param {string} printFormat - "58 PRINTER" or "80 PRINTER"
  */
 export async function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER") {
-	// If BT printer paired, use BLE instead of window.open (Android-compatible)
-	if (getBTPrinterName() && usePOSSettingsStore().enableBluetoothPrinter) {
+	const store = usePOSSettingsStore()
+
+	if (getUSBReceiptPrinterName() && store.enableUsbPrinter) {
+		try {
+			await printReceiptUSB(invoiceData)
+			return
+		} catch (err) {
+			log.warn("USB receipt print failed, falling back:", err)
+		}
+	}
+
+	if (getBTPrinterName() && store.enableBluetoothPrinter) {
 		try {
 			await printReceiptBT(invoiceData)
 			return

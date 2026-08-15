@@ -392,8 +392,8 @@
 											/>
 
 											<!-- USB Printer Pairing -->
-											<div v-if="settings.enable_usb_printer" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
-												<p class="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1">
+											<div v-if="settings.enable_usb_printer" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 flex flex-col gap-3">
+												<p class="text-xs font-semibold text-blue-700 flex items-center gap-1">
 													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
 													</svg>
@@ -405,42 +405,58 @@
 												</div>
 
 												<template v-else>
-													<div v-if="usbPrinterName" class="flex items-center justify-between gap-2 mb-2">
-														<div class="flex items-center gap-1.5 min-w-0">
-															<svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
-															</svg>
-															<span class="text-xs font-medium text-blue-800 truncate">{{ usbPrinterName }}</span>
+													<!-- Struk Kasir -->
+													<div class="bg-white rounded-md border border-blue-100 p-2.5">
+														<p class="text-xs font-semibold text-gray-700 mb-2">🧾 {{ __('Printer Struk Kasir') }}</p>
+														<div v-if="usbReceiptPrinterName" class="flex items-center justify-between gap-2">
+															<span class="text-xs font-medium text-blue-800 truncate">{{ usbReceiptPrinterName }}</span>
+															<div class="flex gap-1 shrink-0">
+																<button @click="pairUsbReceipt" :disabled="usbReceiptPairing"
+																	class="text-xs px-2 py-1 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors disabled:opacity-50"
+																>{{ __('Ganti') }}</button>
+																<button @click="unpairUsbReceipt"
+																	class="text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+																>{{ __('Hapus') }}</button>
+															</div>
 														</div>
-														<div class="flex gap-1 shrink-0">
-															<button
-																@click="pairUsb"
-																:disabled="usbPairing"
-																class="text-xs px-2 py-1 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors disabled:opacity-50"
-															>{{ __('Ganti') }}</button>
-															<button
-																@click="unpairUsb"
-																class="text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
-															>{{ __('Hapus') }}</button>
+														<div v-else>
+															<button @click="pairUsbReceipt" :disabled="usbReceiptPairing"
+																class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
+															>
+																<svg v-if="usbReceiptPairing" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+																	<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+																	<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+																</svg>
+																{{ usbReceiptPairing ? __('Mencari printer...') : __('Pair Printer Struk') }}
+															</button>
 														</div>
 													</div>
 
-													<div v-else class="mb-2">
-														<p class="text-xs text-gray-600 mb-2">{{ __('Belum ada USB printer yang dipasangkan.') }}</p>
-														<button
-															@click="pairUsb"
-															:disabled="usbPairing"
-															class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
-														>
-															<svg v-if="usbPairing" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-																<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-																<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-															</svg>
-															<svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-															</svg>
-															{{ usbPairing ? __('Mencari printer...') : __('Pair USB Printer') }}
-														</button>
+													<!-- Label Cup -->
+													<div class="bg-white rounded-md border border-blue-100 p-2.5">
+														<p class="text-xs font-semibold text-gray-700 mb-2">🏷️ {{ __('Printer Label Cup') }}</p>
+														<div v-if="usbLabelPrinterName" class="flex items-center justify-between gap-2">
+															<span class="text-xs font-medium text-blue-800 truncate">{{ usbLabelPrinterName }}</span>
+															<div class="flex gap-1 shrink-0">
+																<button @click="pairUsbLabel" :disabled="usbLabelPairing"
+																	class="text-xs px-2 py-1 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors disabled:opacity-50"
+																>{{ __('Ganti') }}</button>
+																<button @click="unpairUsbLabel"
+																	class="text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+																>{{ __('Hapus') }}</button>
+															</div>
+														</div>
+														<div v-else>
+															<button @click="pairUsbLabel" :disabled="usbLabelPairing"
+																class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
+															>
+																<svg v-if="usbLabelPairing" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+																	<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+																	<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+																</svg>
+																{{ usbLabelPairing ? __('Mencari printer...') : __('Pair Printer Label') }}
+															</button>
+														</div>
 													</div>
 
 													<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
@@ -529,7 +545,12 @@ import NumberField from "@/components/settings/NumberField.vue"
 import SelectField from "@/components/settings/SelectField.vue"
 import { useToast } from "@/composables/useToast"
 import { isBTAvailable, pairBTPrinter, getBTPrinterName, removeBTPrinter } from "@/utils/bluetoothPrinter"
-import { isUSBAvailable, pairUSBPrinter, getUSBPrinterName, removeUSBPrinter } from "@/utils/usbPrinter"
+import {
+	isUSBAvailable,
+	pairUSBReceiptPrinter, pairUSBLabelPrinter,
+	getUSBReceiptPrinterName, getUSBLabelPrinterName,
+	removeUSBReceiptPrinter, removeUSBLabelPrinter,
+} from "@/utils/usbPrinter"
 import { Button, call, createResource } from "frappe-ui"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import {
@@ -595,27 +616,51 @@ function unpairBluetooth() {
 
 // ── USB Printer ───────────────────────────────────────────────────────────────
 const usbSupported = isUSBAvailable()
-const usbPrinterName = ref(getUSBPrinterName())
-const usbPairing = ref(false)
 
-async function pairUsb() {
-	usbPairing.value = true
+const usbReceiptPrinterName = ref(getUSBReceiptPrinterName())
+const usbReceiptPairing = ref(false)
+
+const usbLabelPrinterName = ref(getUSBLabelPrinterName())
+const usbLabelPairing = ref(false)
+
+async function pairUsbReceipt() {
+	usbReceiptPairing.value = true
 	try {
-		const name = await pairUSBPrinter()
-		usbPrinterName.value = name
-		showSuccess(__("USB printer berhasil dipasangkan: ") + name)
+		const name = await pairUSBReceiptPrinter()
+		usbReceiptPrinterName.value = name
+		showSuccess(__("USB printer struk berhasil dipasangkan: ") + name)
 	} catch (err) {
 		if (err.name !== "NotFoundError") {
-			showError(err.message || __("Gagal pair USB printer"))
+			showError(err.message || __("Gagal pair USB printer struk"))
 		}
 	} finally {
-		usbPairing.value = false
+		usbReceiptPairing.value = false
 	}
 }
 
-function unpairUsb() {
-	removeUSBPrinter()
-	usbPrinterName.value = null
+function unpairUsbReceipt() {
+	removeUSBReceiptPrinter()
+	usbReceiptPrinterName.value = null
+}
+
+async function pairUsbLabel() {
+	usbLabelPairing.value = true
+	try {
+		const name = await pairUSBLabelPrinter()
+		usbLabelPrinterName.value = name
+		showSuccess(__("USB printer label berhasil dipasangkan: ") + name)
+	} catch (err) {
+		if (err.name !== "NotFoundError") {
+			showError(err.message || __("Gagal pair USB printer label"))
+		}
+	} finally {
+		usbLabelPairing.value = false
+	}
+}
+
+function unpairUsbLabel() {
+	removeUSBLabelPrinter()
+	usbLabelPrinterName.value = null
 }
 // ────────────────────────────────────────────────────────────────────────────
 const selectedWarehouse = ref(props.currentWarehouse || "")

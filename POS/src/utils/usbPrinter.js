@@ -1,44 +1,58 @@
 /**
- * WebUSB ESC/POS printer utility — cup labels only.
- * Stores pairing info (vendorId, productId, name) in localStorage so the
- * browser can reconnect to the same device without showing the picker again.
+ * WebUSB ESC/POS printer utility — supports two independent USB printers:
+ *   1. Receipt printer (struk kasir) → pos_usb_printer_receipt
+ *   2. Label printer  (cup labels)  → pos_usb_printer_label
  *
- * Windows requirement: the printer's USB driver must be replaced with WinUSB
- * via Zadig (https://zadig.akeo.ie/) before the browser can claim the interface.
+ * Windows requirement: replace the printer's USB driver with WinUSB via
+ * Zadig (https://zadig.akeo.ie/) before the browser can claim the interface.
  */
 
-const STORAGE_KEY = "pos_usb_printer"
+import { buildReceiptData } from "@/utils/bluetoothPrinter"
+import { call } from "frappe-ui"
+
+const STORAGE_KEY_RECEIPT = "pos_usb_printer_receipt"
+const STORAGE_KEY_LABEL = "pos_usb_printer_label"
+
+// ── Public query helpers ──────────────────────────────────────────────────────
 
 export function isUSBAvailable() {
 	return !!navigator?.usb
 }
 
-export function getUSBPrinterName() {
+function _readStorage(key) {
 	try {
-		const raw = localStorage.getItem(STORAGE_KEY)
-		return raw ? JSON.parse(raw).name : null
+		const raw = localStorage.getItem(key)
+		return raw ? JSON.parse(raw) : null
 	} catch {
 		return null
 	}
 }
 
-export function removeUSBPrinter() {
-	localStorage.removeItem(STORAGE_KEY)
-	if (_device) {
-		try { _device.close() } catch {}
-	}
-	_device = null
-	_epNum = null
+export function getUSBReceiptPrinterName() {
+	return _readStorage(STORAGE_KEY_RECEIPT)?.name ?? null
 }
 
-// ── Internal connection state ──────────────────────────────────────────────
+export function getUSBLabelPrinterName() {
+	return _readStorage(STORAGE_KEY_LABEL)?.name ?? null
+}
 
-let _device = null
-let _epNum = null
+/** Backward-compat alias for label printer */
+export function getUSBPrinterName() {
+	return getUSBLabelPrinterName()
+}
+
+// ── Device state ─────────────────────────────────────────────────────────────
+
+const _receipt = { device: null, epNum: null }
+const _label = { device: null, epNum: null }
+
+// ── Access-denied error message ───────────────────────────────────────────────
 
 const ZADIG_MSG =
 	"Akses ditolak (Access denied). Di Windows: uninstall driver printer di Device Manager, " +
 	"lalu install WinUSB via Zadig (zadig.akeo.ie), kemudian pair ulang."
+
+// ── Low-level USB helpers ─────────────────────────────────────────────────────
 
 async function _openAndClaim(device) {
 	try {
@@ -57,7 +71,6 @@ async function _openAndClaim(device) {
 		// Some devices don't need explicit configuration selection — ignore
 	}
 
-	// Try USB printer class (0x07) interfaces first, then any with a bulk OUT
 	let lastClaimErr = null
 	for (const pass of ["printer", "any"]) {
 		for (const iface of device.configuration.interfaces) {
@@ -86,31 +99,76 @@ async function _openAndClaim(device) {
 	)
 }
 
-// ── Public pairing API ─────────────────────────────────────────────────────
+async function _transfer(slot, data) {
+	const CHUNK = 4096
+	for (let i = 0; i < data.length; i += CHUNK) {
+		await slot.device.transferOut(slot.epNum, data.slice(i, i + CHUNK))
+	}
+}
 
-export async function pairUSBPrinter() {
-	const device = await navigator.usb.requestDevice({
-		filters: [{ classCode: 0x07 }],
-	})
+// Raw USB bypasses OS driver which normally converts LF → CRLF.
+// ESC/POS printers need explicit CR+LF to flush each line.
+function _addCR(data) {
+	const result = []
+	for (const byte of data) {
+		if (byte === 0x0A) result.push(0x0D)
+		result.push(byte)
+	}
+	return new Uint8Array(result)
+}
+
+// ── Pairing ───────────────────────────────────────────────────────────────────
+
+async function _pair(storageKey, slot) {
+	const device = await navigator.usb.requestDevice({ filters: [{ classCode: 0x07 }] })
 	const epNum = await _openAndClaim(device)
-	_device = device
-	_epNum = epNum
-	const name =
-		device.productName || device.manufacturerName || "USB Printer"
+	slot.device = device
+	slot.epNum = epNum
+	const name = device.productName || device.manufacturerName || "USB Printer"
 	localStorage.setItem(
-		STORAGE_KEY,
+		storageKey,
 		JSON.stringify({ name, vendorId: device.vendorId, productId: device.productId }),
 	)
 	return name
 }
 
-// ── Internal helpers ───────────────────────────────────────────────────────
+export async function pairUSBReceiptPrinter() {
+	return _pair(STORAGE_KEY_RECEIPT, _receipt)
+}
 
-async function _ensureConnected() {
-	if (_device?.opened && _epNum !== null) return
+export async function pairUSBLabelPrinter() {
+	return _pair(STORAGE_KEY_LABEL, _label)
+}
 
-	const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null")
-	if (!stored) throw new Error("USB printer belum dipasangkan.")
+/** Backward-compat alias — pairs label printer */
+export async function pairUSBPrinter() {
+	return pairUSBLabelPrinter()
+}
+
+// ── Remove ────────────────────────────────────────────────────────────────────
+
+function _remove(storageKey, slot) {
+	localStorage.removeItem(storageKey)
+	if (slot.device) {
+		try { slot.device.close() } catch {}
+	}
+	slot.device = null
+	slot.epNum = null
+}
+
+export function removeUSBReceiptPrinter() { _remove(STORAGE_KEY_RECEIPT, _receipt) }
+export function removeUSBLabelPrinter() { _remove(STORAGE_KEY_LABEL, _label) }
+
+/** Backward-compat alias */
+export function removeUSBPrinter() { removeUSBLabelPrinter() }
+
+// ── Connection ────────────────────────────────────────────────────────────────
+
+async function _ensureConnected(storageKey, slot, label) {
+	if (slot.device?.opened && slot.epNum !== null) return
+
+	const stored = _readStorage(storageKey)
+	if (!stored) throw new Error(`USB printer ${label} belum dipasangkan.`)
 
 	const devices = await navigator.usb.getDevices()
 	const device = devices.find(
@@ -118,26 +176,39 @@ async function _ensureConnected() {
 	)
 	if (!device) {
 		throw new Error(
-			"Printer USB tidak ditemukan. Pastikan kabel terhubung, lalu coba lagi atau pair ulang.",
+			`Printer USB ${label} tidak ditemukan. Pastikan kabel terhubung, lalu coba lagi atau pair ulang.`,
 		)
 	}
-	_epNum = await _openAndClaim(device)
-	_device = device
+	slot.epNum = await _openAndClaim(device)
+	slot.device = device
 }
 
-async function _transfer(data) {
-	const CHUNK = 4096
-	for (let i = 0; i < data.length; i += CHUNK) {
-		await _device.transferOut(_epNum, data.slice(i, i + CHUNK))
+// ── Receipt print ─────────────────────────────────────────────────────────────
+
+export async function printReceiptUSB(invoiceData) {
+	await _ensureConnected(STORAGE_KEY_RECEIPT, _receipt, "struk")
+
+	let totalLoyaltyPoints = null
+	if (invoiceData.customer) {
+		try {
+			totalLoyaltyPoints = await call(
+				"pos_next.api.customers.get_customer_loyalty_balance",
+				{ customer: invoiceData.customer },
+			)
+		} catch { /* non-fatal */ }
 	}
+
+	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints))
+	await _transfer(_receipt, data)
 }
+
+// ── Label print ───────────────────────────────────────────────────────────────
 
 function _buildLabelData(itemName, remarks) {
 	const enc = new TextEncoder()
 	const b = []
 	const push = (...bytes) => b.push(...bytes)
-	// Raw USB bypasses the Windows printer driver which normally converts \n → \r\n.
-	// ESC/POS printers need explicit CR+LF to flush each line.
+	// Raw USB bypasses Windows driver CR+LF conversion — use \r\n explicitly
 	const line = (s) => b.push(...enc.encode(s + "\r\n"))
 
 	const now = new Date()
@@ -162,13 +233,11 @@ function _buildLabelData(itemName, remarks) {
 	return new Uint8Array(b)
 }
 
-// ── Public print API ───────────────────────────────────────────────────────
-
 export async function printLabelUSB(itemName, remarks, copies = 1) {
-	await _ensureConnected()
+	await _ensureConnected(STORAGE_KEY_LABEL, _label, "label")
 	const data = _buildLabelData(itemName, remarks)
 	for (let i = 0; i < copies; i++) {
-		await _transfer(data)
+		await _transfer(_label, data)
 		if (copies > 1 && i < copies - 1) {
 			await new Promise((r) => setTimeout(r, 200))
 		}
