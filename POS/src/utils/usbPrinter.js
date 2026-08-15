@@ -222,19 +222,24 @@ function _buildLabelData(itemName, remarks) {
 	const safe = (s) => String(s || "").replace(/"/g, "'").replace(/[\r\n]/g, " ").trim()
 
 	// Label: 60mm × 40mm at 8 dots/mm = 480 × 320 dots
-	const LW = 480, LH = 320, M = 10
+	const LW = 480, LH = 320
 
-	// Blueprint printer applies an internal 180° rotation to the whole label.
-	// Fix: send TEXT with rotation=180 and DIRECTION 0.
-	//
-	// With TEXT rotation=180, (x,y) is the text bottom-right in TSPL space.
-	// After the printer's own 180° flip that becomes the physical top-left:
-	//   physical_left = LW - x  →  x = LW - physLeft  (= LW-M = 470, CONSTANT)
-	//   physical_top  = LH - y  →  y = LH - physTop
-	// BAR has no rotation; same formula: TSPL_y = LH - physTop - height.
+	// Blueprint DIRECTION 0: X-axis is inverted (x=0 at physical right edge).
+	// Characters are right-side-up. Center formula: TSPL_X = (LW - textWidth) / 2
+	// Y-axis is normal (y=0 at physical top). Content is vertically centered.
+	const FW2 = 24  // font "2": 24×24 dots/char
+	const FW4 = 32  // font "4": 32×32 dots/char (used for item name, bigger)
+	const FW1 = 12  // font "1": 12×24 dots/char
+	const cx = (w) => Math.max(0, Math.floor((LW - w) / 2))
 
-	const TX = LW - M  // 470 — constant TSPL X for all left-aligned text
-	const truncItem = safe(itemName).substring(0, 19)
+	// Item: font "4" yMult=2 → 32px wide × 64px tall; max 13 chars (13×32=416px)
+	const truncItem = safe(itemName).substring(0, 13)
+	const hasRemarks = !!remarks?.trim()
+
+	// Total content height for vertical centering:
+	// header(24)+gap(10)+bar(2)+gap(8)+item(64)+gap(8)+[rem(24)+gap(8)]+time(24)
+	const contentH = 24 + 10 + 2 + 8 + 64 + 8 + (hasRemarks ? 32 : 0) + 24
+	let y = Math.floor((LH - contentH) / 2)
 
 	const cmds = [
 		"SIZE 60 mm,40 mm",
@@ -244,22 +249,26 @@ function _buildLabelData(itemName, remarks) {
 		"DIRECTION 0,0",
 		"CODEPAGE UTF-8",
 		"CLS",
-		// Header "X-Sha grow" — font "2" (24px tall) — physical top=8
-		`TEXT ${TX},${LH - 8},"2",180,1,1,"X-Sha grow"`,
-		// Divider — physical y=38, 2px tall
-		`BAR 0,${LH - 38 - 2},${LW},2`,
-		// Item — font "3" yMult=2 (48px tall) — physical top=42
-		`TEXT ${TX},${LH - 42},"3",180,1,2,"${truncItem}"`,
+		// Header "X-Sha grow" — font "2" (24px tall), centered
+		`TEXT ${cx(10 * FW2)},${y},"2",0,1,1,"X-Sha grow"`,
 	]
+	y += 34  // header(24) + gap(10)
 
-	// Remarks + time (item ends at physical y≈90)
-	let physY = 98
-	if (remarks?.trim()) {
+	cmds.push(`BAR 0,${y},${LW},2`)
+	y += 10  // bar(2) + gap(8)
+
+	// Item name — font "4" yMult=2 (64px tall), centered
+	cmds.push(`TEXT ${cx(truncItem.length * FW4)},${y},"4",0,1,2,"${truncItem}"`)
+	y += 72  // item(64) + gap(8)
+
+	if (hasRemarks) {
 		const rem = safe(remarks).substring(0, 26)
-		cmds.push(`TEXT ${TX},${LH - physY},"1",180,1,1,"${rem}"`)
-		physY += 28
+		cmds.push(`TEXT ${cx(rem.length * FW1)},${y},"1",0,1,1,"${rem}"`)
+		y += 32  // rem(24) + gap(8)
 	}
-	cmds.push(`TEXT ${TX},${LH - physY},"2",180,1,1,"${hh}:${mm}"`)
+
+	// Time — font "2", centered
+	cmds.push(`TEXT ${cx(5 * FW2)},${y},"2",0,1,1,"${hh}:${mm}"`)
 	cmds.push("PRINT 1,1")
 
 	return new TextEncoder().encode(cmds.join("\r\n") + "\r\n")
