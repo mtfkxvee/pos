@@ -254,6 +254,7 @@ import {
 } from "@/utils/offline/sync"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 import { getBTPrinterName, printLabelBT } from "@/utils/bluetoothPrinter"
+import { getUSBPrinterName, printLabelUSB } from "@/utils/usbPrinter"
 import { Button, Dialog, Input, createResource } from "frappe-ui"
 import { computed, ref, watch } from "vue"
 import ReturnInvoiceDialog from "./ReturnInvoiceDialog.vue"
@@ -533,7 +534,19 @@ async function printLabels() {
 
 	const remarks = labelRemarks.value || ""
 
-	// Use BLE if a printer is paired, otherwise fall back to window.open
+	// Priority: USB → Bluetooth → browser fallback
+	if (getUSBPrinterName() && settingsStore.enableUsbPrinter) {
+		showLabelDialog.value = false
+		try {
+			for (const item of selected) {
+				await printLabelUSB(item.item_name, remarks, labelCopies(item))
+			}
+		} catch (err) {
+			showError(err.message || __("Gagal print ke USB printer"))
+		}
+		return
+	}
+
 	if (getBTPrinterName() && settingsStore.enableBluetoothPrinter) {
 		showLabelDialog.value = false
 		try {

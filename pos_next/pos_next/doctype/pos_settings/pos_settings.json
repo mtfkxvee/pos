@@ -62,6 +62,7 @@
         "silent_print",
         "allow_cup_label_print",
         "enable_bluetooth_printer",
+        "enable_usb_printer",
         "section_break_delivery",
         "use_delivery_charges",
         "auto_set_delivery_charges",
@@ -470,6 +471,13 @@
             "fieldname": "enable_bluetooth_printer",
             "fieldtype": "Check",
             "label": "Enable Bluetooth Printer"
+        },
+        {
+            "default": "0",
+            "description": "Aktifkan printer USB 58mm via WebUSB untuk cetak label cup di komputer (Chrome/Edge). Khusus label cup saja.",
+            "fieldname": "enable_usb_printer",
+            "fieldtype": "Check",
+            "label": "Enable USB Printer (Label Cup)"
         },
         {
             "collapsible": 1,

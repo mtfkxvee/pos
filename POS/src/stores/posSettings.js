@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS = {
 	silent_print: 0,
 	allow_cup_label_print: 0,
 	enable_bluetooth_printer: 0,
+	enable_usb_printer: 0,
 	// Delivery
 	use_delivery_charges: 0,
 	auto_set_delivery_charges: 0,
@@ -210,6 +211,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 	const enableBluetoothPrinter = computed(() =>
 		Boolean(settings.value.enable_bluetooth_printer),
+	)
+	const enableUsbPrinter = computed(() =>
+		Boolean(settings.value.enable_usb_printer),
 	)
 
 	// Computed - Delivery
@@ -445,6 +449,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		silentPrint,
 		allowCupLabelPrint,
 		enableBluetoothPrinter,
+		enableUsbPrinter,
 
 		// Computed - Delivery
 		useDeliveryCharges,
