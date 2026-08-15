@@ -36,11 +36,29 @@ export function removeUSBPrinter() {
 let _device = null
 let _epNum = null
 
+const ZADIG_MSG =
+	"Akses ditolak (Access denied). Di Windows: uninstall driver printer di Device Manager, " +
+	"lalu install WinUSB via Zadig (zadig.akeo.ie), kemudian pair ulang."
+
 async function _openAndClaim(device) {
-	if (!device.opened) await device.open()
-	if (device.configuration === null) await device.selectConfiguration(1)
+	try {
+		if (!device.opened) await device.open()
+	} catch (err) {
+		const msg = (err?.message || "").toLowerCase()
+		if (msg.includes("access denied") || msg.includes("access_denied")) {
+			throw new Error(ZADIG_MSG)
+		}
+		throw err
+	}
+
+	try {
+		if (device.configuration === null) await device.selectConfiguration(1)
+	} catch {
+		// Some devices don't need explicit configuration selection — ignore
+	}
 
 	// Try USB printer class (0x07) interfaces first, then any with a bulk OUT
+	let lastClaimErr = null
 	for (const pass of ["printer", "any"]) {
 		for (const iface of device.configuration.interfaces) {
 			for (const alt of iface.alternates) {
@@ -50,15 +68,21 @@ async function _openAndClaim(device) {
 					try {
 						await device.claimInterface(iface.interfaceNumber)
 						return ep.endpointNumber
-					} catch {
-						// Interface already claimed by OS driver → user needs Zadig
+					} catch (err) {
+						lastClaimErr = err
 					}
 				}
 			}
 		}
 	}
+
+	const claimMsg = (lastClaimErr?.message || "").toLowerCase()
+	if (claimMsg.includes("access denied") || claimMsg.includes("access_denied")) {
+		throw new Error(ZADIG_MSG)
+	}
 	throw new Error(
-		"Tidak bisa claim interface USB. Di Windows, install WinUSB driver dulu via Zadig (zadig.akeo.ie).",
+		"Tidak ditemukan endpoint bulk OUT yang bisa diklaim. " +
+		"Pastikan printer sudah terhubung dan driver WinUSB sudah terpasang via Zadig.",
 	)
 }
 
@@ -112,7 +136,9 @@ function _buildLabelData(itemName, remarks) {
 	const enc = new TextEncoder()
 	const b = []
 	const push = (...bytes) => b.push(...bytes)
-	const text = (s) => b.push(...enc.encode(s))
+	// Raw USB bypasses the Windows printer driver which normally converts \n → \r\n.
+	// ESC/POS printers need explicit CR+LF to flush each line.
+	const line = (s) => b.push(...enc.encode(s + "\r\n"))
 
 	const now = new Date()
 	const hh = String(now.getHours()).padStart(2, "0")
@@ -122,15 +148,15 @@ function _buildLabelData(itemName, remarks) {
 	push(0x1b, 0x61, 0x01) // center
 	push(0x1d, 0x21, 0x00) // normal size
 	push(0x1b, 0x45, 0x00) // bold off
-	text("X-Sha grow\n")
-	text("--------------------------------\n")
+	line("X-Sha grow")
+	line("--------------------------------")
 	push(0x1d, 0x21, 0x11) // double height + width
 	push(0x1b, 0x45, 0x01) // bold on
-	text(itemName + "\n")
+	line(itemName)
 	push(0x1d, 0x21, 0x00) // normal
 	push(0x1b, 0x45, 0x00) // bold off
-	if (remarks?.trim()) text(remarks.trim() + "\n")
-	text(`${hh}:${mm}\n`)
+	if (remarks?.trim()) line(remarks.trim())
+	line(`${hh}:${mm}`)
 	push(0x1b, 0x64, 0x03) // feed 3 lines
 
 	return new Uint8Array(b)
