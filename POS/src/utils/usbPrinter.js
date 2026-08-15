@@ -224,22 +224,27 @@ function _buildLabelData(itemName, remarks) {
 	// Label: 60mm × 40mm at 8 dots/mm = 480 × 320 dots
 	const LW = 480, LH = 320
 
-	// Blueprint DIRECTION 0: X-axis is inverted (x=0 at physical right edge).
-	// Characters are right-side-up. Center formula: TSPL_X = (LW - textWidth) / 2
-	// Y-axis is normal (y=0 at physical top). Content is vertically centered.
-	const FW2 = 24  // font "2": 24×24 dots/char
-	const FW4 = 32  // font "4": 32×32 dots/char (used for item name, bigger)
-	const FW1 = 12  // font "1": 12×24 dots/char
+	// DIRECTION 0, rotation=0: characters are right-side-up.
+	// Standard TSC 203dpi font widths at xMult=1 (dots/char):
+	//   font "1": 8px   font "2": 12px   font "4": 24px
+	// Center formula: TSPL_X = (LW - textWidth) / 2
+	const FW2 = 12, FW4 = 24, FW1 = 8
 	const cx = (w) => Math.max(0, Math.floor((LW - w) / 2))
 
-	// Item: font "4" yMult=2 → 32px wide × 64px tall; max 13 chars (13×32=416px)
-	const truncItem = safe(itemName).substring(0, 13)
+	// Item: font "4" yMult=2 → 24px wide × 64px tall; max 18 chars (18×24=432px)
+	const truncItem = safe(itemName).substring(0, 18)
 	const hasRemarks = !!remarks?.trim()
 
-	// Total content height for vertical centering:
-	// header(24)+gap(10)+bar(2)+gap(8)+item(64)+gap(8)+[rem(24)+gap(8)]+time(24)
-	const contentH = 24 + 10 + 2 + 8 + 64 + 8 + (hasRemarks ? 32 : 0) + 24
-	let y = Math.floor((LH - contentH) / 2)
+	// Layout (no divider):
+	// y=8:          header "X-Sha grow" (font "2", 20px tall), centered
+	// middle:       product name (font "4" yMult=2, 64px tall), centered H+V
+	// [if remarks]: remarks line above time
+	// y=LH-30:      time at BOTTOM-LEFT (fixed, not in center block)
+
+	const bottomArea = hasRemarks ? 62 : 34  // time(24)+margin(10) [+rem(20)+gap(8)]
+	const bodyTop = 34
+	const bodyBottom = LH - bottomArea
+	const itemY = Math.floor((bodyTop + bodyBottom) / 2) - 32
 
 	const cmds = [
 		"SIZE 60 mm,40 mm",
@@ -249,26 +254,19 @@ function _buildLabelData(itemName, remarks) {
 		"DIRECTION 0,0",
 		"CODEPAGE UTF-8",
 		"CLS",
-		// Header "X-Sha grow" — font "2" (24px tall), centered
-		`TEXT ${cx(10 * FW2)},${y},"2",0,1,1,"X-Sha grow"`,
+		// Header — centered, font "2" (20px tall)
+		`TEXT ${cx(10 * FW2)},8,"2",0,1,1,"X-Sha grow"`,
+		// Product name — centered horizontally and vertically
+		`TEXT ${cx(truncItem.length * FW4)},${itemY},"4",0,1,2,"${truncItem}"`,
 	]
-	y += 34  // header(24) + gap(10)
-
-	cmds.push(`BAR 0,${y},${LW},2`)
-	y += 10  // bar(2) + gap(8)
-
-	// Item name — font "4" yMult=2 (64px tall), centered
-	cmds.push(`TEXT ${cx(truncItem.length * FW4)},${y},"4",0,1,2,"${truncItem}"`)
-	y += 72  // item(64) + gap(8)
 
 	if (hasRemarks) {
-		const rem = safe(remarks).substring(0, 26)
-		cmds.push(`TEXT ${cx(rem.length * FW1)},${y},"1",0,1,1,"${rem}"`)
-		y += 32  // rem(24) + gap(8)
+		const rem = safe(remarks).substring(0, 35)
+		cmds.push(`TEXT ${cx(rem.length * FW1)},${LH - bottomArea + 10},"1",0,1,1,"${rem}"`)
 	}
 
-	// Time — font "2", centered
-	cmds.push(`TEXT ${cx(5 * FW2)},${y},"2",0,1,1,"${hh}:${mm}"`)
+	// Time at bottom-left
+	cmds.push(`TEXT 10,${LH - 30},"2",0,1,1,"${hh}:${mm}"`)
 	cmds.push("PRINT 1,1")
 
 	return new TextEncoder().encode(cmds.join("\r\n") + "\r\n")
