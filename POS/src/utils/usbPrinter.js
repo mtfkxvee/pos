@@ -225,26 +225,27 @@ function _buildLabelData(itemName, remarks) {
 	const LW = 480, LH = 320
 
 	// DIRECTION 0, rotation=0: characters are right-side-up.
-	// Standard TSC 203dpi font widths at xMult=1 (dots/char):
-	//   font "1": 8px   font "2": 12px   font "4": 24px
-	// Center formula: TSPL_X = (LW - textWidth) / 2
-	const FW2 = 12, FW4 = 24, FW1 = 8
+	// Font "2" = 12px/char confirmed working. Use multipliers on font "2"
+	// so centering formula stays accurate: cx = (LW - len*charW) / 2
+	const FW2 = 12
 	const cx = (w) => Math.max(0, Math.floor((LW - w) / 2))
 
-	// Item: font "4" yMult=2 → 24px wide × 64px tall; max 18 chars (18×24=432px)
-	const truncItem = safe(itemName).substring(0, 18)
 	const hasRemarks = !!remarks?.trim()
 
-	// Layout (no divider):
-	// y=8:          header "X-Sha grow" (font "2", 20px tall), centered
-	// middle:       product name (font "4" yMult=2, 64px tall), centered H+V
-	// [if remarks]: remarks line above time
-	// y=LH-30:      time at BOTTOM-LEFT (fixed, not in center block)
+	// Product name: font "2" xMult=3, yMult=4 → 36px wide × 80px tall, max 13 chars
+	const truncItem = safe(itemName).substring(0, 13)
+	const itemCharW = FW2 * 3   // 36px per char
+	const itemH = 80            // 20px × yMult=4
 
-	const bottomArea = hasRemarks ? 62 : 34  // time(24)+margin(10) [+rem(20)+gap(8)]
-	const bodyTop = 34
-	const bodyBottom = LH - bottomArea
-	const itemY = Math.floor((bodyTop + bodyBottom) / 2) - 32
+	// Remarks: font "1" (8px wide × 12px tall), below product name
+	const remH = 12
+	const remGap = 8
+
+	// Vertical centering of content block in body area
+	// Body: header bottom (y=28+6=34) → time top (y=LH-30-4=286)
+	const bodyTop = 34, bodyBottom = LH - 34
+	const contentH = itemH + (hasRemarks ? remGap + remH : 0)
+	const blockTop = Math.floor((bodyTop + bodyBottom - contentH) / 2)
 
 	const cmds = [
 		"SIZE 60 mm,40 mm",
@@ -254,15 +255,15 @@ function _buildLabelData(itemName, remarks) {
 		"DIRECTION 0,0",
 		"CODEPAGE UTF-8",
 		"CLS",
-		// Header — centered, font "2" (20px tall)
+		// Header — centered, font "2" (12px/char × 20px tall)
 		`TEXT ${cx(10 * FW2)},8,"2",0,1,1,"X-Sha grow"`,
-		// Product name — centered horizontally and vertically
-		`TEXT ${cx(truncItem.length * FW4)},${itemY},"4",0,1,2,"${truncItem}"`,
+		// Product name — big, centered H+V
+		`TEXT ${cx(truncItem.length * itemCharW)},${blockTop},"2",0,3,4,"${truncItem}"`,
 	]
 
 	if (hasRemarks) {
-		const rem = safe(remarks).substring(0, 35)
-		cmds.push(`TEXT ${cx(rem.length * FW1)},${LH - bottomArea + 10},"1",0,1,1,"${rem}"`)
+		const rem = safe(remarks).substring(0, 40)
+		cmds.push(`TEXT ${cx(rem.length * 8)},${blockTop + itemH + remGap},"1",0,1,1,"${rem}"`)
 	}
 
 	// Time at bottom-left
