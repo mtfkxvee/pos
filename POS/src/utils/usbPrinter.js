@@ -225,26 +225,46 @@ function _buildLabelData(itemName, remarks) {
 	const LW = 480, LH = 320
 
 	// DIRECTION 0, rotation=0: characters are right-side-up.
-	// Font "2" = 12px/char confirmed working. Use multipliers on font "2"
-	// so centering formula stays accurate: cx = (LW - len*charW) / 2
+	// Font "2" = 12px/char confirmed. Multipliers scale proportionally.
+	// Center formula: cx = (LW - len*charW) / 2
 	const FW2 = 12
 	const cx = (w) => Math.max(0, Math.floor((LW - w) / 2))
 
 	const hasRemarks = !!remarks?.trim()
 
-	// Product name: font "2" xMult=3, yMult=4 → 36px wide × 80px tall, max 13 chars
-	const truncItem = safe(itemName).substring(0, 13)
-	const itemCharW = FW2 * 3   // 36px per char
-	const itemH = 80            // 20px × yMult=4
+	// Product name: font "2" xMult=2, yMult=3 → 24px wide × 60px tall (smaller than before)
+	const itemCharW = FW2 * 2   // 24px per char
+	const itemH = 60            // 20px × yMult=3
+	const maxPerLine = Math.floor(LW / itemCharW)  // 20 chars per line
 
-	// Remarks: font "1" (8px wide × 12px tall), below product name
-	const remH = 12
+	// Word-wrap into max 2 lines
+	const rawItem = safe(itemName)
+	const itemLines = []
+	let cur = ""
+	for (const word of rawItem.split(" ")) {
+		const w = word.substring(0, maxPerLine)
+		if (!cur) {
+			cur = w
+		} else if ((cur + " " + w).length <= maxPerLine) {
+			cur += " " + w
+		} else {
+			itemLines.push(cur)
+			cur = w
+			if (itemLines.length === 2) break
+		}
+	}
+	if (cur && itemLines.length < 2) itemLines.push(cur)
+
+	const lineGap = 4
+	const remH = 20   // font "2" xMult=1 tall enough to read
 	const remGap = 8
 
-	// Vertical centering of content block in body area
-	// Body: header bottom (y=28+6=34) → time top (y=LH-30-4=286)
+	// Total content block height
+	const contentH = itemLines.length * itemH + (itemLines.length - 1) * lineGap
+		+ (hasRemarks ? remGap + remH : 0)
+
+	// Vertical centering in body area (header bottom≈34, time top≈286)
 	const bodyTop = 34, bodyBottom = LH - 34
-	const contentH = itemH + (hasRemarks ? remGap + remH : 0)
 	const blockTop = Math.floor((bodyTop + bodyBottom - contentH) / 2)
 
 	const cmds = [
@@ -257,13 +277,17 @@ function _buildLabelData(itemName, remarks) {
 		"CLS",
 		// Header — centered, font "2" (12px/char × 20px tall)
 		`TEXT ${cx(10 * FW2)},8,"2",0,1,1,"X-Sha grow"`,
-		// Product name — big, centered H+V
-		`TEXT ${cx(truncItem.length * itemCharW)},${blockTop},"2",0,3,4,"${truncItem}"`,
 	]
+
+	// Product name lines — each centered
+	itemLines.forEach((line, i) => {
+		cmds.push(`TEXT ${cx(line.length * itemCharW)},${blockTop + i * (itemH + lineGap)},"2",0,2,3,"${line}"`)
+	})
 
 	if (hasRemarks) {
 		const rem = safe(remarks).substring(0, 40)
-		cmds.push(`TEXT ${cx(rem.length * 8)},${blockTop + itemH + remGap},"1",0,1,1,"${rem}"`)
+		const remY = blockTop + itemLines.length * (itemH + lineGap) - lineGap + remGap
+		cmds.push(`TEXT ${cx(rem.length * FW2)},${remY},"2",0,1,1,"${rem}"`)
 	}
 
 	// Time at bottom-left
