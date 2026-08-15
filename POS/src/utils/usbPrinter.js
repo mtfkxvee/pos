@@ -232,9 +232,9 @@ function _buildLabelData(itemName, remarks) {
 
 	const hasRemarks = !!remarks?.trim()
 
-	// Product name: font "2" xMult=2, yMult=3 → 24px wide × 60px tall (smaller than before)
+	// Product name: font "2" xMult=2, yMult=2 → 24px wide × 40px tall
 	const itemCharW = FW2 * 2   // 24px per char
-	const itemH = 60            // 20px × yMult=3
+	const itemH = 40            // 20px × yMult=2
 	const maxPerLine = Math.floor(LW / itemCharW)  // 20 chars per line
 
 	// Word-wrap into max 2 lines
@@ -281,7 +281,7 @@ function _buildLabelData(itemName, remarks) {
 
 	// Product name lines — each centered
 	itemLines.forEach((line, i) => {
-		cmds.push(`TEXT ${cx(line.length * itemCharW)},${blockTop + i * (itemH + lineGap)},"2",0,2,3,"${line}"`)
+		cmds.push(`TEXT ${cx(line.length * itemCharW)},${blockTop + i * (itemH + lineGap)},"2",0,2,2,"${line}"`)
 	})
 
 	if (hasRemarks) {

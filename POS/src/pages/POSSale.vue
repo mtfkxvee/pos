@@ -517,6 +517,7 @@
 	<CupLabelDialog
 		v-model="showAutoLabelDialog"
 		:items="autoLabelItems"
+		:remarks="autoLabelRemarks"
 	/>
 
 		<SpeedModeInfoDialog
@@ -1249,6 +1250,7 @@ const showDiscountAuthDialog = ref(false);
 // Auto cup-label dialog after transaction (shown when USB printer label is enabled)
 const showAutoLabelDialog = ref(false);
 const autoLabelItems = ref([]);
+const autoLabelRemarks = ref("");
 
 // Speed Mode dialogs
 const showSpeedModeInfoDialog = ref(false);
@@ -2431,6 +2433,7 @@ async function handlePaymentCompleted(paymentData) {
 				// Auto-show cup label popup when USB printer is enabled
 				if (pendingLabelItems.length > 0) {
 					autoLabelItems.value = pendingLabelItems;
+					autoLabelRemarks.value = paymentData.remarks || "";
 					showAutoLabelDialog.value = true;
 				}
 			}
