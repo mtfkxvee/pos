@@ -12,6 +12,17 @@ import { call } from "frappe-ui"
 
 const STORAGE_KEY_RECEIPT = "pos_usb_printer_receipt"
 const STORAGE_KEY_LABEL = "pos_usb_printer_label"
+const STORAGE_KEY_LEGACY = "pos_usb_printer"
+
+// Migrate old single-printer data to label slot (one-time, at module load)
+;(function _migrate() {
+	try {
+		const old = localStorage.getItem(STORAGE_KEY_LEGACY)
+		if (old && !localStorage.getItem(STORAGE_KEY_LABEL)) {
+			localStorage.setItem(STORAGE_KEY_LABEL, old)
+		}
+	} catch {}
+})()
 
 // ── Public query helpers ──────────────────────────────────────────────────────
 
