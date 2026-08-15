@@ -547,14 +547,39 @@ async function printLabels() {
 	}
 
 	// ── Fallback: browser print window ────────────────────────────────────────
+	const _now = new Date()
+	const _hh = String(_now.getHours()).padStart(2, "0")
+	const _mm = String(_now.getMinutes()).padStart(2, "0")
+	const timeStr = `${_hh}:${_mm}`
+
+	// B&W inline SVG of X-Sha grow logo
+	const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 58" class="logo">
+  <text x="110" y="22"
+    font-family="'Arial Black',Impact,Arial,sans-serif"
+    font-size="22" font-weight="900"
+    text-anchor="middle"
+    stroke="black" stroke-width="4" stroke-linejoin="round"
+    fill="white"
+    letter-spacing="4">X-Sha</text>
+  <text x="110" y="54"
+    font-family="'Arial Black',Impact,Arial,sans-serif"
+    font-size="34" font-weight="900"
+    text-anchor="middle"
+    fill="black"
+    letter-spacing="1">grow</text>
+</svg>`
+
 	// Build one <div class="label"> per physical cup (copies = ceil(qty))
 	const labelsHtml = selected
 		.flatMap((item) => {
 			const copies = labelCopies(item)
 			return Array.from({ length: copies }, () => `
 				<div class="label">
+					${logoSvg}
+					<div class="divider"></div>
 					<div class="item-name">${escapeHtml(item.item_name)}</div>
 					${remarks ? `<div class="remarks">${escapeHtml(remarks)}</div>` : ""}
+					<div class="time">${timeStr}</div>
 				</div>
 			`)
 		})
@@ -577,27 +602,42 @@ async function printLabels() {
     page-break-after: always;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
     text-align: center;
-    padding: 3mm 3mm;
+    padding: 1.5mm 3mm 1.5mm;
     overflow: hidden;
+    gap: 0.8mm;
   }
   .label:last-child { page-break-after: avoid; }
+  .logo {
+    width: 46mm;
+    height: auto;
+    display: block;
+    flex-shrink: 0;
+  }
+  .divider {
+    width: 90%;
+    border-top: 0.4mm solid #000;
+    flex-shrink: 0;
+  }
   .item-name {
-    font-size: 14pt;
+    font-size: 13pt;
     font-weight: bold;
-    line-height: 1.25;
+    line-height: 1.2;
     word-break: break-word;
     hyphens: auto;
     max-width: 100%;
   }
   .remarks {
-    font-size: 10pt;
-    margin-top: 3mm;
+    font-size: 9pt;
     line-height: 1.3;
     word-break: break-word;
     max-width: 100%;
+  }
+  .time {
+    font-size: 8pt;
+    margin-top: auto;
+    color: #222;
   }
 </style>
 </head>

@@ -339,10 +339,23 @@ function _buildLabel(itemName, remarks) {
 	const push = (...bytes) => b.push(...bytes)
 	const text = (str) => b.push(...enc.encode(str))
 
+	const now = new Date()
+	const hh = String(now.getHours()).padStart(2, "0")
+	const mm = String(now.getMinutes()).padStart(2, "0")
+	const timeStr = `${hh}:${mm}`
+
 	// Initialize printer
 	push(0x1b, 0x40)
 	// Center align
 	push(0x1b, 0x61, 0x01)
+
+	// Brand header: "X-Sha grow" in normal size
+	push(0x1d, 0x21, 0x00)
+	push(0x1b, 0x45, 0x00)
+	text("X-Sha grow\n")
+	// Divider
+	text("--------------------------------\n")
+
 	// Double height + double width for item name
 	push(0x1d, 0x21, 0x11)
 	// Bold on
@@ -356,8 +369,11 @@ function _buildLabel(itemName, remarks) {
 		text(remarks.trim() + "\n")
 	}
 
-	// Feed lines to fill remaining 44mm label height (~8 lines at 203dpi)
-	push(0x1b, 0x64, 0x08)
+	// Time at bottom
+	text(timeStr + "\n")
+
+	// Feed lines to fill remaining 44mm label height
+	push(0x1b, 0x64, 0x03)
 
 	return new Uint8Array(b)
 }
