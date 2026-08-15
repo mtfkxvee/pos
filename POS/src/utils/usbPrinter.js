@@ -224,15 +224,16 @@ function _buildLabelData(itemName, remarks) {
 	// Label: 60mm × 40mm at 8 dots/mm = 480 × 320 dots
 	const LW = 480, LH = 320, M = 10
 
-	// Standard TSPL built-in font widths (dots/char at xMult=1)
-	const FW = { "1": 12, "2": 24, "3": 24 }
+	// Blueprint printer applies an internal 180° rotation to the whole label.
+	// Fix: send TEXT with rotation=180 and DIRECTION 0.
+	//
+	// With TEXT rotation=180, (x,y) is the text bottom-right in TSPL space.
+	// After the printer's own 180° flip that becomes the physical top-left:
+	//   physical_left = LW - x  →  x = LW - physLeft  (= LW-M = 470, CONSTANT)
+	//   physical_top  = LH - y  →  y = LH - physTop
+	// BAR has no rotation; same formula: TSPL_y = LH - physTop - height.
 
-	// DIRECTION 1 inverts BOTH axes (origin moves to opposite corner).
-	// Physical top at margin physY with element height h → TSPL Y = LH - physY - h
-	// Physical left at margin M with text width w   → TSPL X = LW - M - w
-	const ty = (physY, h) => LH - physY - h
-	const tx = (font, len, xm = 1) => Math.max(M, LW - M - FW[font] * len * xm)
-
+	const TX = LW - M  // 470 — constant TSPL X for all left-aligned text
 	const truncItem = safe(itemName).substring(0, 19)
 
 	const cmds = [
@@ -240,25 +241,25 @@ function _buildLabelData(itemName, remarks) {
 		"GAP 3 mm,0",
 		"SPEED 3",
 		"DENSITY 8",
-		"DIRECTION 1,0",
+		"DIRECTION 0,0",
 		"CODEPAGE UTF-8",
 		"CLS",
-		// Header "X-Sha grow" — font "2" (24px/char wide, 24px tall) — physical top=8
-		`TEXT ${tx("2", 10)},${ty(8, 24)},"2",0,1,1,"X-Sha grow"`,
-		// Divider — physical y=40, 2px tall
-		`BAR 0,${ty(40, 2)},${LW},2`,
-		// Item — font "3" yMult=2 (24px wide, 48px tall) — physical top=44
-		`TEXT ${tx("3", truncItem.length)},${ty(44, 48)},"3",0,1,2,"${truncItem}"`,
+		// Header "X-Sha grow" — font "2" (24px tall) — physical top=8
+		`TEXT ${TX},${LH - 8},"2",180,1,1,"X-Sha grow"`,
+		// Divider — physical y=38, 2px tall
+		`BAR 0,${LH - 38 - 2},${LW},2`,
+		// Item — font "3" yMult=2 (48px tall) — physical top=42
+		`TEXT ${TX},${LH - 42},"3",180,1,2,"${truncItem}"`,
 	]
 
-	// Remarks + time below item (item ends at physical y≈92)
-	let physY = 100
+	// Remarks + time (item ends at physical y≈90)
+	let physY = 98
 	if (remarks?.trim()) {
 		const rem = safe(remarks).substring(0, 26)
-		cmds.push(`TEXT ${tx("1", rem.length)},${ty(physY, 24)},"1",0,1,1,"${rem}"`)
+		cmds.push(`TEXT ${TX},${LH - physY},"1",180,1,1,"${rem}"`)
 		physY += 28
 	}
-	cmds.push(`TEXT ${tx("2", 5)},${ty(physY, 24)},"2",0,1,1,"${hh}:${mm}"`)
+	cmds.push(`TEXT ${TX},${LH - physY},"2",180,1,1,"${hh}:${mm}"`)
 	cmds.push("PRINT 1,1")
 
 	return new TextEncoder().encode(cmds.join("\r\n") + "\r\n")
