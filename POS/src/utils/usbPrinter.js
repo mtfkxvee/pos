@@ -366,13 +366,8 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 		const remY = blockTop + itemLines.length * (itemH + lineGap) - lineGap + remGap
 		postCmds.push(`TEXT ${cx(rem.length * FW2)},${remY},"2",0,1,1,"${rem}"`)
 	}
-	postCmds.push(`TEXT ${M},${LH - M - 20},"2",0,1,1,"${timestamp}"`)
-	// Copy counter bottom-right (only when printing multiple copies)
-	if (totalCopies > 1) {
-		const counter = `${copyNum}/${totalCopies}`
-		const counterX = Math.max(0, LW - 20 - counter.length * FW2)
-		postCmds.push(`TEXT ${counterX},${LH - M - 20},"2",0,1,1,"${counter}"`)
-	}
+	const bottomText = totalCopies > 1 ? `${timestamp} ${copyNum}/${totalCopies}` : timestamp
+	postCmds.push(`TEXT ${M},${LH - M - 20},"2",0,1,1,"${bottomText}"`)
 	postCmds.push("PRINT 1,1")
 
 	// BITMAP command header (binary data follows immediately, no quotes)
