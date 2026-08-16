@@ -388,13 +388,8 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	return out
 }
 
-export async function printLabelUSB(itemName, remarks, copies = 1) {
+export async function printLabelUSB(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	await _ensureConnected(STORAGE_KEY_LABEL, _label, "label")
-	for (let i = 0; i < copies; i++) {
-		const data = _buildLabelData(itemName, remarks, i + 1, copies)
-		await _transfer(_label, data)
-		if (copies > 1 && i < copies - 1) {
-			await new Promise((r) => setTimeout(r, 200))
-		}
-	}
+	const data = _buildLabelData(itemName, remarks, copyNum, totalCopies)
+	await _transfer(_label, data)
 }

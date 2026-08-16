@@ -141,8 +141,15 @@ async function printLabels() {
 	if (getUSBPrinterName() && settingsStore.enableUsbPrinter) {
 		show.value = false
 		try {
+			const totalLabels = selected.reduce((s, i) => s + labelCopies(i), 0)
+			let seq = 0
 			for (const item of selected) {
-				await printLabelUSB(item.item_name, remarks, labelCopies(item))
+				const qty = labelCopies(item)
+				for (let i = 0; i < qty; i++) {
+					seq++
+					await printLabelUSB(item.item_name, remarks, seq, totalLabels)
+					if (seq < totalLabels) await new Promise((r) => setTimeout(r, 200))
+				}
 			}
 		} catch (err) {
 			showError(err.message || __("Gagal print ke USB printer"))
