@@ -307,7 +307,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 
 	const { sizeMM, LW, LH } = LABEL_SIZE_PRESETS[getLabelSize()] ?? LABEL_SIZE_PRESETS["60x40"]
 	const M = 3
-	const MB = LH === 240 ? 13 : M
+	const MB = LH === 240 ? 13 : 10
 	const FW2 = 12
 	const cx = (w) => M + Math.max(0, Math.floor((LW - 2 * M - w) / 2))
 
