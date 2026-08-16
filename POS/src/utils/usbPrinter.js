@@ -307,6 +307,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 
 	const { sizeMM, LW, LH } = LABEL_SIZE_PRESETS[getLabelSize()] ?? LABEL_SIZE_PRESETS["60x40"]
 	const M = 3
+	const MB = LH === 240 ? 13 : M
 	const FW2 = 12
 	const cx = (w) => M + Math.max(0, Math.floor((LW - 2 * M - w) / 2))
 
@@ -343,7 +344,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 
 	// Body area: below logo bottom (8+LOGO_H+8) → above time (LH-34)
 	const bodyTop = M + LOGO_H + M
-	const bodyBottom = LH - M - 20 - M
+	const bodyBottom = LH - MB - 20 - MB
 	const blockTop = Math.floor((bodyTop + bodyBottom - contentH) / 2)
 
 	// Split into text-only commands (before and after the binary BITMAP)
@@ -367,7 +368,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 		postCmds.push(`TEXT ${cx(rem.length * FW2)},${remY},"2",0,1,1,"${rem}"`)
 	}
 	const bottomText = totalCopies > 1 ? `${timestamp} ${copyNum}/${totalCopies}` : timestamp
-	postCmds.push(`TEXT ${M},${LH - M - 20},"2",0,1,1,"${bottomText}"`)
+	postCmds.push(`TEXT ${M},${LH - MB - 20},"2",0,1,1,"${bottomText}"`)
 	postCmds.push("PRINT 1,1")
 
 	// BITMAP command header (binary data follows immediately, no quotes)
