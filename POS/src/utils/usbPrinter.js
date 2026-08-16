@@ -370,7 +370,8 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	// Copy counter bottom-right (only when printing multiple copies)
 	if (totalCopies > 1) {
 		const counter = `${copyNum}/${totalCopies}`
-		postCmds.push(`TEXT ${LW - M - counter.length * FW2},${LH - M - 20},"2",0,1,1,"${counter}"`)
+		const counterX = Math.max(0, LW - 20 - counter.length * FW2)
+		postCmds.push(`TEXT ${counterX},${LH - M - 20},"2",0,1,1,"${counter}"`)
 	}
 	postCmds.push("PRINT 1,1")
 
