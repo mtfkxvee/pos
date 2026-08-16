@@ -282,7 +282,7 @@ const LOGO_DATA = new Uint8Array([
 	0x00,0x00,0x00,0x00,0x00,0x0c,0x00,0x00,0x00,0x60,0x00,0x00,0x00,
 ]).map(b => b ^ 0xFF)
 
-function _buildLabelData(itemName, remarks) {
+function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	const now = new Date()
 	const hh = String(now.getHours()).padStart(2, "0")
 	const mm = String(now.getMinutes()).padStart(2, "0")
@@ -349,6 +349,11 @@ function _buildLabelData(itemName, remarks) {
 		postCmds.push(`TEXT ${cx(rem.length * FW2)},${remY},"2",0,1,1,"${rem}"`)
 	}
 	postCmds.push(`TEXT 10,${LH - 30},"2",0,1,1,"${hh}:${mm}"`)
+	// Copy counter bottom-right (only when printing multiple copies)
+	if (totalCopies > 1) {
+		const counter = `${copyNum}/${totalCopies}`
+		postCmds.push(`TEXT ${LW - 10 - counter.length * FW2},${LH - 30},"2",0,1,1,"${counter}"`)
+	}
 	postCmds.push("PRINT 1,1")
 
 	// BITMAP command header (binary data follows immediately, no quotes)
@@ -371,8 +376,8 @@ function _buildLabelData(itemName, remarks) {
 
 export async function printLabelUSB(itemName, remarks, copies = 1) {
 	await _ensureConnected(STORAGE_KEY_LABEL, _label, "label")
-	const data = _buildLabelData(itemName, remarks)
 	for (let i = 0; i < copies; i++) {
+		const data = _buildLabelData(itemName, remarks, i + 1, copies)
 		await _transfer(_label, data)
 		if (copies > 1 && i < copies - 1) {
 			await new Promise((r) => setTimeout(r, 200))
