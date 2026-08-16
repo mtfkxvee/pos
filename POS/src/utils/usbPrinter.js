@@ -284,8 +284,12 @@ const LOGO_DATA = new Uint8Array([
 
 function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	const now = new Date()
+	const dd = String(now.getDate()).padStart(2, "0")
+	const mo = String(now.getMonth() + 1).padStart(2, "0")
+	const yy = String(now.getFullYear()).slice(-2)
 	const hh = String(now.getHours()).padStart(2, "0")
 	const mm = String(now.getMinutes()).padStart(2, "0")
+	const timestamp = `${dd}/${mo}/${yy} ${hh}:${mm}`
 	const safe = (s) => String(s || "").replace(/"/g, "'").replace(/[\r\n]/g, " ").trim()
 
 	const LW = 480, LH = 320
@@ -348,7 +352,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 		const remY = blockTop + itemLines.length * (itemH + lineGap) - lineGap + remGap
 		postCmds.push(`TEXT ${cx(rem.length * FW2)},${remY},"2",0,1,1,"${rem}"`)
 	}
-	postCmds.push(`TEXT 10,${LH - 30},"2",0,1,1,"${hh}:${mm}"`)
+	postCmds.push(`TEXT 10,${LH - 30},"2",0,1,1,"${timestamp}"`)
 	// Copy counter bottom-right (only when printing multiple copies)
 	if (totalCopies > 1) {
 		const counter = `${copyNum}/${totalCopies}`
