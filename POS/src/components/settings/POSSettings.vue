@@ -1,4 +1,4 @@
-﻿<template>
+<template>
 	<!-- Full Page Overlay -->
 	<Transition name="fade">
 		<div
@@ -457,6 +457,19 @@
 																{{ usbLabelPairing ? __('Mencari printer...') : __('Pair Printer Label') }}
 															</button>
 														</div>
+													<div class="mt-2 pt-2 border-t border-blue-100">
+														<p class="text-xs text-gray-600 mb-1.5">{{ __('Ukuran Kertas') }}</p>
+														<div class="flex gap-3">
+															<label class="flex items-center gap-1.5 cursor-pointer">
+																<input type="radio" v-model="labelSize" value="60x40" @change="onLabelSizeChange" class="accent-blue-600" />
+																<span class="text-xs font-medium">60×40 mm</span>
+															</label>
+															<label class="flex items-center gap-1.5 cursor-pointer">
+																<input type="radio" v-model="labelSize" value="40x30" @change="onLabelSizeChange" class="accent-blue-600" />
+																<span class="text-xs font-medium">40×30 mm</span>
+															</label>
+														</div>
+													</div>
 													</div>
 
 													<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
@@ -550,6 +563,7 @@ import {
 	pairUSBReceiptPrinter, pairUSBLabelPrinter,
 	getUSBReceiptPrinterName, getUSBLabelPrinterName,
 	removeUSBReceiptPrinter, removeUSBLabelPrinter,
+	getLabelSize, setLabelSize,
 } from "@/utils/usbPrinter"
 import { Button, call, createResource } from "frappe-ui"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
@@ -622,6 +636,8 @@ const usbReceiptPairing = ref(false)
 
 const usbLabelPrinterName = ref(getUSBLabelPrinterName())
 const usbLabelPairing = ref(false)
+const labelSize = ref(getLabelSize())
+function onLabelSizeChange() { setLabelSize(labelSize.value) }
 
 async function pairUsbReceipt() {
 	usbReceiptPairing.value = true

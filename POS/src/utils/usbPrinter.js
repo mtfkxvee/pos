@@ -13,6 +13,19 @@ import { call } from "frappe-ui"
 const STORAGE_KEY_RECEIPT = "pos_usb_printer_receipt"
 const STORAGE_KEY_LABEL = "pos_usb_printer_label"
 const STORAGE_KEY_LEGACY = "pos_usb_printer"
+const STORAGE_KEY_LABEL_SIZE = "pos_label_size"
+
+const LABEL_SIZE_PRESETS = {
+	"60x40": { sizeMM: "60 mm,40 mm", LW: 480, LH: 320 },
+	"40x30": { sizeMM: "40 mm,30 mm", LW: 320, LH: 240 },
+}
+
+export function getLabelSize() {
+	return localStorage.getItem(STORAGE_KEY_LABEL_SIZE) || "60x40"
+}
+export function setLabelSize(size) {
+	localStorage.setItem(STORAGE_KEY_LABEL_SIZE, size)
+}
 
 // Migrate old single-printer data to label slot (one-time, at module load)
 ;(function _migrate() {
@@ -292,7 +305,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	const timestamp = `${dd}/${mo}/${yy} ${hh}:${mm}`
 	const safe = (s) => String(s || "").replace(/"/g, "'").replace(/[\r\n]/g, " ").trim()
 
-	const LW = 480, LH = 320
+	const { sizeMM, LW, LH } = LABEL_SIZE_PRESETS[getLabelSize()] ?? LABEL_SIZE_PRESETS["60x40"]
 	const M = 3
 	const FW2 = 12
 	const cx = (w) => M + Math.max(0, Math.floor((LW - 2 * M - w) / 2))
@@ -335,7 +348,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 
 	// Split into text-only commands (before and after the binary BITMAP)
 	const preCmds = [
-		"SIZE 60 mm,40 mm",
+		`SIZE ${sizeMM}`,
 		"GAP 3 mm,0",
 		"SPEED 3",
 		"DENSITY 8",
