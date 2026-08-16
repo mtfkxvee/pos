@@ -293,8 +293,9 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	const safe = (s) => String(s || "").replace(/"/g, "'").replace(/[\r\n]/g, " ").trim()
 
 	const LW = 480, LH = 320
+	const M = 3
 	const FW2 = 12
-	const cx = (w) => Math.max(0, Math.floor((LW - w) / 2))
+	const cx = (w) => M + Math.max(0, Math.floor((LW - 2 * M - w) / 2))
 
 	const hasRemarks = !!remarks?.trim()
 
@@ -328,8 +329,8 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 		+ (hasRemarks ? remGap + remH : 0)
 
 	// Body area: below logo bottom (8+LOGO_H+8) → above time (LH-34)
-	const bodyTop = 8 + LOGO_H + 8
-	const bodyBottom = LH - 34
+	const bodyTop = M + LOGO_H + M
+	const bodyBottom = LH - M - 20 - M
 	const blockTop = Math.floor((bodyTop + bodyBottom - contentH) / 2)
 
 	// Split into text-only commands (before and after the binary BITMAP)
@@ -352,11 +353,11 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 		const remY = blockTop + itemLines.length * (itemH + lineGap) - lineGap + remGap
 		postCmds.push(`TEXT ${cx(rem.length * FW2)},${remY},"2",0,1,1,"${rem}"`)
 	}
-	postCmds.push(`TEXT 10,${LH - 30},"2",0,1,1,"${timestamp}"`)
+	postCmds.push(`TEXT ${M},${LH - M - 20},"2",0,1,1,"${timestamp}"`)
 	// Copy counter bottom-right (only when printing multiple copies)
 	if (totalCopies > 1) {
 		const counter = `${copyNum}/${totalCopies}`
-		postCmds.push(`TEXT ${LW - 10 - counter.length * FW2},${LH - 30},"2",0,1,1,"${counter}"`)
+		postCmds.push(`TEXT ${LW - M - counter.length * FW2},${LH - M - 20},"2",0,1,1,"${counter}"`)
 	}
 	postCmds.push("PRINT 1,1")
 
@@ -365,7 +366,7 @@ function _buildLabelData(itemName, remarks, copyNum = 0, totalCopies = 0) {
 	const enc = new TextEncoder()
 	const parts = [
 		enc.encode(preCmds.join("\r\n") + "\r\n"),
-		enc.encode(`BITMAP ${logoX},8,${LOGO_BPR},${LOGO_H},0,`),
+		enc.encode(`BITMAP ${logoX},${M},${LOGO_BPR},${LOGO_H},0,`),
 		LOGO_DATA,
 		enc.encode("\r\n"),
 		enc.encode(postCmds.join("\r\n") + "\r\n"),
