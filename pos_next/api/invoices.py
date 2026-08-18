@@ -2534,7 +2534,8 @@ def get_invoices(
 			docstatus,
 			is_return,
 			return_against,
-			custom_shipping_address
+			custom_shipping_address,
+			custom_serving
 		FROM
 			`tabSales Invoice`
 		WHERE

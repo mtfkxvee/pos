@@ -2171,6 +2171,7 @@ async function saveCurrentTransactionOffline(paymentData, customerValue, draftId
 		loyalty_redemption_account: paymentData.loyalty_redemption_account || null,
 		loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 		remarks: paymentData.remarks || null,
+		custom_serving: paymentData.serving || null,
 
 		// Keep real posting time when synced — use local date (not UTC) so
 		// midnight transactions in UTC+7 don't land on yesterday's date.

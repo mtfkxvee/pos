@@ -1042,7 +1042,19 @@
 					</div>
 
 					<!-- Remarks Toggle + Field -->
-					<div class="mt-1.5">
+					<!-- Serving type -->
+						<div class="mt-1.5">
+							<select
+								v-model="serving"
+								class="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+							>
+								<option value="">{{ __('— Serving —') }}</option>
+								<option value="Take Away">{{ __('Take Away') }}</option>
+								<option value="Dine In">{{ __('Dine In') }}</option>
+							</select>
+						</div>
+
+						<div class="mt-1.5">
 						<button
 							@click="showRemarks = !showRemarks"
 							:class="[
@@ -1284,6 +1296,7 @@ const isSalesOrder = computed(() => props.targetDoctype === "Sales Order")
 
 // Remarks state
 const remarks = ref("")
+const serving = ref("")
 const showRemarks = ref(false)
 
 // Column refs for height matching
@@ -2144,8 +2157,9 @@ watch(show, (newVal) => {
 
 		// Set default delivery date to today for Sales Orders
 		deliveryDate.value = isSalesOrder.value ? today : ""
-		// Reset remarks
+		// Reset remarks and serving
 		remarks.value = ""
+		serving.value = ""
 		showRemarks.value = false
 
 		// Debug logging
@@ -2515,6 +2529,7 @@ function completePayment() {
 			: null,
 		// Remarks
 		remarks: remarks.value || null,
+		serving: serving.value || null,
 	}
 
 	log.debug("[PaymentDialog] Emitting payment-completed:", paymentData)
