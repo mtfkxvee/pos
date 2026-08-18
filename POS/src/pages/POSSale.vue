@@ -2381,10 +2381,11 @@ async function handlePaymentCompleted(paymentData) {
 			loyalty_redemption_cost_center: paymentData.loyalty_redemption_cost_center || null,
 		});
 
-		// Store remarks for invoice
+		// Store remarks and serving for invoice
 		if (paymentData.remarks) {
 			cartStore.setRemarks(paymentData.remarks);
 		}
+		cartStore.setServing(paymentData.serving || "");
 
 		// Delete draft if it exists (since we're submitting/saving invoice)
 		const draftIdToDelete = cartStore.currentDraftId;

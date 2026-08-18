@@ -316,6 +316,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		currentDraftId.value = null
 		targetDoctype.value = "Sales Invoice"
 		remarks.value = ""
+		serving.value = ""
 
 		// Reset offer processing state
 		suppressOfferReapply.value = false
@@ -352,6 +353,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 	function setRemarks(text) {
 		remarks.value = text || ""
+	}
+
+	function setServing(value) {
+		serving.value = value || ""
 	}
 
 	function setLoyaltyData(data) {
@@ -2361,6 +2366,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Remarks
 		remarks,
 		setRemarks,
+		serving,
+		setServing,
 		complimentReason,
 		setSalesTeam,
 

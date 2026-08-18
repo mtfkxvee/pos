@@ -30,6 +30,7 @@ export function useInvoice() {
 	const couponCode = ref(null)
 	const complimentReason = ref("") // Reason text for an applied Compliment discount
 	const remarks = ref("") // Invoice remarks
+	const serving = ref("") // Serving type (Take Away / Dine In)
 	const taxRules = ref([]) // Tax rules from POS Profile
 	const taxInclusive = ref(false) // Tax inclusive setting from POS Settings
 
@@ -913,6 +914,7 @@ export function useInvoice() {
 					update_stock: 1, // Critical: Ensures stock is updated
 					...loyaltyData,
 					remarks: remarks.value || undefined,
+					custom_serving: serving.value || undefined,
 				}
 
 				// Retry of a previous attempt for this same cart - reuse the same
@@ -1223,6 +1225,7 @@ export function useInvoice() {
 		couponCode,
 		complimentReason,
 		remarks,
+		serving,
 		taxRules,
 		taxInclusive,
 		isSubmitting,
