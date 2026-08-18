@@ -59,7 +59,7 @@
 								'text-2xl font-black leading-none',
 								order.status === 'Order Placed' ? 'text-yellow-500' : 'text-blue-500',
 							]">
-								#{{ idx + 1 }}
+								#{{ order.order_number || '—' }}
 							</span>
 							<span :class="[
 								'text-xs font-semibold px-2 py-0.5 rounded-full',

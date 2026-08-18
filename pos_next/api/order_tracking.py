@@ -15,6 +15,20 @@ def get_order_tracking(date=None):
 		order_by="creation asc",
 	)
 
+	# Fetch order_number from linked Sales Invoice
+	invoice_names = [r["sales_invoice"] for r in records if r.get("sales_invoice")]
+	if invoice_names:
+		inv_map = {
+			row["name"]: row["order_number"]
+			for row in frappe.get_all(
+				"Sales Invoice",
+				filters={"name": ["in", invoice_names]},
+				fields=["name", "order_number"],
+			)
+		}
+		for record in records:
+			record["order_number"] = inv_map.get(record.get("sales_invoice"))
+
 	for record in records:
 		record["items"] = frappe.get_all(
 			"Order Tracking Item",
