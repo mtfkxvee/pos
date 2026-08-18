@@ -76,8 +76,8 @@
 					<p class="text-sm font-semibold text-gray-800 mb-1 truncate">{{ order.customer || '—' }}</p>
 
 					<!-- Items summary -->
-					<p v-if="order.items_summary" class="text-xs text-gray-500 mb-2.5 line-clamp-2 leading-relaxed">
-						{{ order.items_summary }}
+					<p v-if="order.items_summary || order.item_list" class="text-xs text-gray-500 mb-2.5 line-clamp-2 leading-relaxed">
+						{{ order.items_summary || order.item_list }}
 					</p>
 
 					<!-- Action buttons -->
