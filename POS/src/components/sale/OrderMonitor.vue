@@ -37,7 +37,8 @@
 			<template v-if="loading && orders.length === 0">
 				<div v-for="i in 3" :key="i" class="bg-white rounded-xl border border-gray-100 p-3 animate-pulse">
 					<div class="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
-					<div class="h-3 bg-gray-100 rounded w-2/3"></div>
+					<div class="h-3 bg-gray-100 rounded w-2/3 mb-1"></div>
+					<div class="h-3 bg-gray-100 rounded w-1/2"></div>
 				</div>
 			</template>
 
@@ -51,7 +52,7 @@
 						order.status === 'Order Placed' ? 'border-yellow-200' : 'border-blue-200',
 					]"
 				>
-					<!-- Top row: queue number + time -->
+					<!-- Top row: queue number + status + time -->
 					<div class="flex items-start justify-between mb-2">
 						<div class="flex items-center gap-2">
 							<span :class="[
@@ -73,31 +74,56 @@
 					</div>
 
 					<!-- Customer name -->
-					<p class="text-sm font-semibold text-gray-800 mb-1 truncate">{{ order.customer || '—' }}</p>
+					<p class="text-sm font-semibold text-gray-800 mb-2 truncate">{{ order.customer || '—' }}</p>
 
-					<!-- Items list -->
-					<div v-if="order.items && order.items.length" class="mb-2 flex flex-col gap-0.5">
-						<div v-for="item in order.items" :key="item.item_name" class="flex items-center gap-1.5 text-xs text-gray-600">
-							<span class="font-semibold text-gray-800">{{ item.qty }}x</span>
-							<span class="flex-1 truncate">{{ item.item_name }}</span>
+					<!-- Items list with per-item status buttons -->
+					<div v-if="order.items && order.items.length" class="mb-2 flex flex-col gap-1">
+						<div
+							v-for="item in order.items"
+							:key="item.name"
+							class="flex items-center gap-2"
+						>
+							<!-- Item info -->
+							<div class="flex-1 flex items-center gap-1.5 min-w-0">
+								<span class="text-xs font-bold text-gray-700 shrink-0">{{ item.qty }}x</span>
+								<span class="text-xs text-gray-600 truncate">{{ item.item_name }}</span>
+							</div>
+							<!-- Item status button -->
+							<button
+								v-if="item.status !== 'Complete'"
+								@click="updateItemStatus(order, item)"
+								:disabled="item._updating"
+								:class="[
+									'shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors disabled:opacity-50',
+									item.status === 'Order Placed'
+										? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+										: 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+								]"
+							>
+								{{ item._updating ? '...' : (item.status === 'Order Placed' ? __('Proses') : __('Selesai')) }}
+							</button>
+							<!-- Done indicator -->
+							<span v-else class="shrink-0 text-[10px] font-semibold text-green-600 px-2 py-0.5 bg-green-50 rounded-md">
+								✓
+							</span>
 						</div>
 					</div>
 
 					<!-- Remarks -->
 					<p v-if="order.remarks" class="text-xs text-gray-400 italic mb-2 truncate">{{ order.remarks }}</p>
 
-					<!-- Action buttons -->
-					<div class="flex gap-2 mt-2">
+					<!-- Order-level action buttons -->
+					<div class="flex gap-2 mt-2 pt-2 border-t border-gray-100">
 						<button
 							v-if="order.status === 'Order Placed'"
-							@click="updateStatus(order, 'On Progress')"
+							@click="updateOrderStatus(order, 'On Progress')"
 							:disabled="order._updating"
 							class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
 						>
 							{{ order._updating ? '...' : __('On Progress') }}
 						</button>
 						<button
-							@click="updateStatus(order, 'Complete')"
+							@click="updateOrderStatus(order, 'Complete')"
 							:disabled="order._updating"
 							:class="[
 								'py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50',
@@ -129,7 +155,11 @@ async function fetchOrders() {
 	loading.value = true
 	try {
 		const result = await call("pos_next.api.order_tracking.get_order_tracking")
-		orders.value = (result || []).map((o) => ({ ...o, _updating: false }))
+		orders.value = (result || []).map((o) => ({
+			...o,
+			_updating: false,
+			items: (o.items || []).map((i) => ({ ...i, _updating: false })),
+		}))
 	} catch (e) {
 		showError(e.message || __("Gagal memuat order"))
 	} finally {
@@ -137,22 +167,48 @@ async function fetchOrders() {
 	}
 }
 
-async function updateStatus(order, status) {
+async function updateOrderStatus(order, status) {
 	order._updating = true
 	try {
-		await call("pos_next.api.order_tracking.update_order_status", {
-			name: order.name,
-			status,
-		})
+		await call("pos_next.api.order_tracking.update_order_status", { name: order.name, status })
 		if (status === "Complete") {
 			orders.value = orders.value.filter((o) => o.name !== order.name)
 		} else {
 			order.status = status
+			// Mark all Order Placed items as On Progress
+			if (status === "On Progress") {
+				for (const item of order.items) {
+					if (item.status === "Order Placed") item.status = "On Progress"
+				}
+			}
 			order._updating = false
 		}
 	} catch (e) {
 		order._updating = false
 		showError(e.message || __("Gagal update status"))
+	}
+}
+
+async function updateItemStatus(order, item) {
+	const nextStatus = item.status === "Order Placed" ? "On Progress" : "Complete"
+	item._updating = true
+	try {
+		const res = await call("pos_next.api.order_tracking.update_item_status", {
+			parent: order.name,
+			child_name: item.name,
+			status: nextStatus,
+		})
+		item.status = nextStatus
+		item._updating = false
+
+		if (res.order_complete) {
+			orders.value = orders.value.filter((o) => o.name !== order.name)
+		} else if (order.status === "Order Placed" && nextStatus !== "Order Placed") {
+			order.status = "On Progress"
+		}
+	} catch (e) {
+		item._updating = false
+		showError(e.message || __("Gagal update item"))
 	}
 }
 
@@ -164,7 +220,11 @@ function formatTime(t) {
 
 function handleNewOrder(data) {
 	if (orders.value.some((o) => o.name === data.name)) return
-	orders.value.push({ ...data, _updating: false, items: data.items || [] })
+	orders.value.push({
+		...data,
+		_updating: false,
+		items: (data.items || []).map((i) => ({ ...i, _updating: false })),
+	})
 }
 
 function handleCancelOrder(data) {
@@ -172,13 +232,19 @@ function handleCancelOrder(data) {
 }
 
 function handleStatusChanged(data) {
-	const o = orders.value.find((o) => o.name === data.name)
-	if (!o) return
 	if (data.status === "Complete") {
 		orders.value = orders.value.filter((o) => o.name !== data.name)
 	} else {
-		o.status = data.status
+		const o = orders.value.find((o) => o.name === data.name)
+		if (o) o.status = data.status
 	}
+}
+
+function handleItemStatusChanged(data) {
+	const order = orders.value.find((o) => o.name === data.parent)
+	if (!order) return
+	const item = order.items.find((i) => i.name === data.child_name)
+	if (item) item.status = data.status
 }
 
 onMounted(() => {
@@ -186,12 +252,14 @@ onMounted(() => {
 	window.frappe?.realtime?.on("new_order", handleNewOrder)
 	window.frappe?.realtime?.on("cancel_order", handleCancelOrder)
 	window.frappe?.realtime?.on("order_status_changed", handleStatusChanged)
+	window.frappe?.realtime?.on("item_status_changed", handleItemStatusChanged)
 })
 
 onUnmounted(() => {
 	window.frappe?.realtime?.off("new_order", handleNewOrder)
 	window.frappe?.realtime?.off("cancel_order", handleCancelOrder)
 	window.frappe?.realtime?.off("order_status_changed", handleStatusChanged)
+	window.frappe?.realtime?.off("item_status_changed", handleItemStatusChanged)
 })
 </script>
 
