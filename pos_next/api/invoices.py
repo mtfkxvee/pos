@@ -721,19 +721,21 @@ def update_invoice(data):
                 if cint(frappe.db.get_value(
                     "POS Settings", {"pos_profile": pos_profile, "enabled": 1}, "enable_order_number"
                 ) or 0):
-                    # Atomic increment; reset to 1 when date changes
+                    # Atomic increment; reset to 1 when posting_date changes
+                    # Use invoice posting_date (local timezone) instead of CURDATE() (server UTC)
+                    posting_date = invoice_doc.posting_date or frappe.utils.today()
                     frappe.db.sql("""
                         UPDATE `tabPOS Settings`
                         SET
                             last_order_number = LAST_INSERT_ID(
-                                CASE WHEN last_order_date < CURDATE() OR last_order_date IS NULL
+                                CASE WHEN last_order_date < %s OR last_order_date IS NULL
                                      THEN 1
                                      ELSE last_order_number + 1
                                 END
                             ),
-                            last_order_date = CURDATE()
+                            last_order_date = %s
                         WHERE pos_profile = %s AND enabled = 1
-                    """, pos_profile)
+                    """, (posting_date, posting_date, pos_profile))
                     result = frappe.db.sql("SELECT LAST_INSERT_ID()")
                     order_num = cint(result[0][0]) if result else None
                     if order_num:
