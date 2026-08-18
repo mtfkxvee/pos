@@ -1077,7 +1077,7 @@
 			<Transition name="reminder-slide">
 				<div
 					v-if="showOrderReminder && posSettingsStore.enableOrderMonitor"
-					class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
+					class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
 				>
 					<div class="bg-white border-2 border-orange-400 rounded-2xl shadow-xl p-4">
 						<div class="flex items-start gap-3">
