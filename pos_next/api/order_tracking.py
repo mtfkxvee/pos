@@ -13,7 +13,7 @@ def get_order_tracking(date=None):
 		filters={"posting_date": target_date, "status": ["!=", "Done"]},
 		fields=[
 			"name", "order_number", "customer", "status",
-			"posting_time", "grand_total", "items_summary", "sales_invoice",
+			"grand_total", "items_summary", "sales_invoice", "creation",
 		],
 		order_by="order_number asc",
 	)
