@@ -76,17 +76,24 @@
 					<!-- Customer name -->
 					<p class="text-sm font-semibold text-gray-800 mb-2 truncate">{{ order.customer || '—' }}</p>
 
-					<!-- Items list with per-item status buttons -->
-					<div v-if="order.items && order.items.length" class="mb-2 flex flex-col gap-1">
+					<!-- Items list with per-item status cards -->
+					<div v-if="order.items && order.items.length" class="mb-2 flex flex-col gap-1.5">
 						<div
 							v-for="item in order.items"
 							:key="item.name"
-							class="flex items-center gap-2"
+							:class="[
+								'flex items-center gap-2 rounded-lg px-2.5 py-2 border',
+								item.status === 'Complete'
+									? 'bg-green-50 border-green-200'
+									: item.status === 'On Progress'
+										? 'bg-blue-50 border-blue-200'
+										: 'bg-gray-50 border-gray-200',
+							]"
 						>
 							<!-- Item info -->
-							<div class="flex-1 flex items-center gap-1.5 min-w-0">
-								<span class="text-xs font-bold text-gray-700 shrink-0">{{ item.qty }}x</span>
-								<span class="text-xs text-gray-600 truncate">{{ item.item_name }}</span>
+							<div class="flex-1 min-w-0">
+								<span class="text-sm font-bold text-gray-800">{{ item.qty }}x</span>
+								<span class="text-sm text-gray-700 ml-1.5 truncate">{{ item.item_name }}</span>
 							</div>
 							<!-- Item status button -->
 							<button
@@ -94,17 +101,17 @@
 								@click="updateItemStatus(order, item)"
 								:disabled="item._updating"
 								:class="[
-									'shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors disabled:opacity-50',
+									'shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50',
 									item.status === 'Order Placed'
-										? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-										: 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+										? 'bg-yellow-400 hover:bg-yellow-500 text-white'
+										: 'bg-blue-500 hover:bg-blue-600 text-white',
 								]"
 							>
 								{{ item._updating ? '...' : (item.status === 'Order Placed' ? __('Proses') : __('Selesai')) }}
 							</button>
 							<!-- Done indicator -->
-							<span v-else class="shrink-0 text-[10px] font-semibold text-green-600 px-2 py-0.5 bg-green-50 rounded-md">
-								✓
+							<span v-else class="shrink-0 text-xs font-semibold text-green-600 px-3 py-1.5 bg-green-100 rounded-lg">
+								✓ Done
 							</span>
 						</div>
 					</div>
