@@ -94,6 +94,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		additionalDiscount,
 		complimentReason,
 		remarks,
+		serving,
 		taxInclusive,
 		isSubmitting,
 		lastInvoiceDraftName,
