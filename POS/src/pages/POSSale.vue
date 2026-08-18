@@ -1,4 +1,4 @@
-﻿<template>
+<template>
 	<div
 		class="flex flex-col bg-gray-50 overflow-x-hidden"
 		style="height: 100vh; max-height: 100vh"
@@ -518,6 +518,7 @@
 		v-model="showAutoLabelDialog"
 		:items="autoLabelItems"
 		:remarks="autoLabelRemarks"
+		:serving="autoLabelServing"
 	/>
 
 		<SpeedModeInfoDialog
@@ -1251,6 +1252,7 @@ const showDiscountAuthDialog = ref(false);
 const showAutoLabelDialog = ref(false);
 const autoLabelItems = ref([]);
 const autoLabelRemarks = ref("");
+const autoLabelServing = ref("");
 
 // Speed Mode dialogs
 const showSpeedModeInfoDialog = ref(false);
@@ -2435,6 +2437,7 @@ async function handlePaymentCompleted(paymentData) {
 				if (pendingLabelItems.length > 0) {
 					autoLabelItems.value = pendingLabelItems;
 					autoLabelRemarks.value = paymentData.remarks || "";
+						autoLabelServing.value = paymentData.serving || "";
 					showAutoLabelDialog.value = true;
 				}
 			}

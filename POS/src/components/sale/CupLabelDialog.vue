@@ -93,6 +93,7 @@ const props = defineProps({
 	items: { type: Array, default: () => [] },
 	loading: { type: Boolean, default: false },
 	remarks: { type: String, default: "" },
+	serving: { type: String, default: "" },
 })
 
 const emit = defineEmits(["update:modelValue"])
@@ -135,7 +136,8 @@ function escapeHtml(text) {
 async function printLabels() {
 	const selected = localItems.value.filter((i) => i.checked)
 	if (!selected.length) return
-	const remarks = props.remarks || ""
+	const remarksLabel = [props.serving, props.remarks].filter(Boolean).join(" | ")
+	const remarks = remarksLabel
 
 	// Priority: USB → Bluetooth → browser window
 	if (getUSBPrinterName() && settingsStore.enableUsbPrinter) {

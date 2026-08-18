@@ -164,6 +164,7 @@
 		:items="labelItems"
 		:loading="labelLoading"
 		:remarks="labelRemarks"
+		:serving="labelServing"
 	/>
 </template>
 
@@ -227,6 +228,7 @@ const showLabelDialog = ref(false)
 const labelLoading = ref(false)
 const labelItems = ref([])   // [{ item_name, qty, checked }]
 const labelRemarks = ref("")
+const labelServing = ref("")
 
 // Track if we're loading more (appending) vs fresh load (replacing)
 const isLoadingMore = ref(false)
@@ -410,6 +412,7 @@ function formatDateTime(date, time) {
 async function openLabelDialog(invoice) {
 	labelItems.value = []
 	labelRemarks.value = ""
+	labelServing.value = ""
 	labelLoading.value = true
 	showLabelDialog.value = true
 
@@ -421,6 +424,7 @@ async function openLabelDialog(invoice) {
 		const doc = json.data || {}
 
 		labelRemarks.value = doc.remarks || ""
+		labelServing.value = doc.custom_serving || ""
 		labelItems.value = (doc.items || [])
 			.filter((item) => !item.is_free_item)
 			.map((item) => ({
