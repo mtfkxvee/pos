@@ -1847,11 +1847,10 @@ let reminderPollTimer = null
 async function checkPendingOrders() {
 	if (!posSettingsStore.enableOrderMonitor) return
 	try {
-		const result = await frappeRequest({
-			url: "/api/method/pos_next.api.order_tracking.get_order_tracking",
-			method: "POST",
-		})
-		const count = (result.message || []).length
+		const now = new Date()
+		const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+		const result = await call("pos_next.api.order_tracking.get_order_tracking", { date: localDate })
+		const count = (result || []).length
 		pendingOrderCount.value = count
 		const cooldownExpired = Date.now() - reminderLastDismissed > REMINDER_COOLDOWN_MS
 		if (count >= REMINDER_THRESHOLD && cooldownExpired) {
