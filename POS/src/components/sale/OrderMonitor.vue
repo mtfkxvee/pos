@@ -73,8 +73,14 @@
 						<span class="text-xs text-gray-400">{{ formatTime(order.creation) }}</span>
 					</div>
 
-					<!-- Customer name -->
-					<p class="text-sm font-semibold text-gray-800 mb-2 truncate">{{ order.customer || '—' }}</p>
+					<!-- Customer name + serving -->
+					<div class="flex items-center gap-2 mb-2">
+						<p class="text-sm font-semibold text-gray-800 truncate flex-1">{{ order.customer || '—' }}</p>
+						<span v-if="order.serving" :class="[
+							'shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full',
+							order.serving === 'Take Away' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+						]">{{ order.serving }}</span>
+					</div>
 
 					<!-- Items list with per-item status cards -->
 					<div v-if="order.items && order.items.length" class="mb-2 flex flex-col gap-1.5">

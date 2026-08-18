@@ -11,7 +11,7 @@ def get_order_tracking(date=None):
 	records = frappe.get_all(
 		"Sales Order Tracking",
 		filters={"posting_date": target_date, "status": ["!=", "Complete"]},
-		fields=["name", "customer", "status", "grand_total", "remarks", "sales_invoice", "creation"],
+		fields=["name", "customer", "status", "grand_total", "remarks", "serving", "sales_invoice", "creation"],
 		order_by="creation asc",
 	)
 
