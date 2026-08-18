@@ -44,11 +44,11 @@
 			<!-- Order cards -->
 			<transition-group name="order-list" tag="div" class="flex flex-col gap-2">
 				<div
-					v-for="order in orders"
+					v-for="(order, idx) in orders"
 					:key="order.name"
 					:class="[
 						'bg-white rounded-xl border shadow-sm p-3 transition-all',
-						order.status === 'Waiting' ? 'border-yellow-200' : 'border-green-200',
+						order.status === 'Order Placed' ? 'border-yellow-200' : 'border-blue-200',
 					]"
 				>
 					<!-- Top row: queue number + time -->
@@ -56,46 +56,52 @@
 						<div class="flex items-center gap-2">
 							<span :class="[
 								'text-2xl font-black leading-none',
-								order.status === 'Waiting' ? 'text-yellow-500' : 'text-green-500',
+								order.status === 'Order Placed' ? 'text-yellow-500' : 'text-blue-500',
 							]">
-								#{{ order.order_number }}
+								#{{ idx + 1 }}
 							</span>
 							<span :class="[
 								'text-xs font-semibold px-2 py-0.5 rounded-full',
-								order.status === 'Waiting'
+								order.status === 'Order Placed'
 									? 'bg-yellow-100 text-yellow-700'
-									: 'bg-green-100 text-green-700',
+									: 'bg-blue-100 text-blue-700',
 							]">
-								{{ order.status === 'Waiting' ? __('Menunggu') : __('Diproses') }}
+								{{ order.status === 'Order Placed' ? __('Menunggu') : __('Diproses') }}
 							</span>
 						</div>
-						<span class="text-xs text-gray-400">{{ formatTime(order.posting_time) }}</span>
+						<span class="text-xs text-gray-400">{{ formatTime(order.creation) }}</span>
 					</div>
 
 					<!-- Customer name -->
 					<p class="text-sm font-semibold text-gray-800 mb-1 truncate">{{ order.customer || '—' }}</p>
 
-					<!-- Items summary -->
-					<p v-if="order.items_summary || order.item_list" class="text-xs text-gray-500 mb-2.5 line-clamp-2 leading-relaxed">
-						{{ order.items_summary || order.item_list }}
-					</p>
+					<!-- Items list -->
+					<div v-if="order.items && order.items.length" class="mb-2 flex flex-col gap-0.5">
+						<div v-for="item in order.items" :key="item.item_name" class="flex items-center gap-1.5 text-xs text-gray-600">
+							<span class="font-semibold text-gray-800">{{ item.qty }}x</span>
+							<span class="flex-1 truncate">{{ item.item_name }}</span>
+						</div>
+					</div>
+
+					<!-- Remarks -->
+					<p v-if="order.remarks" class="text-xs text-gray-400 italic mb-2 truncate">{{ order.remarks }}</p>
 
 					<!-- Action buttons -->
-					<div class="flex gap-2">
+					<div class="flex gap-2 mt-2">
 						<button
-							v-if="order.status === 'Waiting'"
-							@click="updateStatus(order, 'Ready')"
+							v-if="order.status === 'Order Placed'"
+							@click="updateStatus(order, 'On Progress')"
 							:disabled="order._updating"
 							class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
 						>
 							{{ order._updating ? '...' : __('On Progress') }}
 						</button>
 						<button
-							@click="updateStatus(order, 'Done')"
+							@click="updateStatus(order, 'Complete')"
 							:disabled="order._updating"
 							:class="[
 								'py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50',
-								order.status === 'Waiting'
+								order.status === 'Order Placed'
 									? 'px-3 bg-gray-100 hover:bg-gray-200 text-gray-600'
 									: 'flex-1 bg-green-600 hover:bg-green-700 text-white',
 							]"
@@ -138,7 +144,7 @@ async function updateStatus(order, status) {
 			name: order.name,
 			status,
 		})
-		if (status === "Done") {
+		if (status === "Complete") {
 			orders.value = orders.value.filter((o) => o.name !== order.name)
 		} else {
 			order.status = status
@@ -152,15 +158,13 @@ async function updateStatus(order, status) {
 
 function formatTime(t) {
 	if (!t) return ""
-	return t.substring(0, 5)
+	const timePart = t.includes(" ") ? t.split(" ")[1] : t
+	return timePart.substring(0, 5)
 }
 
 function handleNewOrder(data) {
-	// Avoid duplicate
 	if (orders.value.some((o) => o.name === data.name)) return
-	orders.value.unshift({ ...data, _updating: false })
-	// Re-sort by order_number ascending
-	orders.value.sort((a, b) => a.order_number - b.order_number)
+	orders.value.push({ ...data, _updating: false, items: data.items || [] })
 }
 
 function handleCancelOrder(data) {
@@ -170,7 +174,7 @@ function handleCancelOrder(data) {
 function handleStatusChanged(data) {
 	const o = orders.value.find((o) => o.name === data.name)
 	if (!o) return
-	if (data.status === "Done") {
+	if (data.status === "Complete") {
 		orders.value = orders.value.filter((o) => o.name !== data.name)
 	} else {
 		o.status = data.status
@@ -203,11 +207,5 @@ onUnmounted(() => {
 .order-list-leave-to {
 	opacity: 0;
 	transform: translateX(20px);
-}
-.line-clamp-2 {
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
 }
 </style>
