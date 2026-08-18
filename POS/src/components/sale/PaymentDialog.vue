@@ -1043,7 +1043,7 @@
 
 					<!-- Remarks Toggle + Field -->
 					<!-- Serving type -->
-						<div class="mt-1.5">
+						<div v-if="settingsStore.enableServing" class="mt-1.5">
 							<select
 								v-model="serving"
 								class="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
@@ -1296,7 +1296,7 @@ const isSalesOrder = computed(() => props.targetDoctype === "Sales Order")
 
 // Remarks state
 const remarks = ref("")
-const serving = ref("")
+const serving = ref("Dine In")
 const showRemarks = ref(false)
 
 // Column refs for height matching
@@ -2159,7 +2159,7 @@ watch(show, (newVal) => {
 		deliveryDate.value = isSalesOrder.value ? today : ""
 		// Reset remarks and serving
 		remarks.value = ""
-		serving.value = ""
+		serving.value = "Dine In"
 		showRemarks.value = false
 
 		// Debug logging
@@ -2529,7 +2529,7 @@ function completePayment() {
 			: null,
 		// Remarks
 		remarks: remarks.value || null,
-		serving: serving.value || null,
+		serving: settingsStore.enableServing ? (serving.value || null) : null,
 	}
 
 	log.debug("[PaymentDialog] Emitting payment-completed:", paymentData)

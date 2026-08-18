@@ -63,6 +63,7 @@
         "allow_cup_label_print",
         "enable_bluetooth_printer",
         "enable_usb_printer",
+        "enable_serving",
         "section_break_delivery",
         "use_delivery_charges",
         "auto_set_delivery_charges",
@@ -478,6 +479,13 @@
             "fieldname": "enable_usb_printer",
             "fieldtype": "Check",
             "label": "Enable USB Printer (Label Cup)"
+        },
+        {
+            "default": "0",
+            "description": "Tampilkan pilihan Serving (Take Away / Dine In) di dialog pembayaran.",
+            "fieldname": "enable_serving",
+            "fieldtype": "Check",
+            "label": "Enable Serving"
         },
         {
             "collapsible": 1,
