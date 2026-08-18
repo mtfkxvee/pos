@@ -1837,10 +1837,12 @@ onUnmounted(() => {
 // ============================================================================
 const REMINDER_THRESHOLD = 5
 const REMINDER_COOLDOWN_MS = 3 * 60 * 1000 // 3 minutes
+const REMINDER_POLL_MS = 60 * 1000 // check every 1 minute
 
 const showOrderReminder = ref(false)
 const pendingOrderCount = ref(0)
 let reminderLastDismissed = 0
+let reminderPollTimer = null
 
 async function checkPendingOrders() {
 	if (!posSettingsStore.enableOrderMonitor) return
@@ -1854,6 +1856,8 @@ async function checkPendingOrders() {
 		const cooldownExpired = Date.now() - reminderLastDismissed > REMINDER_COOLDOWN_MS
 		if (count >= REMINDER_THRESHOLD && cooldownExpired) {
 			showOrderReminder.value = true
+		} else if (count < REMINDER_THRESHOLD) {
+			showOrderReminder.value = false
 		}
 	} catch (_) {}
 }
@@ -1869,10 +1873,6 @@ function goToOrderMonitor() {
 	activeLeftTab.value = "orders"
 }
 
-function handleNewOrderReminder() {
-	checkPendingOrders()
-}
-
 function handleOrderCompleteReminder(data) {
 	if (data?.status === "Complete") {
 		pendingOrderCount.value = Math.max(0, pendingOrderCount.value - 1)
@@ -1884,13 +1884,16 @@ function handleOrderCompleteReminder(data) {
 
 onMounted(() => {
 	if (posSettingsStore.enableOrderMonitor) {
-		window.frappe?.realtime?.on("new_order", handleNewOrderReminder)
+		// Initial check after a short delay to let POS finish loading
+		setTimeout(checkPendingOrders, 3000)
+		// Periodic poll every minute
+		reminderPollTimer = setInterval(checkPendingOrders, REMINDER_POLL_MS)
 		window.frappe?.realtime?.on("order_status_changed", handleOrderCompleteReminder)
 	}
 })
 
 onUnmounted(() => {
-	window.frappe?.realtime?.off("new_order", handleNewOrderReminder)
+	if (reminderPollTimer) clearInterval(reminderPollTimer)
 	window.frappe?.realtime?.off("order_status_changed", handleOrderCompleteReminder)
 })
 
@@ -2433,6 +2436,8 @@ async function saveCurrentTransactionAsDraft(customerValue, draftIdToDelete) {
 }
 
 async function handlePaymentCompleted(paymentData) {
+	// Trigger reminder check after new transaction
+	setTimeout(checkPendingOrders, 2000)
 	try {
 		const customerValue = cartStore.customer?.name || cartStore.customer;
 		if (!customerValue && !shiftStore.profileCustomer) {
