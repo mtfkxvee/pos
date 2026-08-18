@@ -333,6 +333,7 @@
 							<OrderMonitor
 								v-if="activeLeftTab === 'orders' && settingsStore.enableOrderMonitor"
 							/>
+
 						</div>
 					</div>
 
@@ -1072,6 +1073,38 @@
 				@confirm="versionCheck.performHardRefresh"
 			/>
 
+			<!-- Order Reminder -->
+			<Transition name="reminder-slide">
+				<div
+					v-if="showOrderReminder && posSettingsStore.enableOrderMonitor"
+					class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
+				>
+					<div class="bg-white border-2 border-orange-400 rounded-2xl shadow-xl p-4">
+						<div class="flex items-start gap-3">
+							<div class="shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-xl">⚠️</div>
+							<div class="flex-1 min-w-0">
+								<p class="text-sm font-bold text-gray-800">{{ pendingOrderCount }} pesanan belum selesai!</p>
+								<p class="text-xs text-gray-500 mt-0.5">Jangan lupa tandai pesanan yang sudah selesai di Order Monitor.</p>
+							</div>
+						</div>
+						<div class="flex gap-2 mt-3">
+							<button
+								@click="goToOrderMonitor"
+								class="flex-1 py-2 text-xs font-semibold rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors"
+							>
+								Lihat Order
+							</button>
+							<button
+								@click="dismissOrderReminder"
+								class="px-4 py-2 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+							>
+								Tutup
+							</button>
+						</div>
+					</div>
+				</div>
+			</Transition>
+
 			<!-- Footer -->
 			<POSFooter />
 		</template>
@@ -1798,6 +1831,68 @@ onUnmounted(() => {
 	// Stop periodic stock sync on unmount
 	offlineWorker.stopStockSync().catch(() => {});
 });
+
+// ============================================================================
+// ORDER REMINDER
+// ============================================================================
+const REMINDER_THRESHOLD = 5
+const REMINDER_COOLDOWN_MS = 3 * 60 * 1000 // 3 minutes
+
+const showOrderReminder = ref(false)
+const pendingOrderCount = ref(0)
+let reminderLastDismissed = 0
+
+async function checkPendingOrders() {
+	if (!posSettingsStore.enableOrderMonitor) return
+	try {
+		const result = await frappeRequest({
+			url: "/api/method/pos_next.api.order_tracking.get_order_tracking",
+			method: "POST",
+		})
+		const count = (result.message || []).length
+		pendingOrderCount.value = count
+		const cooldownExpired = Date.now() - reminderLastDismissed > REMINDER_COOLDOWN_MS
+		if (count >= REMINDER_THRESHOLD && cooldownExpired) {
+			showOrderReminder.value = true
+		}
+	} catch (_) {}
+}
+
+function dismissOrderReminder() {
+	showOrderReminder.value = false
+	reminderLastDismissed = Date.now()
+}
+
+function goToOrderMonitor() {
+	showOrderReminder.value = false
+	reminderLastDismissed = Date.now()
+	activeLeftTab.value = "orders"
+}
+
+function handleNewOrderReminder() {
+	checkPendingOrders()
+}
+
+function handleOrderCompleteReminder(data) {
+	if (data?.status === "Complete") {
+		pendingOrderCount.value = Math.max(0, pendingOrderCount.value - 1)
+		if (pendingOrderCount.value < REMINDER_THRESHOLD) {
+			showOrderReminder.value = false
+		}
+	}
+}
+
+onMounted(() => {
+	if (posSettingsStore.enableOrderMonitor) {
+		window.frappe?.realtime?.on("new_order", handleNewOrderReminder)
+		window.frappe?.realtime?.on("order_status_changed", handleOrderCompleteReminder)
+	}
+})
+
+onUnmounted(() => {
+	window.frappe?.realtime?.off("new_order", handleNewOrderReminder)
+	window.frappe?.realtime?.off("order_status_changed", handleOrderCompleteReminder)
+})
 
 // ============================================================================
 // PERIODIC STOCK SYNC
@@ -3440,3 +3535,15 @@ function handleTabSwitch(tab) {
 	});
 }
 </script>
+
+<style scoped>
+.reminder-slide-enter-active,
+.reminder-slide-leave-active {
+	transition: all 0.3s ease;
+}
+.reminder-slide-enter-from,
+.reminder-slide-leave-to {
+	opacity: 0;
+	transform: translate(-50%, -16px);
+}
+</style>
