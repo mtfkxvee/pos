@@ -64,6 +64,7 @@
         "enable_bluetooth_printer",
         "enable_usb_printer",
         "enable_serving",
+        "enable_order_monitor",
         "section_break_delivery",
         "use_delivery_charges",
         "auto_set_delivery_charges",
@@ -486,6 +487,13 @@
             "fieldname": "enable_serving",
             "fieldtype": "Check",
             "label": "Enable Serving"
+        },
+        {
+            "default": "0",
+            "description": "Tampilkan tab Order Monitor di POS untuk memantau dan update status antrian pesanan.",
+            "fieldname": "enable_order_monitor",
+            "fieldtype": "Check",
+            "label": "Enable Order Monitor"
         },
         {
             "collapsible": 1,

@@ -288,8 +288,8 @@
 								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
 								{{ __('Products') }}
 							</button>
-							<button 
-								@click="activeLeftTab = 'customers'" 
+							<button
+								@click="activeLeftTab = 'customers'"
 								:class="[
 									'flex-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center justify-center gap-2',
 									activeLeftTab === 'customers' ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -297,6 +297,17 @@
 							>
 								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
 								{{ __('Customers (Online)') }}
+							</button>
+							<button
+								v-if="posSettingsStore.enableOrderMonitor"
+								@click="activeLeftTab = 'orders'"
+								:class="[
+									'flex-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center justify-center gap-2',
+									activeLeftTab === 'orders' ? 'border-orange-500 text-orange-600 bg-orange-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+								]"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+								{{ __('Order Monitor') }}
 							</button>
 						</div>
 
@@ -316,7 +327,11 @@
 							<CustomerSelector
 								v-if="activeLeftTab === 'customers'"
 								:pos-profile="shiftStore.profileName"
-								@customer-selected="handleCustomerSelected" 
+								@customer-selected="handleCustomerSelected"
+							/>
+
+							<OrderMonitor
+								v-if="activeLeftTab === 'orders' && settingsStore.enableOrderMonitor"
 							/>
 						</div>
 					</div>
@@ -1095,6 +1110,7 @@ import OfflineInvoicesDialog from "@/components/sale/OfflineInvoicesDialog.vue";
 import PaymentDialog from "@/components/sale/PaymentDialog.vue";
 import DiscountAuthDialog from "@/components/sale/DiscountAuthDialog.vue";
 import CupLabelDialog from "@/components/sale/CupLabelDialog.vue";
+import OrderMonitor from "@/components/sale/OrderMonitor.vue";
 import PromotionManagement from "@/components/sale/PromotionManagement.vue";
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue";
 import ValuationWarningDialog from "@/components/sale/ValuationWarningDialog.vue";

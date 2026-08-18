@@ -58,6 +58,7 @@ const DEFAULT_SETTINGS = {
 	enable_bluetooth_printer: 0,
 	enable_usb_printer: 0,
 	enable_serving: 0,
+	enable_order_monitor: 0,
 	// Delivery
 	use_delivery_charges: 0,
 	auto_set_delivery_charges: 0,
@@ -218,6 +219,9 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 	const enableServing = computed(() =>
 		Boolean(settings.value.enable_serving),
+	)
+	const enableOrderMonitor = computed(() =>
+		Boolean(settings.value.enable_order_monitor),
 	)
 
 	// Computed - Delivery
@@ -455,6 +459,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		enableBluetoothPrinter,
 		enableUsbPrinter,
 		enableServing,
+		enableOrderMonitor,
 
 		// Computed - Delivery
 		useDeliveryCharges,

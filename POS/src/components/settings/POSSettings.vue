@@ -397,6 +397,12 @@
 												:description="__('Tampilkan pilihan Take Away / Dine In di dialog pembayaran (default: Dine In).')"
 											/>
 
+											<CheckboxField
+												v-model="settings.enable_order_monitor"
+												:label="__('Enable Order Monitor')"
+												:description="__('Tampilkan tab Order Monitor di POS untuk memantau dan update status antrian pesanan.')"
+											/>
+
 											<!-- USB Printer Pairing -->
 											<div v-if="settings.enable_usb_printer" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 flex flex-col gap-3">
 												<p class="text-xs font-semibold text-blue-700 flex items-center gap-1">
@@ -706,6 +712,7 @@ const settings = ref({
 	enable_bluetooth_printer: 0,
 	enable_usb_printer: 0,
 	enable_serving: 0,
+	enable_order_monitor: 0,
 	allow_negative_stock: 0,
 	allow_zero_valuation: 0,
 	tax_inclusive: 0,
