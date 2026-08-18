@@ -18,7 +18,7 @@ def get_order_tracking(date=None):
 	for record in records:
 		record["items"] = frappe.get_all(
 			"Order Tracking Item",
-			filters={"parent": record["name"]},
+			filters={"parent": record["name"], "parenttype": "Sales Order Tracking"},
 			fields=["item_name", "qty", "status"],
 			order_by="idx asc",
 		)
