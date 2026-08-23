@@ -198,6 +198,12 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 	const line = (str = "") => b.push(...enc.encode(str.substring(0, cols) + "\n"))
 	const sep = (char = "-") => line(char.repeat(cols))
 	const row = (label, value) => _row(label, value, cols)
+	const wrapLine = (str = "") => {
+		if (!str) return
+		let s = str
+		while (s.length > cols) { line(s.substring(0, cols)); s = s.substring(cols) }
+		if (s) line(s)
+	}
 
 	const fmtDate = (d) => {
 		if (!d) return ""
@@ -216,21 +222,21 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 		if (addr) {
 			if (addr.address_title) {
 				push(0x1b, 0x45, 0x01) // bold
-				line(addr.address_title)
+				wrapLine(addr.address_title)
 				push(0x1b, 0x45, 0x00)
 			}
-			if (addr.address_line1) line(addr.address_line1)
-			if (addr.address_line2) line(addr.address_line2)
+			if (addr.address_line1) wrapLine(addr.address_line1)
+			if (addr.address_line2) wrapLine(addr.address_line2)
 			const cityPhone = [addr.city, addr.phone].filter(Boolean).join(" | ")
-			if (cityPhone) line(cityPhone)
+			if (cityPhone) wrapLine(cityPhone)
 		} else {
 			push(0x1b, 0x45, 0x01)
-			line(inv.company || "")
+			wrapLine(inv.company || "")
 			push(0x1b, 0x45, 0x00)
 		}
 	} catch {
 		push(0x1b, 0x45, 0x01)
-		line(inv.company || "")
+		wrapLine(inv.company || "")
 		push(0x1b, 0x45, 0x00)
 	}
 
@@ -255,7 +261,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 		const rate = item.rate || 0
 		const amount = item.amount ?? qty * rate
 		const displayQty = qty % 1 === 0 ? Math.floor(qty) : qty
-		line(item.item_name || item.item_code || "")
+		wrapLine(item.item_name || item.item_code || "")
 		line(row(`  ${displayQty} x ${_num(rate)}`, _num(amount)))
 		if (item.discount_amount > 0) line(row("  Diskon", `-${_num(item.discount_amount)}`))
 		if (item.serial_no) {
@@ -318,7 +324,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 
 	// ── Footer ──
 	sep()
-	if (inv.terms) line(inv.terms.substring(0, cols))
+	if (inv.terms) wrapLine(inv.terms)
 	if (inv.remarks) line(`Ordered By: ${inv.remarks}`)
 	push(0x1b, 0x61, 0x01) // center
 	line("Terima kasih, sampai jumpa lagi.")
