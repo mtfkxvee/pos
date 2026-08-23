@@ -734,7 +734,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 	// ── Footer ──
 	sep()
 	if (inv.terms) wrapLine(inv.terms)
-	if (inv.remarks) line(`Ordered By: ${inv.remarks}`)
+	if (inv.remarks) wrapLine(inv.remarks)
 	push(0x1b, 0x61, 0x01) // center
 	line("Terima kasih, sampai jumpa lagi.")
 	push(0x1b, 0x61, 0x00)
