@@ -3,7 +3,7 @@ import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
 import { getBTPrinterName, printReceiptBT } from "@/utils/bluetoothPrinter"
-import { getUSBReceiptPrinterName, printReceiptUSB } from "@/utils/usbPrinter"
+import { getUSBReceiptPrinterName, printReceiptUSB, getReceiptCols } from "@/utils/usbPrinter"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 
 const log = logger.create("PrintInvoice")
@@ -36,7 +36,7 @@ export async function printInvoice(
 	// Priority 2: Bluetooth printer (Android)
 	if (getBTPrinterName() && store.enableBluetoothPrinter) {
 		try {
-			await printReceiptBT(invoiceData)
+			await printReceiptBT(invoiceData, getReceiptCols())
 			return true
 		} catch (err) {
 			log.warn("BLE receipt print failed, falling back to window.open:", err)
@@ -155,7 +155,7 @@ export async function printInvoiceCustom(invoiceData, printFormat = "58 PRINTER"
 
 	if (getBTPrinterName() && store.enableBluetoothPrinter) {
 		try {
-			await printReceiptBT(invoiceData)
+			await printReceiptBT(invoiceData, getReceiptCols())
 			return
 		} catch (err) {
 			log.warn("BLE receipt print failed, falling back to window.open:", err)

@@ -150,7 +150,7 @@ export async function printLabelBT(itemName, remarks, copies = 1) {
 
 // ── Receipt printer ──────────────────────────────────────────────────────────
 
-export async function printReceiptBT(invoiceData) {
+export async function printReceiptBT(invoiceData, cols = COLS) {
 	const char = await _ensureConnected()
 
 	// Fetch total loyalty balance from server for any customer
@@ -165,7 +165,7 @@ export async function printReceiptBT(invoiceData) {
 		} catch { /* non-fatal */ }
 	}
 
-	const data = buildReceiptData(invoiceData, totalLoyaltyPoints)
+	const data = buildReceiptData(invoiceData, totalLoyaltyPoints, cols)
 	await _writeChunked(char, data)
 }
 
