@@ -14,6 +14,22 @@ const STORAGE_KEY_RECEIPT = "pos_usb_printer_receipt"
 const STORAGE_KEY_LABEL = "pos_usb_printer_label"
 const STORAGE_KEY_LEGACY = "pos_usb_printer"
 const STORAGE_KEY_LABEL_SIZE = "pos_label_size"
+const STORAGE_KEY_RECEIPT_WIDTH = "pos_receipt_width"
+
+const RECEIPT_WIDTH_PRESETS = {
+	"58": { cols: 32, label: "58mm" },
+	"80": { cols: 48, label: "80mm" },
+}
+
+export function getReceiptWidth() {
+	return localStorage.getItem(STORAGE_KEY_RECEIPT_WIDTH) || "58"
+}
+export function setReceiptWidth(width) {
+	localStorage.setItem(STORAGE_KEY_RECEIPT_WIDTH, width)
+}
+export function getReceiptCols() {
+	return RECEIPT_WIDTH_PRESETS[getReceiptWidth()]?.cols ?? 32
+}
 
 const LABEL_SIZE_PRESETS = {
 	"60x40": { sizeMM: "60 mm,40 mm", LW: 480, LH: 320 },
@@ -222,7 +238,7 @@ export async function printReceiptUSB(invoiceData) {
 		} catch { /* non-fatal */ }
 	}
 
-	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints))
+	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints, getReceiptCols()))
 	await _transfer(_receipt, data)
 }
 

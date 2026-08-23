@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 	<!-- Full Page Overlay -->
 	<Transition name="fade">
 		<div
@@ -376,7 +376,7 @@
 											<CheckboxField
 												v-model="settings.allow_cup_label_print"
 												:label="__('Allow Cup Label Print')"
-												:description="__('Tampilkan tombol cetak label cup (58×44mm) di Invoice History')"
+												:description="__('Tampilkan tombol cetak label cup (58Ã—44mm) di Invoice History')"
 											/>
 
 											<CheckboxField
@@ -419,7 +419,7 @@
 												<template v-else>
 													<!-- Struk Kasir -->
 													<div class="bg-white rounded-md border border-blue-100 p-2.5">
-														<p class="text-xs font-semibold text-gray-700 mb-2">🧾 {{ __('Printer Struk Kasir') }}</p>
+														<p class="text-xs font-semibold text-gray-700 mb-2">ðŸ§¾ {{ __('Printer Struk Kasir') }}</p>
 														<div v-if="usbReceiptPrinterName" class="flex items-center justify-between gap-2">
 															<span class="text-xs font-medium text-blue-800 truncate">{{ usbReceiptPrinterName }}</span>
 															<div class="flex gap-1 shrink-0">
@@ -446,7 +446,7 @@
 
 													<!-- Label Cup -->
 													<div class="bg-white rounded-md border border-blue-100 p-2.5">
-														<p class="text-xs font-semibold text-gray-700 mb-2">🏷️ {{ __('Printer Label Cup') }}</p>
+														<p class="text-xs font-semibold text-gray-700 mb-2">ðŸ·ï¸ {{ __('Printer Label Cup') }}</p>
 														<div v-if="usbLabelPrinterName" class="flex items-center justify-between gap-2">
 															<span class="text-xs font-medium text-blue-800 truncate">{{ usbLabelPrinterName }}</span>
 															<div class="flex gap-1 shrink-0">
@@ -474,18 +474,33 @@
 														<div class="flex gap-3">
 															<label class="flex items-center gap-1.5 cursor-pointer">
 																<input type="radio" v-model="labelSize" value="60x40" @change="onLabelSizeChange" class="accent-blue-600" />
-																<span class="text-xs font-medium">60×40 mm</span>
+																<span class="text-xs font-medium">60Ã—40 mm</span>
 															</label>
 															<label class="flex items-center gap-1.5 cursor-pointer">
 																<input type="radio" v-model="labelSize" value="40x30" @change="onLabelSizeChange" class="accent-blue-600" />
-																<span class="text-xs font-medium">40×30 mm</span>
+																<span class="text-xs font-medium">40Ã—30 mm</span>
 															</label>
 														</div>
 													</div>
 													</div>
 
+													<!-- Receipt Paper Width -->
+													<div>
+														<p class="text-xs font-semibold text-gray-600 mb-1">Lebar Kertas Struk</p>
+														<div class="flex gap-3">
+															<label class="flex items-center gap-1.5 cursor-pointer">
+																<input type="radio" v-model="receiptWidth" value="58" @change="onReceiptWidthChange" class="accent-blue-600" />
+																<span class="text-xs font-medium">58 mm (32 kolom)</span>
+															</label>
+															<label class="flex items-center gap-1.5 cursor-pointer">
+																<input type="radio" v-model="receiptWidth" value="80" @change="onReceiptWidthChange" class="accent-blue-600" />
+																<span class="text-xs font-medium">80 mm (48 kolom)</span>
+															</label>
+														</div>
+													</div>
+
 													<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-														⚠ <strong>Windows:</strong> {{ __('Jika printer tidak muncul, ganti drivernya ke WinUSB dulu via Zadig (zadig.akeo.ie).') }}
+														âš  <strong>Windows:</strong> {{ __('Jika printer tidak muncul, ganti drivernya ke WinUSB dulu via Zadig (zadig.akeo.ie).') }}
 													</p>
 												</template>
 											</div>
@@ -576,6 +591,7 @@ import {
 	getUSBReceiptPrinterName, getUSBLabelPrinterName,
 	removeUSBReceiptPrinter, removeUSBLabelPrinter,
 	getLabelSize, setLabelSize,
+	getReceiptWidth, setReceiptWidth,
 } from "@/utils/usbPrinter"
 import { Button, call, createResource } from "frappe-ui"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
@@ -615,7 +631,7 @@ const loading = ref(true)
 const saving = ref(false)
 const warehousesList = ref([])
 
-// ── Bluetooth Printer ────────────────────────────────────────────────────────
+// â”€â”€ Bluetooth Printer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const btSupported = isBTAvailable()
 const btPrinterName = ref(getBTPrinterName())
 const btPairing = ref(false)
@@ -640,7 +656,7 @@ function unpairBluetooth() {
 	btPrinterName.value = null
 }
 
-// ── USB Printer ───────────────────────────────────────────────────────────────
+// â”€â”€ USB Printer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const usbSupported = isUSBAvailable()
 
 const usbReceiptPrinterName = ref(getUSBReceiptPrinterName())
@@ -650,6 +666,9 @@ const usbLabelPrinterName = ref(getUSBLabelPrinterName())
 const usbLabelPairing = ref(false)
 const labelSize = ref(getLabelSize())
 function onLabelSizeChange() { setLabelSize(labelSize.value) }
+
+const receiptWidth = ref(getReceiptWidth())
+function onReceiptWidthChange() { setReceiptWidth(receiptWidth.value) }
 
 async function pairUsbReceipt() {
 	usbReceiptPairing.value = true
@@ -690,7 +709,7 @@ function unpairUsbLabel() {
 	removeUSBLabelPrinter()
 	usbLabelPrinterName.value = null
 }
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const selectedWarehouse = ref(props.currentWarehouse || "")
 const settings = ref({
 	pos_profile: props.posProfile || "",

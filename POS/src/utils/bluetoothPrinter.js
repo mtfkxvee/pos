@@ -169,7 +169,7 @@ export async function printReceiptBT(invoiceData) {
 	await _writeChunked(char, data)
 }
 
-const COLS = 32 // chars per line for 58mm standard font
+const COLS = 32 // chars per line for 58mm standard font (default)
 
 function _num(val) {
 	const v = Math.floor(val || 0)
@@ -191,12 +191,12 @@ function _center(str, cols = COLS) {
 	return " ".repeat(pad) + str
 }
 
-export function buildReceiptData(inv, totalLoyaltyPoints = null) {
+export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS) {
 	const enc = new TextEncoder()
 	const b = []
 	const push = (...bytes) => b.push(...bytes)
-	const line = (str = "") => b.push(...enc.encode(str.substring(0, COLS) + "\n"))
-	const sep = (char = "-") => line(char.repeat(COLS))
+	const line = (str = "") => b.push(...enc.encode(str.substring(0, cols) + "\n"))
+	const sep = (char = "-") => line(char.repeat(cols))
 
 	const fmtDate = (d) => {
 		if (!d) return ""
@@ -259,7 +259,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null) {
 		if (item.discount_amount > 0) line(_row("  Diskon", `-${_num(item.discount_amount)}`))
 		if (item.serial_no) {
 			const sn = String(item.serial_no).replace(/\n/g, ", ")
-			line(`S/N: ${sn}`.substring(0, COLS))
+			line(`S/N: ${sn}`.substring(0, cols))
 		}
 	}
 	sep()
@@ -317,7 +317,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null) {
 
 	// ── Footer ──
 	sep()
-	if (inv.terms) line(inv.terms.substring(0, COLS))
+	if (inv.terms) line(inv.terms.substring(0, cols))
 	if (inv.remarks) line(`Ordered By: ${inv.remarks}`)
 	push(0x1b, 0x61, 0x01) // center
 	line("Terima kasih, sampai jumpa lagi.")
