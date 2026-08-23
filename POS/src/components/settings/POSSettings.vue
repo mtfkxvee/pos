@@ -446,7 +446,7 @@
 
 													<!-- Label Cup -->
 													<div class="bg-white rounded-md border border-blue-100 p-2.5">
-														<p class="text-xs font-semibold text-gray-700 mb-2">ðŸ·ï¸ {{ __('Printer Label Cup') }}</p>
+														<p class="text-xs font-semibold text-gray-700 mb-2">🏷️ {{ __('Printer Label Cup') }}</p>
 														<div v-if="usbLabelPrinterName" class="flex items-center justify-between gap-2">
 															<span class="text-xs font-medium text-blue-800 truncate">{{ usbLabelPrinterName }}</span>
 															<div class="flex gap-1 shrink-0">
