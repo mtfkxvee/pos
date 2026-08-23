@@ -197,6 +197,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 	const push = (...bytes) => b.push(...bytes)
 	const line = (str = "") => b.push(...enc.encode(str.substring(0, cols) + "\n"))
 	const sep = (char = "-") => line(char.repeat(cols))
+	const row = (label, value) => _row(label, value, cols)
 
 	const fmtDate = (d) => {
 		if (!d) return ""
@@ -255,8 +256,8 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 		const amount = item.amount ?? qty * rate
 		const displayQty = qty % 1 === 0 ? Math.floor(qty) : qty
 		line(item.item_name || item.item_code || "")
-		line(_row(`  ${displayQty} x ${_num(rate)}`, _num(amount)))
-		if (item.discount_amount > 0) line(_row("  Diskon", `-${_num(item.discount_amount)}`))
+		line(row(`  ${displayQty} x ${_num(rate)}`, _num(amount)))
+		if (item.discount_amount > 0) line(row("  Diskon", `-${_num(item.discount_amount)}`))
 		if (item.serial_no) {
 			const sn = String(item.serial_no).replace(/\n/g, ", ")
 			line(`S/N: ${sn}`.substring(0, cols))
@@ -266,40 +267,40 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 
 	// ── Totals ──
 	if (inv.show_inclusive_tax_in_print) {
-		line(_row("Total Excl. Tax", _num(inv.net_total)))
+		line(row("Total Excl. Tax", _num(inv.net_total)))
 	} else {
-		line(_row("Total", _num(inv.total)))
+		line(row("Total", _num(inv.total)))
 	}
 	if (inv.taxes && inv.taxes.length) {
 		for (const tax of inv.taxes) {
 			if (!tax.included_in_print_rate || inv.show_inclusive_tax_in_print) {
 				const desc = tax.description || ""
 				const label = desc.includes("%") ? desc : `${desc}@${tax.rate}%`
-				line(_row(label, _num(tax.tax_amount)))
+				line(row(label, _num(tax.tax_amount)))
 			}
 		}
 	}
-	if (inv.discount_amount > 0) line(_row("Diskon", `-${_num(inv.discount_amount)}`))
-	if (inv.loyalty_amount > 0) line(_row("Tukar Poin", `-${_num(inv.loyalty_amount)}`))
+	if (inv.discount_amount > 0) line(row("Diskon", `-${_num(inv.discount_amount)}`))
+	if (inv.loyalty_amount > 0) line(row("Tukar Poin", `-${_num(inv.loyalty_amount)}`))
 
 	// Grand Total (double border effect with = lines)
 	sep("=")
 	push(0x1b, 0x45, 0x01) // bold
-	line(_row("Grand Total", `Rp${_num(inv.grand_total)}`))
+	line(row("Grand Total", `Rp${_num(inv.grand_total)}`))
 	push(0x1b, 0x45, 0x00)
 	sep("=")
 
-	if (inv.rounded_total) line(_row("Dibulatkan", `Rp${_num(inv.rounded_total)}`))
+	if (inv.rounded_total) line(row("Dibulatkan", `Rp${_num(inv.rounded_total)}`))
 
 	// ── Payments ──
 	for (const pay of (inv.payments || [])) {
-		line(_row(pay.mode_of_payment, _num(pay.amount)))
+		line(row(pay.mode_of_payment, _num(pay.amount)))
 	}
 	const paidAmount = inv.paid_amount || (inv.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0)
 	sep()
-	line(_row("Bayar", _num(paidAmount)))
-	if (inv.change_amount > 0) line(_row("Kembali", _num(inv.change_amount)))
-	if (inv.outstanding_amount > 0) line(_row("Sisa Tagihan", _num(inv.outstanding_amount)))
+	line(row("Bayar", _num(paidAmount)))
+	if (inv.change_amount > 0) line(row("Kembali", _num(inv.change_amount)))
+	if (inv.outstanding_amount > 0) line(row("Sisa Tagihan", _num(inv.outstanding_amount)))
 
 	// ── Loyalty Points ──
 	const loyaltyPoints = inv.loyalty_points || 0
@@ -310,9 +311,9 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 		push(0x1b, 0x61, 0x01) // center
 		line("-- LOYALTY POINTS --")
 		push(0x1b, 0x61, 0x00)
-		if (loyaltyPoints > 0 && !redeemLoyalty) line(_row("Poin Didapat", `+${loyaltyPoints}`))
-		if (loyaltyPoints > 0 && redeemLoyalty) line(_row("Poin Ditukar", `-${loyaltyPoints}`))
-		if (totalLoyaltyPoints !== null && totalLoyaltyPoints > 0) line(_row("Total Poin", String(totalLoyaltyPoints)))
+		if (loyaltyPoints > 0 && !redeemLoyalty) line(row("Poin Didapat", `+${loyaltyPoints}`))
+		if (loyaltyPoints > 0 && redeemLoyalty) line(row("Poin Ditukar", `-${loyaltyPoints}`))
+		if (totalLoyaltyPoints !== null && totalLoyaltyPoints > 0) line(row("Total Poin", String(totalLoyaltyPoints)))
 	}
 
 	// ── Footer ──
