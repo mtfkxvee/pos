@@ -2496,7 +2496,7 @@ async function handlePaymentCompleted(paymentData) {
 			const soldItemCodes = cartStore.invoiceItems.map((item) => item.item_code);
 
 			// Capture items for auto label popup before cart is cleared
-			const pendingLabelItems = posSettingsStore.enableUsbPrinter
+			const pendingLabelItems = posSettingsStore.enableUsbLabelPrinter
 				? cartStore.invoiceItems
 					.filter((i) => !i.is_free_item)
 					.map((i) => ({ item_name: i.item_name || i.item_code, qty: i.quantity || i.qty || 1 }))

@@ -140,7 +140,7 @@ async function printLabels() {
 	const remarks = remarksLabel
 
 	// Priority: USB → Bluetooth → browser window
-	if (getUSBPrinterName() && settingsStore.enableUsbPrinter) {
+	if (getUSBPrinterName() && settingsStore.enableUsbLabelPrinter) {
 		show.value = false
 		try {
 			const totalLabels = selected.reduce((s, i) => s + labelCopies(i), 0)

@@ -387,8 +387,13 @@
 
 											<CheckboxField
 												v-model="settings.enable_usb_printer"
+												:label="__('Enable USB Printer (Struk)')"
+												:description="__('Cetak struk/receipt ke printer USB via WebUSB di komputer (Chrome/Edge).')"
+											/>
+											<CheckboxField
+												v-model="settings.enable_usb_label_printer"
 												:label="__('Enable USB Printer (Label Cup)')"
-												:description="__('Cetak label cup otomatis ke printer USB 58mm di komputer (Chrome/Edge). Khusus label cup saja.')"
+												:description="__('Cetak label cup otomatis ke printer USB setelah transaksi (terpisah dari printer struk).')"
 											/>
 
 											<CheckboxField
@@ -404,7 +409,7 @@
 											/>
 
 											<!-- USB Printer Pairing -->
-											<div v-if="settings.enable_usb_printer" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 flex flex-col gap-3">
+											<div v-if="settings.enable_usb_printer || settings.enable_usb_label_printer" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 flex flex-col gap-3">
 												<p class="text-xs font-semibold text-blue-700 flex items-center gap-1">
 													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -730,6 +735,7 @@ const settings = ref({
 	allow_cup_label_print: 0,
 	enable_bluetooth_printer: 0,
 	enable_usb_printer: 0,
+	enable_usb_label_printer: 0,
 	enable_serving: 0,
 	enable_order_monitor: 0,
 	allow_negative_stock: 0,

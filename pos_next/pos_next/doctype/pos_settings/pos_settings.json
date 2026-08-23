@@ -63,6 +63,7 @@
         "allow_cup_label_print",
         "enable_bluetooth_printer",
         "enable_usb_printer",
+        "enable_usb_label_printer",
         "enable_serving",
         "enable_order_monitor",
         "section_break_delivery",
@@ -476,8 +477,15 @@
         },
         {
             "default": "0",
-            "description": "Aktifkan printer USB 58mm via WebUSB untuk cetak label cup di komputer (Chrome/Edge). Khusus label cup saja.",
+            "description": "Aktifkan printer USB via WebUSB untuk cetak struk/receipt di komputer (Chrome/Edge).",
             "fieldname": "enable_usb_printer",
+            "fieldtype": "Check",
+            "label": "Enable USB Printer (Struk)"
+        },
+        {
+            "default": "0",
+            "description": "Aktifkan printer USB untuk cetak label cup otomatis setelah transaksi (terpisah dari printer struk).",
+            "fieldname": "enable_usb_label_printer",
             "fieldtype": "Check",
             "label": "Enable USB Printer (Label Cup)"
         },
