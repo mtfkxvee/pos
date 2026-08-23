@@ -191,7 +191,7 @@ function _center(str, cols = COLS) {
 	return " ".repeat(pad) + str
 }
 
-export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS) {
+export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, openCashDrawer = false) {
 	const enc = new TextEncoder()
 	const b = []
 	const push = (...bytes) => b.push(...bytes)
@@ -322,6 +322,11 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS) {
 	push(0x1b, 0x61, 0x01) // center
 	line("Terima kasih, sampai jumpa lagi.")
 	push(0x1b, 0x61, 0x00)
+
+	// Open cash drawer (pin 2) — only when connected via USB receipt printer
+	if (openCashDrawer) {
+		push(0x1b, 0x70, 0x00, 0x19, 0xfa)
+	}
 
 	// Feed + cut
 	push(0x1b, 0x64, 0x04)

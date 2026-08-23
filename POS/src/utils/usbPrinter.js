@@ -238,7 +238,7 @@ export async function printReceiptUSB(invoiceData) {
 		} catch { /* non-fatal */ }
 	}
 
-	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints, getReceiptCols()))
+	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints, getReceiptCols(), true))
 	await _transfer(_receipt, data)
 }
 
