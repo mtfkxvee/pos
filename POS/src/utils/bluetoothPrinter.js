@@ -342,6 +342,102 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 	return new Uint8Array(b)
 }
 
+// ── Shift Closing print ───────────────────────────────────────────────────────
+
+export function buildShiftClosingData(closing, cols = COLS) {
+	const enc = new TextEncoder()
+	const b = []
+	const push = (...bytes) => b.push(...bytes)
+	const line = (str = "") => b.push(...enc.encode(str.substring(0, cols) + "\n"))
+	const sep = (char = "-") => line(char.repeat(cols))
+	const row = (label, value) => _row(label, value, cols)
+
+	const now = new Date()
+	const fmtDt = (d) => {
+		if (!d) return "-"
+		const dt = typeof d === "string" ? new Date(d) : d
+		const dd = String(dt.getDate()).padStart(2, "0")
+		const mm = String(dt.getMonth() + 1).padStart(2, "0")
+		const hh = String(dt.getHours()).padStart(2, "0")
+		const mi = String(dt.getMinutes()).padStart(2, "0")
+		return `${dd}-${mm}-${dt.getFullYear()} ${hh}:${mi}`
+	}
+
+	const salesTotal = closing.sales_total ?? closing.grand_total ?? 0
+	const taxesTotal = (closing.taxes || []).reduce((s, t) => s + (Number.parseFloat(t.amount) || 0), 0)
+	const payments = (closing.payment_reconciliation || []).filter(
+		(p) => Number(p.expected_amount) > 0 || Number(p.closing_amount) > 0
+	)
+	const hasReturns = (closing.returns_count || 0) > 0
+	const totalExpected = payments.reduce((s, p) => s + (Number.parseFloat(p.expected_amount) || 0), 0)
+	const totalActual   = payments.reduce((s, p) => s + (Number.parseFloat(p.closing_amount) || 0), 0)
+	const variance = totalActual - totalExpected
+
+	push(0x1b, 0x40) // init
+	push(0x1b, 0x61, 0x01) // center
+
+	push(0x1b, 0x45, 0x01)
+	line("CLOSING SHIFT")
+	line(closing.pos_profile || "")
+	push(0x1b, 0x45, 0x00)
+
+	push(0x1b, 0x61, 0x00) // left
+	sep("=")
+	line(`User : ${closing.owner || "-"}`)
+	line(`Start: ${fmtDt(closing.period_start_date)}`)
+	line(`End  : ${fmtDt(now)}`)
+	sep()
+
+	// Sales summary
+	push(0x1b, 0x45, 0x01); line("RINGKASAN PENJUALAN"); push(0x1b, 0x45, 0x00)
+	line(row("Penjualan Kotor", _num(salesTotal)))
+	if (closing.returns_total) line(row("Return", `-${_num(closing.returns_total)}`))
+	if (closing.loyalty_redemption_total) line(row("Loyalty Ditukar", `-${_num(closing.loyalty_redemption_total)}`))
+	if (taxesTotal) line(row("Pajak", _num(taxesTotal)))
+	sep("=")
+	push(0x1b, 0x45, 0x01)
+	line(row("NET SALES", _num(closing.grand_total)))
+	push(0x1b, 0x45, 0x00)
+	sep("=")
+	line(`Transaksi: ${closing.sales_count || 0} jual, ${closing.returns_count || 0} return`)
+	if (closing.visitor) line(`Pengunjung: ${closing.visitor}`)
+	sep()
+
+	// Payments
+	push(0x1b, 0x45, 0x01); line("PEMBAYARAN"); push(0x1b, 0x45, 0x00)
+	for (const p of payments) {
+		const returnsAmt = Number.parseFloat(p.returns_amount || 0)
+		sep()
+		push(0x1b, 0x45, 0x01); line(p.mode_of_payment || ""); push(0x1b, 0x45, 0x00)
+		line(row("  Saldo Awal", _num(p.opening_amount)))
+		if (hasReturns && returnsAmt !== 0) {
+			const gross = Number.parseFloat(p.expected_amount || 0) - returnsAmt
+			line(row("  Sebelum Retur", _num(gross)))
+			line(row("  Dipotong", `-${_num(Math.abs(returnsAmt))}`))
+		}
+		line(row("  Expected", _num(p.expected_amount)))
+		line(row("  Aktual", _num(p.closing_amount)))
+		const diff = Number.parseFloat(p.closing_amount || 0) - Number.parseFloat(p.expected_amount || 0)
+		line(row("  Selisih", (diff >= 0 ? "+" : "") + _num(diff)))
+	}
+	sep("=")
+	push(0x1b, 0x45, 0x01)
+	line(row("TOTAL EXPECTED", _num(totalExpected)))
+	line(row("TOTAL AKTUAL", _num(totalActual)))
+	line(row("SELISIH", (variance >= 0 ? "+" : "") + _num(variance)))
+	push(0x1b, 0x45, 0x00)
+	sep("=")
+
+	push(0x1b, 0x61, 0x01)
+	line(fmtDt(now))
+	push(0x1b, 0x61, 0x00)
+
+	push(0x1b, 0x64, 0x04)
+	push(0x1d, 0x56, 0x00)
+
+	return new Uint8Array(b)
+}
+
 // ── Label printer ─────────────────────────────────────────────────────────────
 
 function _buildLabel(itemName, remarks) {

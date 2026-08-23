@@ -3,7 +3,7 @@ import { logger } from "@/utils/logger"
 import { formatCurrency } from "@/utils/currency"
 import { getCachedCompanyAddress } from "@/utils/offline/cache"
 import { getBTPrinterName, printReceiptBT } from "@/utils/bluetoothPrinter"
-import { getUSBReceiptPrinterName, printReceiptUSB, getReceiptCols } from "@/utils/usbPrinter"
+import { getUSBReceiptPrinterName, printReceiptUSB, printShiftClosingUSB, getReceiptCols } from "@/utils/usbPrinter"
 import { usePOSSettingsStore } from "@/stores/posSettings"
 
 const log = logger.create("PrintInvoice")
@@ -364,7 +364,18 @@ export async function printInvoiceByName(
  * @param {Object} closingData - The shift closing data
  * @param {string} paperSize - "58mm" or "80mm"
  */
-export function printShiftClosing(closingData, paperSize = "80mm") {
+export async function printShiftClosing(closingData, paperSize = "80mm") {
+	const store = usePOSSettingsStore()
+
+	if (getUSBReceiptPrinterName() && store.enableUsbPrinter) {
+		try {
+			await printShiftClosingUSB(closingData)
+			return
+		} catch (err) {
+			log.warn("USB shift closing print failed, falling back to window:", err)
+		}
+	}
+
 	const is58mm = paperSize === "58mm"
 	const paperWidth = is58mm ? "58mm" : "80mm"
 	const windowWidth = is58mm ? "220" : "350"

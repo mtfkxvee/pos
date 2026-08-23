@@ -7,7 +7,7 @@
  * Zadig (https://zadig.akeo.ie/) before the browser can claim the interface.
  */
 
-import { buildReceiptData } from "@/utils/bluetoothPrinter"
+import { buildReceiptData, buildShiftClosingData } from "@/utils/bluetoothPrinter"
 import { call } from "frappe-ui"
 
 const STORAGE_KEY_RECEIPT = "pos_usb_printer_receipt"
@@ -239,6 +239,12 @@ export async function printReceiptUSB(invoiceData) {
 	}
 
 	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints, getReceiptCols(), true))
+	await _transfer(_receipt, data)
+}
+
+export async function printShiftClosingUSB(closingData) {
+	await _ensureConnected(STORAGE_KEY_RECEIPT, _receipt, "struk")
+	const data = _addCR(buildShiftClosingData(closingData, getReceiptCols()))
 	await _transfer(_receipt, data)
 }
 
