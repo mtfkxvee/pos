@@ -547,8 +547,8 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 
 	// ── Footer ──
 	sep()
-	if (inv.terms) wrapLine(inv.terms)
-	if (inv.remarks && inv.remarks !== "No remarks") wrapLine(inv.remarks)
+	if (inv.terms && !/^no\s*remarks$/i.test(inv.terms.trim())) wrapLine(inv.terms)
+	if (inv.remarks && !/^no\s*remarks$/i.test(inv.remarks.trim())) wrapLine(inv.remarks)
 	push(0x1b, 0x61, 0x01) // center
 	line("Terima kasih, sampai jumpa lagi.")
 	push(0x1b, 0x61, 0x00)
