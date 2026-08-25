@@ -416,7 +416,13 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 	const customerName = customerRaw.split(" XSA")[0].split(" XPY")[0].split(" XS")[0].split(" - ")[0]
 
 	line(`No : ${inv.name || ""}`)
-	line(`Ksr: ${ownerShort}  Tgl: ${postDate} ${postTime}`)
+	const ksrTgl = `Ksr: ${ownerShort}  Tgl: ${postDate} ${postTime}`
+	if (ksrTgl.length <= cols) {
+		line(ksrTgl)
+	} else {
+		line(`Ksr: ${ownerShort}`)
+		line(`Tgl: ${postDate} ${postTime}`)
+	}
 	line(`Pel: ${customerName}`)
 	sep()
 
