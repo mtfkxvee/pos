@@ -141,20 +141,15 @@ async function _openAndClaim(device) {
 
 async function _transfer(slot, data) {
 	const CHUNK = 4096
+	console.log(`[USB] transferring ${data.length} bytes in ${Math.ceil(data.length / CHUNK)} chunk(s)`)
 	for (let i = 0; i < data.length; i += CHUNK) {
-		await slot.device.transferOut(slot.epNum, data.slice(i, i + CHUNK))
+		const chunk = data.slice(i, i + CHUNK)
+		const result = await slot.device.transferOut(slot.epNum, chunk)
+		if (result.status !== "ok") {
+			console.error(`[USB] transferOut chunk @${i} status: ${result.status}`)
+		}
 	}
-}
-
-// Raw USB bypasses OS driver which normally converts LF → CRLF.
-// ESC/POS printers need explicit CR+LF to flush each line.
-function _addCR(data) {
-	const result = []
-	for (const byte of data) {
-		if (byte === 0x0A) result.push(0x0D)
-		result.push(byte)
-	}
-	return new Uint8Array(result)
+	console.log("[USB] transfer complete")
 }
 
 // ── Pairing ───────────────────────────────────────────────────────────────────
@@ -211,10 +206,13 @@ async function _ensureConnected(storageKey, slot, label) {
 	if (!stored) throw new Error(`USB printer ${label} belum dipasangkan.`)
 
 	const devices = await navigator.usb.getDevices()
+	console.log(`[USB] getDevices() returned ${devices.length} device(s):`, devices.map(d => `${d.productName} [${d.vendorId}:${d.productId}]`))
+	console.log(`[USB] looking for vendorId=${stored.vendorId} productId=${stored.productId}`)
 	const device = devices.find(
 		(d) => d.vendorId === stored.vendorId && d.productId === stored.productId,
 	)
 	if (!device) {
+		console.warn(`[USB] device not found — browser may have lost permission. Available:`, devices)
 		throw new Error(
 			`Printer USB ${label} tidak ditemukan. Pastikan kabel terhubung, lalu coba lagi atau pair ulang.`,
 		)
@@ -238,13 +236,14 @@ export async function printReceiptUSB(invoiceData) {
 		} catch { /* non-fatal */ }
 	}
 
-	const data = _addCR(buildReceiptData(invoiceData, totalLoyaltyPoints, getReceiptCols(), true))
+	const data = buildReceiptData(invoiceData, totalLoyaltyPoints, getReceiptCols(), true)
+	console.log(`[USB] receipt data ${data.length} bytes, cols=${getReceiptCols()}`)
 	await _transfer(_receipt, data)
 }
 
 export async function printShiftClosingUSB(closingData) {
 	await _ensureConnected(STORAGE_KEY_RECEIPT, _receipt, "struk")
-	const data = _addCR(buildShiftClosingData(closingData, getReceiptCols()))
+	const data = buildShiftClosingData(closingData, getReceiptCols())
 	await _transfer(_receipt, data)
 }
 
