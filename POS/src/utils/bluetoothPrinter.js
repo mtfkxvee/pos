@@ -318,8 +318,8 @@ const LOGO_RAW_ROWS = 72
 const LOGO_RAW_BYTES = 31
 
 function _buildLogo(cols) {
-	// 58mm (cols=32) → 48 dot-bytes wide; 80mm (cols=48) → 72 dot-bytes wide
-	const dotBytes = cols === 32 ? 48 : 72
+	// 58mm (cols=32) → 46 dot-bytes wide (368 dots, safe margin); 80mm (cols=48) → 72 dot-bytes wide
+	const dotBytes = cols === 32 ? 46 : 72
 	const leftPad = Math.floor((dotBytes - LOGO_RAW_BYTES) / 2)
 	const rightPad = dotBytes - LOGO_RAW_BYTES - leftPad
 	const out = new Uint8Array(8 + LOGO_RAW_ROWS * dotBytes) // zeros by default
