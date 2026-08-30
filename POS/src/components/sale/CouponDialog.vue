@@ -35,53 +35,6 @@
 					<p class="text-xs text-gray-500 mt-1">{{ __('Code is case-insensitive') }}</p>
 				</div>
 
-				<!-- My Gift Cards -->
-				<div v-if="giftCards.length > 0 && !appliedDiscount">
-					<label class="block text-sm font-medium text-gray-700 mb-2 text-start">
-						<div class="flex items-center gap-2">
-							<svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-								<path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-								<path fill-rule="evenodd"
-									d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
-									clip-rule="evenodd" />
-							</svg>
-							<span>{{ __('My Gift Cards ({0})', [giftCards.length]) }}</span>
-						</div>
-					</label>
-					<div class="flex flex-col gap-2 max-h-60 overflow-y-auto pe-1">
-						<div v-for="card in giftCards" :key="card.coupon_code" @click="applyGiftCard(card)"
-							class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-3 cursor-pointer hover:shadow-md hover:border-purple-400 transition-all">
-							<div class="flex items-center justify-between">
-								<div class="flex-1">
-									<div class="flex items-center gap-2">
-										<div
-											class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-											<svg class="w-4 h-4 text-purple-600" fill="currentColor"
-												viewBox="0 0 20 20">
-												<path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-												<path fill-rule="evenodd"
-													d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
-													clip-rule="evenodd" />
-											</svg>
-										</div>
-										<div class="flex-1">
-											<h4 class="text-sm font-bold text-gray-900">
-												{{ card.coupon_code }}
-											</h4>
-											<p class="text-xs text-gray-600">{{ card.coupon_name }}</p>
-										</div>
-									</div>
-								</div>
-								<svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-									<path fill-rule="evenodd"
-										d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-										clip-rule="evenodd" />
-								</svg>
-							</div>
-						</div>
-					</div>
-				</div>
-
 				<!-- Applied Coupon Preview -->
 				<div v-if="appliedDiscount" class="bg-green-50 border-2 border-green-500 rounded-lg p-4">
 					<div class="flex items-center gap-2 mb-3">
@@ -187,32 +140,16 @@ const emit = defineEmits([
 
 const show = ref(props.modelValue)
 const couponCode = ref("")
-const giftCards = ref([])
 const appliedDiscount = ref(null)
 const applying = ref(false)
 const errorMessage = ref("")
 
-// Resource to load gift cards
-const giftCardsResource = createResource({
-	url: "pos_next.api.offers.get_active_coupons",
-	makeParams() {
-		return {
-			customer: props.customer,
-			company: props.company,
-		}
-	},
-	auto: false,
-	onSuccess(data) {
-		giftCards.value = data?.message || data || []
-	},
-})
-
-// Resource to validate coupon
+// Resource to validate coupon against ERPNext Coupon Code doctype
 const couponResource = createResource({
 	url: "pos_next.api.offers.validate_coupon",
 	makeParams() {
 		return {
-			coupon_code: couponCode.value,
+			coupon_code: couponCode.value.toUpperCase(),
 			customer: props.customer,
 			company: props.company,
 		}
@@ -225,10 +162,8 @@ watch(
 	(val) => {
 		show.value = val
 		if (val) {
-			loadGiftCards()
 			errorMessage.value = ""
 			couponCode.value = ""
-			// Sync with external state
 			appliedDiscount.value = props.appliedCoupon
 		}
 	},
@@ -245,20 +180,6 @@ watch(
 		appliedDiscount.value = val
 	},
 )
-
-async function loadGiftCards() {
-	if (!props.customer || !props.company) return
-	try {
-		await giftCardsResource.reload()
-	} catch (error) {
-		console.error("Error loading gift cards:", error)
-	}
-}
-
-function applyGiftCard(card) {
-	couponCode.value = card.coupon_code
-	applyCoupon()
-}
 
 async function applyCoupon() {
 	if (!couponCode.value.trim()) {
