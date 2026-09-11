@@ -265,7 +265,7 @@ ${(invoiceData.items || []).map((item) => {
 <hr>
 ${showInclusiveTax
 	? `<p>Total Excl. Tax<span style="float:right;">${num(invoiceData.net_total || invoiceData.grand_total)}</span></p>`
-	: `<p>Total<span style="float:right;">${num(invoiceData.total || invoiceData.grand_total)}</span></p>`}
+	: `<p>Total<span style="float:right;">${num(invoiceData.net_total || invoiceData.total || invoiceData.grand_total)}</span></p>`}
 ${(invoiceData.taxes || []).filter(row => !row.included_in_print_rate || showInclusiveTax).map(row => {
 	const desc = row.description || ""
 	const label = desc.includes('%') ? desc : `${desc}@${row.rate}%`

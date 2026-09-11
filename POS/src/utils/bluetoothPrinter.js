@@ -446,7 +446,7 @@ export function buildReceiptData(inv, totalLoyaltyPoints = null, cols = COLS, op
 	if (inv.show_inclusive_tax_in_print) {
 		line(row("Total Excl. Tax", _num(inv.net_total)))
 	} else {
-		line(row("Total", _num(inv.total)))
+		line(row("Total", _num(inv.net_total || inv.total)))
 	}
 	if (inv.taxes && inv.taxes.length) {
 		for (const tax of inv.taxes) {

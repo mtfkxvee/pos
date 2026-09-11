@@ -857,12 +857,14 @@ def update_invoice(data):
         if not invoice_doc.get("is_return") and (_discount_amount > 0 or _has_item_discount):
             gt = flt(invoice_doc.grand_total)
             ui_gt = flt(data.get("ui_grand_total") or 0) if data else 0
-            if ui_gt > 0 and abs(ui_gt - gt) <= 1000:
+            if ui_gt > 0 and 0 < ui_gt <= gt:
                 # Anchor grand_total to what the UI showed (= what the customer paid).
-                # This absorbs any accumulated float-rounding that makes ERPNext's
-                # net_total differ slightly from the frontend's, which would otherwise
-                # cause the independent round-to-100 to land on a different 100-boundary
-                # and produce a grand_total that differs by 200 from the cashier's screen.
+                # Covers both small rounding deltas and large item-level pricing rule
+                # discounts where ERPNext recomputes net_total from price_list_rate
+                # (ignoring our discounted item.rate), producing a gap larger than
+                # any rounding tolerance.  The only guard we need: ui_gt must be
+                # positive and not exceed ERPNext's computed total (can't discount to
+                # a higher number than the list price).
                 target_discount = flt(invoice_doc.net_total) - ui_gt
                 invoice_doc.flags.pos_next_rounding_info = {
                     "rule": "Anchor grand_total to UI display value",
