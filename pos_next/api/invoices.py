@@ -923,37 +923,25 @@ def update_invoice(data):
                     sum(p.base_amount or 0 for p in invoice_doc.payments)
                 )
 
-        # Validate and track Coupon Code if provided
+        # Validate and track POS Coupon if coupon_code is provided
         coupon_code = data.get("coupon_code")
         if coupon_code:
-            coupon = frappe.db.get_value(
-                "Coupon Code",
-                {"coupon_code": coupon_code},
-                ["name", "disabled", "coupon_type", "maximum_use", "used",
-                 "valid_from", "valid_upto", "pricing_rule"],
-                as_dict=1
-            )
+            # Validate POS Coupon exists and is valid
+            if frappe.db.table_exists("POS Coupon"):
+                from pos_next.pos_next.doctype.pos_coupon.pos_coupon import check_coupon_code
 
-            if not coupon:
-                frappe.throw(_("Invalid coupon code: {0}").format(coupon_code))
+                coupon_result = check_coupon_code(
+                    coupon_code,
+                    customer=invoice_doc.customer,
+                    company=invoice_doc.company
+                )
 
-            if coupon.disabled:
-                frappe.throw(_("Coupon {0} is disabled").format(coupon_code))
+                if not coupon_result or not coupon_result.get("valid"):
+                    error_msg = coupon_result.get("msg", "Invalid coupon code") if coupon_result else "Invalid coupon code"
+                    frappe.throw(_(error_msg))
 
-            today = getdate()
-            if coupon.valid_from and getdate(coupon.valid_from) > today:
-                frappe.throw(_("Coupon {0} is not yet valid").format(coupon_code))
-            if coupon.valid_upto and getdate(coupon.valid_upto) < today:
-                frappe.throw(_("Coupon {0} has expired").format(coupon_code))
-
-            if coupon.coupon_type == "Gift Card":
-                if coupon.used:
-                    frappe.throw(_("Gift card {0} has already been used").format(coupon_code))
-            else:
-                if coupon.maximum_use and coupon.maximum_use > 0 and (coupon.used or 0) >= coupon.maximum_use:
-                    frappe.throw(_("Coupon {0} has reached its usage limit").format(coupon_code))
-
-            invoice_doc.coupon_code = coupon_code
+                # Store coupon code on invoice for tracking
+                invoice_doc.coupon_code = coupon_code
 
         # ERPNext might overwrite remarks for Returns during validation. Reinforce it.
         frontend_remarks = data.get("remarks")
@@ -1873,17 +1861,19 @@ def submit_invoice(invoice=None, data=None):
                         "allocated_percentage": member.get("allocated_percentage", 0),
                     })
 
-        # Increment Coupon Code usage counter on submit
+        # Handle POS Coupon if coupon_code is provided
         coupon_code = invoice.get("coupon_code") or data.get("coupon_code")
         if coupon_code:
-            try:
-                coupon_doc = frappe.get_doc("Coupon Code", {"coupon_code": coupon_code})
-                coupon_doc.db_set("used", (coupon_doc.used or 0) + 1)
-            except Exception as e:
-                frappe.log_error(
-                    title="Failed to increment coupon usage",
-                    message=f"Coupon: {coupon_code}, Error: {str(e)}"
-                )
+            # Increment usage counter for POS Coupon
+            if frappe.db.table_exists("POS Coupon"):
+                try:
+                    from pos_next.pos_next.doctype.pos_coupon.pos_coupon import increment_coupon_usage
+                    increment_coupon_usage(coupon_code)
+                except Exception as e:
+                    frappe.log_error(
+                        title="Failed to increment coupon usage",
+                        message=f"Coupon: {coupon_code}, Error: {str(e)}"
+                    )
 
         # Auto-set batch numbers for returns
         _auto_set_return_batches(invoice_doc)

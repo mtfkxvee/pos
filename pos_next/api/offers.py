@@ -706,7 +706,7 @@ def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: 
 
 @frappe.whitelist()
 def get_active_coupons(customer: str, company: str) -> List[Dict]:
-	"""Get active gift card coupons for a customer (legacy POS Coupon)"""
+	"""Get active gift card coupons for a customer"""
 	if not frappe.db.table_exists("POS Coupon"):
 		return []
 
@@ -726,14 +726,18 @@ def get_active_coupons(customer: str, company: str) -> List[Dict]:
 
 @frappe.whitelist()
 def validate_coupon(coupon_code: str, customer: str, company: str) -> Dict:
-	"""Validate a coupon code against ERPNext Coupon Code doctype"""
+	"""Validate a coupon code and return its details"""
+	if not frappe.db.table_exists("POS Coupon"):
+		return {"valid": False, "message": _("Coupons are not enabled")}
+
 	date = getdate()
 
+	# Fetch coupon with case-insensitive code matching
+	# Note: coupon_code field is unique, so we can fetch directly
 	coupon = frappe.db.get_value(
-		"Coupon Code",
-		{"coupon_code": coupon_code},
-		["name", "coupon_code", "coupon_name", "coupon_type", "pricing_rule",
-		 "valid_from", "valid_upto", "maximum_use", "used", "description", "disabled"],
+		"POS Coupon",
+		{"coupon_code": coupon_code, "company": company},
+		["*"],
 		as_dict=1
 	)
 
@@ -748,54 +752,22 @@ def validate_coupon(coupon_code: str, customer: str, company: str) -> Dict:
 		if coupon.used:
 			return {"valid": False, "message": _("This gift card has already been used")}
 	else:
-		if coupon.maximum_use and coupon.maximum_use > 0 and coupon.used >= coupon.maximum_use:
+		# Promotional coupons
+		if coupon.maximum_use > 0 and coupon.used >= coupon.maximum_use:
 			return {"valid": False, "message": _("This coupon has reached its usage limit")}
 
 	# Check validity dates
-	if coupon.valid_from and getdate(coupon.valid_from) > date:
+	if coupon.valid_from and coupon.valid_from > date:
 		return {"valid": False, "message": _("This coupon is not yet valid")}
 
-	if coupon.valid_upto and getdate(coupon.valid_upto) < date:
+	if coupon.valid_upto and coupon.valid_upto < date:
 		return {"valid": False, "message": _("This coupon has expired")}
 
-	# Fetch linked Pricing Rule
-	if not coupon.pricing_rule:
-		return {"valid": False, "message": _("This coupon has no pricing rule configured")}
-
-	pricing_rule = frappe.db.get_value(
-		"Pricing Rule",
-		coupon.pricing_rule,
-		["name", "disable", "discount_percentage", "discount_amount",
-		 "rate", "apply_discount_on", "min_amt", "max_discount",
-		 "price_or_product_discount"],
-		as_dict=1
-	)
-
-	if not pricing_rule:
-		return {"valid": False, "message": _("Pricing rule not found for this coupon")}
-
-	if pricing_rule.disable:
-		return {"valid": False, "message": _("This coupon's pricing rule is disabled")}
-
-	discount_type = "Percentage" if (pricing_rule.discount_percentage or 0) > 0 else "Amount"
+	# Check customer restriction
+	if coupon.customer and coupon.customer != customer:
+		return {"valid": False, "message": _("This coupon is not valid for this customer")}
 
 	return {
 		"valid": True,
-		"coupon": {
-			"coupon_code": coupon.coupon_code,
-			"coupon_name": coupon.coupon_name,
-			"coupon_type": coupon.coupon_type,
-			"pricing_rule": coupon.pricing_rule,
-			"valid_from": str(coupon.valid_from) if coupon.valid_from else None,
-			"valid_upto": str(coupon.valid_upto) if coupon.valid_upto else None,
-			"maximum_use": coupon.maximum_use or 0,
-			"used": coupon.used or 0,
-			"description": coupon.description,
-			"discount_type": discount_type,
-			"discount_percentage": pricing_rule.discount_percentage or 0,
-			"discount_amount": pricing_rule.discount_amount or 0,
-			"min_amount": pricing_rule.min_amt or 0,
-			"max_amount": pricing_rule.max_discount or 0,
-			"apply_on": pricing_rule.apply_discount_on or "Grand Total",
-		}
+		"coupon": coupon
 	}
