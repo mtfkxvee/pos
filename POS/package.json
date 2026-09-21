@@ -1,7 +1,7 @@
 {
 	"name": "pos-next-frontend",
 	"private": true,
-	"version": "2.2.86",
+	"version": "2.2.87",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",

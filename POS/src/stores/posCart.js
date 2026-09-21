@@ -2028,7 +2028,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			if (!validateOffersOffline()) {
 				applyOffersOffline()
 			}
-			offerProcessingState.value.lastCartHash = generateCartHash()
+			// Use hash captured at START so a cart change during async processing
+			// doesn't cause the next trigger to be skipped (the cart that was processed
+			// was currentHash, not whatever generateCartHash() returns now).
+			offerProcessingState.value.lastCartHash = currentHash
 			offerProcessingState.value.lastProcessedAt = Date.now()
 			return
 		}
@@ -2061,8 +2064,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		// Auto-apply eligible offers (always check for new eligible offers)
 		await autoApplyEligibleOffers(currentProfile, signal)
 
-		// Update last processed hash on success
-		offerProcessingState.value.lastCartHash = generateCartHash()
+		// Use hash captured at START (not generateCartHash() at end) so a cart change
+		// that arrived during this async processing is not silently skipped by the next
+		// trigger — the next run will see its hash differs from currentHash and will process.
+		offerProcessingState.value.lastCartHash = currentHash
 		offerProcessingState.value.lastProcessedAt = Date.now()
 		offerProcessingState.value.retryCount = 0
 	}
