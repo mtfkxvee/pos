@@ -280,7 +280,11 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
 		}
 	)
 
-	res = erpnext_get_item_details(args, doc)
+	# overwrite_warehouse=False is required for args.warehouse above to actually
+	# take effect — ERPNext's default (True) unconditionally replaces it with the
+	# Item's own default warehouse (see get_item_warehouse()), silently discarding
+	# the POS Profile warehouse we just set.
+	res = erpnext_get_item_details(args, doc, overwrite_warehouse=False)
 
 	if item.get("is_stock_item") and warehouse:
 		res["actual_qty"] = get_stock_availability(item_code, warehouse)
