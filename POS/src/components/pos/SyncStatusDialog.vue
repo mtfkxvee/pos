@@ -98,6 +98,54 @@
 							{{ isSyncingCustomers ? __('Updating...') : __('Update Customers') }}
 						</button>
 					</div>
+
+					<!-- Promo Sync -->
+					<div class="p-4 border border-gray-100 rounded-xl hover:border-blue-100 transition-colors">
+						<div class="flex items-center justify-between mb-2">
+							<div class="flex items-center gap-2">
+								<TagIcon class="w-5 h-5 text-gray-400" />
+								<span class="font-medium text-gray-900">{{ __('Promo') }}</span>
+							</div>
+							<StatusBadge :status="getPromoSyncStatus" />
+						</div>
+						<div class="text-sm text-gray-500">
+							<p>{{ __('Loaded:') }} <span class="font-mono font-medium text-gray-900">{{ formatNumber(offersStore.availableOffers.length) }}</span></p>
+							<p class="text-xs mt-1 text-gray-400">{{ __('Pricing rules & discounts') }}</p>
+						</div>
+						<button
+							v-if="!isOffline"
+							@click="handleRefreshPromo"
+							:disabled="isRefreshingPromo"
+							class="mt-3 w-full py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+						>
+							<ArrowPathIcon v-if="isRefreshingPromo" class="w-3 h-3 animate-spin" />
+							{{ isRefreshingPromo ? __('Refreshing...') : __('Refresh Promo') }}
+						</button>
+					</div>
+
+					<!-- Payment Methods Sync -->
+					<div class="p-4 border border-gray-100 rounded-xl hover:border-blue-100 transition-colors">
+						<div class="flex items-center justify-between mb-2">
+							<div class="flex items-center gap-2">
+								<CreditCardIcon class="w-5 h-5 text-gray-400" />
+								<span class="font-medium text-gray-900">{{ __('Payment Methods') }}</span>
+							</div>
+							<StatusBadge :status="getPaymentSyncStatus" />
+						</div>
+						<div class="text-sm text-gray-500">
+							<p>{{ __('Last synced:') }} {{ formatLastSync(cacheStats?.paymentMethodsLastSync) }}</p>
+							<p class="text-xs mt-1 text-gray-400">{{ __('Modes of payment') }}</p>
+						</div>
+						<button
+							v-if="!isOffline"
+							@click="handleRefreshPaymentMethods"
+							:disabled="isRefreshingPayment"
+							class="mt-3 w-full py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+						>
+							<ArrowPathIcon v-if="isRefreshingPayment" class="w-3 h-3 animate-spin" />
+							{{ isRefreshingPayment ? __('Refreshing...') : __('Refresh Metode Bayar') }}
+						</button>
+					</div>
 				</div>
 
 				<!-- Pending Invoices -->
@@ -147,10 +195,14 @@ import {
 	CubeIcon,
 	UserGroupIcon,
 	DocumentTextIcon,
+	TagIcon,
+	CreditCardIcon,
 } from "@heroicons/vue/24/outline"
 import StatusBadge from "@/components/common/StatusBadge.vue"
 import { useToast } from "@/composables/useToast"
 import { offlineWorker } from "@/utils/offline/workerClient"
+import { usePOSOffersStore } from "@/stores/posOffers"
+import { cachePaymentMethodsFromServer } from "@/utils/offline"
 
 const props = defineProps({
 	isOffline: Boolean,
@@ -168,10 +220,13 @@ const emit = defineEmits([
 	"view-pending",
 ])
 const { showSuccess, showError } = useToast()
+const offersStore = usePOSOffersStore()
 
 const isSyncingItems = ref(false)
 const isSyncingCustomers = ref(false)
 const isSyncingPending = ref(false)
+const isRefreshingPromo = ref(false)
+const isRefreshingPayment = ref(false)
 
 const getItemSyncStatus = computed(() => {
 	if (isSyncingItems.value) return "syncing"
@@ -182,6 +237,18 @@ const getItemSyncStatus = computed(() => {
 const getCustomerSyncStatus = computed(() => {
 	if (isSyncingCustomers.value) return "syncing"
 	if (props.cacheStats?.customers > 0) return "synced"
+	return "pending"
+})
+
+const getPromoSyncStatus = computed(() => {
+	if (isRefreshingPromo.value) return "syncing"
+	if (offersStore.hasFetched) return "synced"
+	return "pending"
+})
+
+const getPaymentSyncStatus = computed(() => {
+	if (isRefreshingPayment.value) return "syncing"
+	if (props.cacheStats?.paymentMethodsLastSync) return "synced"
 	return "pending"
 })
 
@@ -235,5 +302,37 @@ async function handleSyncPending() {
 	} finally {
 		isSyncingPending.value = false
 	}
+}
+
+function handleRefreshPromo() {
+	if (isRefreshingPromo.value) return
+	isRefreshingPromo.value = true
+	offersStore.hasFetched = false
+	offersStore
+		.ensureOffersFetched(props.posProfile)
+		.then(() => {
+			showSuccess(__("Promo updated"))
+		})
+		.catch(() => {
+			showError(__("Failed to refresh promo"))
+		})
+		.finally(() => {
+			isRefreshingPromo.value = false
+		})
+}
+
+function handleRefreshPaymentMethods() {
+	if (isRefreshingPayment.value) return
+	isRefreshingPayment.value = true
+	cachePaymentMethodsFromServer(props.posProfile)
+		.then(() => {
+			showSuccess(__("Payment methods updated"))
+		})
+		.catch(() => {
+			showError(__("Failed to refresh payment methods"))
+		})
+		.finally(() => {
+			isRefreshingPayment.value = false
+		})
 }
 </script>

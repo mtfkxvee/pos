@@ -1215,6 +1215,7 @@ async function getCacheStats() {
 			queuedInvoices,
 			lastSyncSetting,
 			customersLastSyncSetting,
+			paymentMethodsLastSyncSetting,
 		] = await Promise.all([
 			db.table("items").count(),
 			// Count variant items (have non-empty variant_of field)
@@ -1227,6 +1228,7 @@ async function getCacheStats() {
 			getOfflineInvoiceCount(),
 			db.table("settings").get("items_last_sync"),
 			db.table("settings").get("customers_last_sync"),
+			db.table("settings").get("payment_methods_last_sync"),
 		])
 		// Exclude variants from display count (they're cached for template item lookups)
 		const itemCount = totalCount - variantCount
@@ -1238,6 +1240,7 @@ async function getCacheStats() {
 			cacheReady: itemCount > 0,
 			lastSync: lastSyncSetting?.value || null,
 			customersLastSync: customersLastSyncSetting?.value || null,
+			paymentMethodsLastSync: paymentMethodsLastSyncSetting?.value || null,
 		}
 	} catch (error) {
 		log.error("Error getting cache stats", error)
