@@ -272,6 +272,11 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
 			"price_list_currency": item.get("price_list_currency"),
 			"plc_conversion_rate": item.get("plc_conversion_rate"),
 			"conversion_rate": item.get("conversion_rate"),
+			# Without this, ERPNext falls back to the Item's own default warehouse
+			# instead of the POS Profile's selling warehouse, so warehouse-scoped
+			# Pricing Rules resolve differently than the get_items() list path
+			# (which is always scoped to the profile's warehouse).
+			"warehouse": warehouse,
 		}
 	)
 

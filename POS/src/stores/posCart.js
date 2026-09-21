@@ -606,14 +606,19 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				// net_total correctly from rate × qty (not from price_list_rate).
 				// Without this, item.rate stays at full price and the item-level
 				// discount is lost in the submitted invoice.
+				//
+				// Prefer discount_amount (a LINE TOTAL) over discount_percentage when both
+				// are present: when apply_offers stacks multiple pricing rules on one item,
+				// discount_amount always reflects the combined total, but discount_percentage
+				// can lag behind at an earlier rule's value (see apply_offers backend) — using
+				// amount first avoids pricing off that stale, smaller percentage.
 				const plr = item.price_list_rate || item.rate
-				if (discountPct > 0) {
-					item.rate = roundCurrency(plr * (1 - discountPct / 100))
-				} else if (discountAmt > 0) {
-					// apply_offers returns discount_amount as a LINE TOTAL (price_list_rate × qty × pct).
+				if (discountAmt > 0) {
 					// Divide by qty to get per-unit discount before computing item.rate.
 					const qty = item.quantity || item.qty || 1
 					item.rate = roundCurrency(Math.max(0, plr - discountAmt / qty))
+				} else if (discountPct > 0) {
+					item.rate = roundCurrency(plr * (1 - discountPct / 100))
 				}
 			}
 			// Otherwise preserve existing manual discount

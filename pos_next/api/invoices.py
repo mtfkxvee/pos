@@ -4136,10 +4136,20 @@ def apply_offers(invoice_data, selected_offers=None):
                             price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
                             qty = flt(item_doc.get("qty") or 0)
                             if full_rule.discount_percentage:
-                                item_doc.discount_percentage = flt(item_doc.discount_percentage or 0) + flt(full_rule.discount_percentage)
                                 item_doc.discount_amount = flt(item_doc.discount_amount or 0) + price_list_rate * qty * flt(full_rule.discount_percentage) / 100
                             elif full_rule.discount_amount:
                                 item_doc.discount_amount = flt(item_doc.discount_amount or 0) + flt(full_rule.discount_amount) * qty
+                            # Re-derive discount_percentage from the running discount_amount total
+                            # (rather than accumulating raw percentages) so it always reflects
+                            # every stacked rule. Without this, a rule already resolved by
+                            # ERPNext's own engine (which sets discount_percentage for the
+                            # winning rule before this loop stacks additional rules on top via
+                            # discount_amount) leaves discount_percentage stuck at the first
+                            # rule's value while discount_amount correctly grows — the frontend
+                            # then prices off the stale, smaller discount_percentage.
+                            base_amount = price_list_rate * qty
+                            if base_amount:
+                                item_doc.discount_percentage = flt(item_doc.discount_amount) / base_amount * 100
                             # Append rule name to item's pricing_rules string
                             existing = item_doc.pricing_rules or ""
                             item_doc.pricing_rules = (existing + "," + rule_name).strip(",")
