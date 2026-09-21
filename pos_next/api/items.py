@@ -16,7 +16,6 @@ ITEM_RESULT_FIELDS = [
 	"item_name",
 	"description",
 	"stock_uom",
-	"image",
 	"is_stock_item",
 	"has_batch_no",
 	"has_serial_no",
