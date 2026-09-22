@@ -3036,6 +3036,7 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
             si.grand_total,
             si.paid_amount,
             si.outstanding_amount,
+            si.status,
             si.customer,
             si.customer_name,
             si.net_total,
@@ -3121,11 +3122,17 @@ def prepare_return_invoice(invoice_name, pos_opening_shift=None):
     ).run(as_dict=True)
 
     # Include original invoice data for reference (payments, amounts, etc.)
+    # grand_total/outstanding_amount/status are queried fresh above (not cached),
+    # so this reflects the invoice's real payment state right now — including
+    # any piutang collected after the original sale via the AR-collection flow
+    # (pos_next.api.partial_payments), which the frontend uses to decide whether
+    # a return should refund cash or reduce the outstanding receivable.
     return_dict["_original_invoice"] = {
         "name": invoice_name,
         "grand_total": invoice_info.grand_total,
         "paid_amount": invoice_info.paid_amount,
         "outstanding_amount": invoice_info.outstanding_amount,
+        "status": invoice_info.status,
         "customer": invoice_info.customer,
         "customer_name": invoice_info.customer_name,
         "posting_date": invoice_info.posting_date,
