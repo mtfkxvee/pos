@@ -106,6 +106,23 @@
 			</div>
 		</button>
 
+		<!-- Online Order -->
+		<button
+			@click="handleMenuClick('online_orders')"
+			:class="[
+				'w-12 h-12 rounded-lg flex items-center justify-center transition-all relative group',
+				activeMenu === 'online_orders'
+					? 'bg-orange-100 text-orange-600'
+					: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+			]"
+			:title="__('Online Order')"
+		>
+			<GlobeAltIcon class="w-6 h-6" />
+			<div class="absolute start-full ms-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+				{{ __('Online Order') }}
+			</div>
+		</button>
+
 		<!-- Spacer -->
 		<div class="flex-1"></div>
 
@@ -143,6 +160,7 @@ import {
 	BookOpenIcon,
 	ClipboardDocumentCheckIcon,
 	TruckIcon,
+	GlobeAltIcon,
 } from "@heroicons/vue/24/outline"
 
 defineProps({

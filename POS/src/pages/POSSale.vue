@@ -725,6 +725,14 @@
 				:currency="shiftStore.profileCurrency"
 			/>
 
+			<!-- Online Order -->
+			<OnlineOrderManagement
+				v-model="showOnlineOrders"
+				:pos-profile="shiftStore.profileName"
+				:pos-opening-shift="shiftStore.currentShift?.name"
+				:currency="shiftStore.profileCurrency"
+			/>
+
 			<!-- Invoice Management -->
 			<InvoiceManagement
 				v-model="showInvoiceManagement"
@@ -1153,6 +1161,7 @@ import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import JournalEntryManagement from "@/components/journal/JournalEntryManagement.vue";
 import POSClosingManagement from "@/components/journal/POSClosingManagement.vue";
 import DeliveryNoteManagement from "@/components/journal/DeliveryNoteManagement.vue";
+import OnlineOrderManagement from "@/components/journal/OnlineOrderManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -1292,6 +1301,7 @@ const showInvoiceManagement = ref(false);
 const showJournalEntry = ref(false);
 const showPOSClosing = ref(false);
 const showDeliveryNotes = ref(false);
+const showOnlineOrders = ref(false);
 
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
@@ -3391,6 +3401,8 @@ function handleManagementMenuClick(menuItem) {
 		showPOSClosing.value = true;
 	} else if (menuItem === "delivery_notes") {
 		showDeliveryNotes.value = true;
+	} else if (menuItem === "online_orders") {
+		showOnlineOrders.value = true;
 	}
 }
 
