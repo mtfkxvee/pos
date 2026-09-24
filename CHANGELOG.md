@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.88] - 2026-09-25
+
+### Added
+- **Menu Online Order**
+  - Menu baru di sidebar untuk melihat Sales Order yang masuk ke outlet (difilter dari `custom_outlet` POS Profile), klik untuk lihat detail item & data pembayaran
+  - Tombol **Siapkan**: bikin Sales Invoice dari Sales Order via `make_sales_invoice`, payment otomatis terisi dari `custom_payment_method`/`custom_payment_amount` di Sales Order
+  - Tombol **Kirim**: bikin Delivery Request (doctype dari `courier_app`) berisi data pelanggan, alamat, produk, dan metode pembayaran hasil pemetaan otomatis — murni untuk tracking pengiriman, tidak terhubung sebagai dokumen akuntansi
+
+### Changed
+- **Sidebar Delivery Note → Delivery Request**
+  - Menu yang sebelumnya menampilkan daftar Sales Invoice dengan alamat kirim, sekarang menampilkan daftar Delivery Request asli yang sudah dibuat, difilter per outlet
+
+### Fixed
+- **Retur pada invoice piutang yang sudah lunas — salah potong piutang, bukan refund tunai**
+  - Klasifikasi "credit sale" saat retur sebelumnya berdasarkan tabel `payments` Sales Invoice yang bisa basi ketika piutang dilunasi lewat alur pelunasan AR terpisah (Payment Entry, tidak menyentuh tabel tersebut)
+  - Perbaikan: klasifikasi sekarang murni berdasarkan `outstanding_amount` segar dari server saat tombol Retur diklik — invoice yang sudah lunas (walau awalnya piutang) sekarang benar mendapat refund tunai
+- **Tombol Kirim di Online Order tidak terlihat**
+  - Warna `sky`/`indigo` yang dipakai tidak terdaftar di palet Tailwind kustom project ini (`frappe-ui` preset), sehingga class warna tidak menghasilkan CSS apa pun — tombol tetap ada & bisa diklik tapi tidak kelihatan
+  - Diganti ke `blue`/`violet` yang valid di palet
+
 ## [2.2.34] - 2026-08-02
 
 ### Fixed

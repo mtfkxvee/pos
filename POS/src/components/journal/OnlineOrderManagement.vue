@@ -163,7 +163,7 @@
 								<button
 									@click="handleSend"
 									:disabled="!selectedOrder.sales_invoice || sending"
-									class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed"
+									class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
 								>
 									<TruckIcon class="w-4 h-4" />
 									{{ sending ? __('Mengirim...') : (lastDeliveryRequest ? __('Kirim Lagi') : __('Kirim')) }}

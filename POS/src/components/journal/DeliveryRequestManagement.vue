@@ -11,7 +11,7 @@
 					<!-- Header -->
 					<div class="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
 						<div class="flex items-center gap-3">
-							<TruckIcon class="w-5 h-5 text-sky-600" />
+							<TruckIcon class="w-5 h-5 text-blue-600" />
 							<div>
 								<h2 class="text-lg font-semibold text-gray-900">{{ __('Delivery Request') }}</h2>
 								<p class="text-sm text-gray-500">{{ __('Daftar permintaan pengiriman untuk outlet ini') }}</p>
@@ -71,7 +71,7 @@
 							</tbody>
 						</table>
 						<div v-if="hasMore" class="flex justify-center py-4">
-							<button @click="loadMore" class="text-sm text-sky-600 hover:text-sky-700 font-medium">
+							<button @click="loadMore" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
 								{{ __('Load more') }}
 							</button>
 						</div>
@@ -128,7 +128,7 @@ function statusBadgeClass(status) {
 	const map = {
 		"Pending": "bg-amber-100 text-amber-700",
 		"Ditugaskan": "bg-blue-100 text-blue-700",
-		"Dalam Perjalanan": "bg-indigo-100 text-indigo-700",
+		"Dalam Perjalanan": "bg-violet-100 text-violet-700",
 		"Terkirim": "bg-green-100 text-green-700",
 		"Gagal": "bg-red-100 text-red-700",
 	}
