@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.89] - 2026-09-25
+
+### Added
+- **Online Order — Koordinat & tautan Delivery Request**
+  - Tombol **Siapkan**: Sales Invoice sekarang ikut membawa `custom_latitude`/`custom_longitude` dari Sales Order
+  - Tombol **Kirim**: Delivery Request sekarang ikut membawa `delivery_latitude`/`delivery_longitude` dari Sales Invoice, plus mengisi `delivery_type` dan link `sales_invoice` (field yang sudah ada di doctype Delivery Request)
+  - Kategori Pelanggan di Delivery Request otomatis terisi dari Customer Group pelanggan
+  - Tombol Kirim disable permanen setelah terkirim (tidak lagi bisa "Kirim Lagi")
+  - Badge notifikasi jumlah online order yang belum di-invoice muncul di ikon sidebar
+  - Detail Delivery Request sekarang bisa dibuka & diedit langsung dari list
+
+### Fixed
+- **Status "sudah dikirim" pada Online Order tidak persisten**
+  - Sebelumnya status ini cuma tersimpan di sesi tampilan (hilang saat dialog ditutup-buka lagi) karena Delivery Request belum punya link balik ke Sales Invoice
+  - Sekarang memakai field `sales_invoice` (Link) yang sudah tersedia di Delivery Request — status tersimpan permanen di server, dan pembuatan Delivery Request ganda untuk invoice yang sama otomatis ditolak
+
 ## [2.2.88] - 2026-09-25
 
 ### Added
