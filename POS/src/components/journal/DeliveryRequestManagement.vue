@@ -124,10 +124,14 @@
 								</div>
 							</div>
 
-							<div class="grid grid-cols-2 gap-4">
+							<div class="grid grid-cols-3 gap-4">
 								<div>
 									<label class="block text-xs text-gray-500 mb-1">{{ __('Nama Pelanggan') }}</label>
 									<input v-model="form.customer_name" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" required />
+								</div>
+								<div>
+									<label class="block text-xs text-gray-500 mb-1">{{ __('Kategori Pelanggan') }}</label>
+									<input v-model="form.customer_category" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="MEMBER, UMUM" />
 								</div>
 								<div>
 									<label class="block text-xs text-gray-500 mb-1">{{ __('No. Telepon') }}</label>

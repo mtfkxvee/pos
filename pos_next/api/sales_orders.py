@@ -268,7 +268,12 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 
 	so = frappe.get_doc("Sales Order", sales_order)
 
-	phone = so.contact_mobile or frappe.db.get_value("Customer", so.customer, "mobile_no") or ""
+	customer = so.customer or si.customer
+	customer_info = frappe.db.get_value(
+		"Customer", customer, ["mobile_no", "customer_group"], as_dict=True
+	) or {}
+
+	phone = so.contact_mobile or customer_info.get("mobile_no") or ""
 	address_street = _build_address_street(so.shipping_address_name or so.customer_address)
 
 	product_lines = [f"{flt(item.qty):g}x {item.item_name}" for item in si.items]
@@ -276,6 +281,7 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 	dr = frappe.new_doc("Delivery Request")
 	dr.outlet = outlet
 	dr.customer_name = so.customer_name or si.customer_name
+	dr.customer_category = customer_info.get("customer_group")
 	dr.phone = phone
 	dr.payment_method = _guess_delivery_request_payment_method(so.custom_payment_method)
 	dr.total_price = si.grand_total
