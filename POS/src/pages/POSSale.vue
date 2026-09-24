@@ -724,6 +724,7 @@
 				v-model="showDeliveryNotes"
 				:pos-profile="shiftStore.profileName"
 				:currency="shiftStore.profileCurrency"
+				:open-detail-name="deliveryRequestDetailToOpen"
 			/>
 
 			<!-- Online Order -->
@@ -747,6 +748,7 @@
 				@load-draft="handleLoadDraftFromManagement"
 				@delete-draft="handleDeleteDraft"
 				@refresh-history="draftsStore.loadDrafts"
+				@delivery-request-created="handleDeliveryRequestCreated"
 			/>
 
 			<!-- Invoice Detail Dialog -->
@@ -1304,6 +1306,7 @@ const showPOSClosing = ref(false);
 const showDeliveryNotes = ref(false);
 const showOnlineOrders = ref(false);
 const pendingOnlineOrderCount = ref(0);
+const deliveryRequestDetailToOpen = ref("");
 
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
@@ -3429,6 +3432,19 @@ watch(() => shiftStore.profileName, (profile) => {
 // inside it may have reduced how many orders are still pending).
 watch(showOnlineOrders, (isOpen, wasOpen) => {
 	if (!isOpen && wasOpen) loadPendingOnlineOrderCount();
+});
+
+// Opens the Delivery Request popup straight at the just-created record, so
+// the outlet team can fill in delivery location/details right away.
+function handleDeliveryRequestCreated(deliveryRequestName) {
+	deliveryRequestDetailToOpen.value = deliveryRequestName;
+	showDeliveryNotes.value = true;
+}
+
+// Clear the "open straight to this detail" target once the dialog is closed,
+// so a normal sidebar click next time opens the list as usual.
+watch(showDeliveryNotes, (isOpen, wasOpen) => {
+	if (!isOpen && wasOpen) deliveryRequestDetailToOpen.value = "";
 });
 
 // Load invoice history data

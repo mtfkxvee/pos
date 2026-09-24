@@ -311,6 +311,64 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 
 
 @frappe.whitelist()
+def create_delivery_request_from_sales_invoice(sales_invoice, pos_profile):
+	"""Create a bare-bones Delivery Request straight from a (regular, walk-in)
+	Sales Invoice — used by the "Buat Delivery Request" action in Invoice
+	History, where there is no originating Sales Order to pull address/payment
+	details from. Only what's reliably known (customer, totals, coordinates)
+	is filled in; the outlet team fills in the rest (address, driver, etc.)
+	in the edit popup shown right after this call.
+	"""
+	if not sales_invoice:
+		frappe.throw(_("Sales Invoice is required"))
+
+	_check_pos_profile_access(pos_profile)
+	outlet = _get_pos_profile_outlet(pos_profile)
+
+	si = frappe.get_doc("Sales Invoice", sales_invoice)
+	if si.docstatus != 1:
+		frappe.throw(_("Sales Invoice must be submitted before creating a delivery request"))
+	if si.pos_profile != pos_profile:
+		frappe.throw(_("This invoice does not belong to your outlet"))
+
+	existing = frappe.db.get_value("Delivery Request", {"sales_invoice": sales_invoice})
+	if existing:
+		frappe.throw(_("A Delivery Request ({0}) already exists for this invoice").format(existing))
+
+	customer_info = frappe.db.get_value(
+		"Customer", si.customer, ["mobile_no", "customer_group"], as_dict=True
+	) or {}
+
+	# Prefer the largest payment row's mode of payment as the guess (a POS sale
+	# can have a "Cash" row plus a "wallet" or rounding-adjustment row).
+	payment_mode = None
+	if si.payments:
+		payment_mode = max(si.payments, key=lambda p: abs(flt(p.amount))).mode_of_payment
+
+	product_lines = [f"{flt(item.qty):g}x {item.item_name}" for item in si.items]
+
+	dr = frappe.new_doc("Delivery Request")
+	dr.outlet = outlet
+	dr.delivery_type = "Sales Invoice"
+	dr.sales_invoice = sales_invoice
+	dr.customer_name = si.customer_name
+	dr.customer_category = customer_info.get("customer_group")
+	dr.phone = si.contact_mobile or customer_info.get("mobile_no") or ""
+	dr.payment_method = _guess_delivery_request_payment_method(payment_mode)
+	dr.total_price = si.grand_total
+	dr.address_street = _build_address_street(si.customer_address)
+	dr.delivery_latitude = si.custom_latitude
+	dr.delivery_longitude = si.custom_longitude
+	dr.product_purchased = ", ".join(product_lines)
+	dr.product_qty = sum(flt(item.qty) for item in si.items)
+	dr.notes = _("Invoice: {0}").format(sales_invoice)
+
+	dr.insert(ignore_permissions=False)
+
+	return {"delivery_request": dr.name}
+
+
+@frappe.whitelist()
 def get_delivery_requests(pos_profile, page_size=20, page=1):
 	"""List Delivery Requests for the outlet linked to this POS Profile, newest first."""
 	_check_pos_profile_access(pos_profile, doctype="Delivery Request")
@@ -340,6 +398,7 @@ _DELIVERY_REQUEST_EDITABLE_FIELDS = [
 	"customer_name", "customer_category", "phone",
 	"payment_method", "total_price",
 	"address_street", "address_landmark", "rt_rw", "village", "district",
+	"delivery_latitude", "delivery_longitude",
 	"item_location_note", "product_purchased", "product_qty",
 	"notes", "issues",
 ]

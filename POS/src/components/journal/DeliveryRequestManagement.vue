@@ -146,6 +146,10 @@
 
 							<div class="grid grid-cols-3 gap-4">
 								<div>
+									<label class="block text-xs text-gray-500 mb-1">{{ __('Patokan/No. Rumah') }}</label>
+									<input v-model="form.address_landmark" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" />
+								</div>
+								<div>
 									<label class="block text-xs text-gray-500 mb-1">{{ __('RT/RW') }}</label>
 									<input v-model="form.rt_rw" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" />
 								</div>
@@ -153,11 +157,32 @@
 									<label class="block text-xs text-gray-500 mb-1">{{ __('Desa') }}</label>
 									<input v-model="form.village" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" />
 								</div>
+							</div>
+
+							<div class="grid grid-cols-3 gap-4">
 								<div>
 									<label class="block text-xs text-gray-500 mb-1">{{ __('Kecamatan') }}</label>
 									<input v-model="form.district" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" />
 								</div>
+								<div>
+									<label class="block text-xs text-gray-500 mb-1">{{ __('Latitude') }}</label>
+									<input v-model.number="form.delivery_latitude" type="number" step="any" class="w-full border rounded-lg px-3 py-2 text-sm" />
+								</div>
+								<div>
+									<label class="block text-xs text-gray-500 mb-1">{{ __('Longitude') }}</label>
+									<input v-model.number="form.delivery_longitude" type="number" step="any" class="w-full border rounded-lg px-3 py-2 text-sm" />
+								</div>
 							</div>
+
+							<a
+								v-if="form.delivery_latitude && form.delivery_longitude"
+								:href="`https://www.google.com/maps?q=${form.delivery_latitude},${form.delivery_longitude}`"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+							>
+								{{ __('Buka lokasi di Google Maps') }} →
+							</a>
 
 							<div class="grid grid-cols-2 gap-4">
 								<div>
@@ -215,6 +240,11 @@ const props = defineProps({
 	modelValue: Boolean,
 	posProfile: { type: String, default: "" },
 	currency: { type: String, default: "IDR" },
+	// When set, opening the dialog jumps straight to this record's detail/edit
+	// view instead of the list — used right after creating a Delivery Request
+	// from Invoice History, so the outlet team can fill in delivery details
+	// immediately.
+	openDetailName: { type: String, default: "" },
 })
 const emit = defineEmits(["update:modelValue"])
 const { showSuccess, showError } = useToast()
@@ -270,6 +300,9 @@ function backToList() {
 	view.value = "list"
 	selectedRequest.value = null
 	form.value = null
+	// If opened directly into detail (openDetailName), the list was never
+	// loaded — load it now so going back doesn't show an empty table.
+	if (entries.value.length === 0) loadEntries(true)
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -346,8 +379,12 @@ watch(
 	() => props.modelValue,
 	async (val) => {
 		if (val) {
-			view.value = "list"
-			await loadEntries(true)
+			if (props.openDetailName) {
+				await openDetail(props.openDetailName)
+			} else {
+				view.value = "list"
+				await loadEntries(true)
+			}
 		}
 	},
 )

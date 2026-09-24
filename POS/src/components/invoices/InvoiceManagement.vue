@@ -431,15 +431,27 @@
 												<span>{{ __('Print') }}</span>
 											</button>
 											<button
-												v-if="!invoice.custom_shipping_address"
-												@click="openDeliveryNoteDialog(invoice)"
-												class="px-3 py-2 text-xs font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors flex items-center gap-1"
-												:title="__('Buat Delivery Note')"
+												v-if="invoice.__deliveryRequestCreated"
+												disabled
+												class="px-3 py-2 text-xs font-semibold text-green-700 bg-green-50 rounded-lg flex items-center gap-1 opacity-75 cursor-not-allowed"
+												:title="__('Delivery Request Dibuat')"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+												</svg>
+												<span>{{ __('Delivery Request Dibuat') }}</span>
+											</button>
+											<button
+												v-else-if="!invoice.custom_shipping_address"
+												@click="handleCreateDeliveryRequest(invoice)"
+												:disabled="creatingDeliveryRequestFor === invoice.name"
+												class="px-3 py-2 text-xs font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+												:title="__('Buat Delivery Request')"
 											>
 												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5V8a2 2 0 012-2h7a2 2 0 012 2v8.5M3 16.5h11M3 16.5v1a1 1 0 001 1h1.5m9.5-2v-3h3.5a1.5 1.5 0 011.5 1.5v1.5a1 1 0 01-1 1h-1m-2 0a1.5 1.5 0 11-3 0m0 0a1.5 1.5 0 113 0M6.5 18.5a1.5 1.5 0 11-3 0 1.5 1.5 0 113 0z"/>
 												</svg>
-												<span>{{ __('Buat Delivery Note') }}</span>
+												<span>{{ creatingDeliveryRequestFor === invoice.name ? __('Membuat...') : __('Buat Delivery Request') }}</span>
 											</button>
 											<button
 												v-else
@@ -636,14 +648,6 @@
 		@payment-completed="handlePaymentCompleted"
 	/>
 
-	<!-- Delivery Note Address Dialog -->
-	<DeliveryNoteAddressDialog
-		v-model="showDeliveryNoteDialog"
-		:invoice-name="deliveryNoteTargetInvoice?.name"
-		:loading="deliveryNoteLoading"
-		@confirm="handleDeliveryNoteConfirm"
-	/>
-
 	<!-- Return Invoice Dialog -->
 	<ReturnInvoiceDialog
 		v-model="showReturnDialog"
@@ -657,7 +661,6 @@
 
 <script setup>
 import InvoiceFilters from "@/components/invoices/InvoiceFilters.vue"
-import DeliveryNoteAddressDialog from "@/components/invoices/DeliveryNoteAddressDialog.vue"
 import PaymentDialog from "@/components/sale/PaymentDialog.vue"
 import ReturnInvoiceDialog from "@/components/sale/ReturnInvoiceDialog.vue"
 import { useInvoiceFilters } from "@/composables/useInvoiceFilters"
@@ -715,6 +718,7 @@ const emit = defineEmits([
 	"delete-draft",
 	"refresh-history",
 	"return-created",
+	"delivery-request-created",
 ])
 
 const show = ref(props.modelValue)
@@ -897,17 +901,10 @@ const unpaidSummary = ref({
 const selectedInvoice = ref(null)
 const showPaymentDialog = ref(false)
 
-const showDeliveryNoteDialog = ref(false)
-const deliveryNoteTargetInvoice = ref(null)
-const deliveryNoteLoading = ref(false)
+const creatingDeliveryRequestFor = ref(null)
 
 const showReturnDialog = ref(false)
 const returnTargetInvoice = ref(null)
-
-function openDeliveryNoteDialog(invoice) {
-	deliveryNoteTargetInvoice.value = invoice
-	showDeliveryNoteDialog.value = true
-}
 
 function openReturnDialog(invoice) {
 	returnTargetInvoice.value = invoice
@@ -919,24 +916,25 @@ function handleReturnCreated(returnInvoice) {
 	loadHistoryPage(true)
 }
 
-async function handleDeliveryNoteConfirm(address) {
-	const invoice = deliveryNoteTargetInvoice.value
-	if (!invoice) return
-
-	deliveryNoteLoading.value = true
+async function handleCreateDeliveryRequest(invoice) {
+	if (creatingDeliveryRequestFor.value) return
+	creatingDeliveryRequestFor.value = invoice.name
 	try {
-		await call("pos_next.api.delivery_notes.set_delivery_address", {
-			invoice_name: invoice.name,
-			shipping_address: address,
+		const result = await call("pos_next.api.sales_orders.create_delivery_request_from_sales_invoice", {
+			sales_invoice: invoice.name,
+			pos_profile: props.posProfile,
 		})
-		invoice.custom_shipping_address = address
-		showSuccess(__("Delivery Note berhasil dibuat"))
-		showDeliveryNoteDialog.value = false
+		// Mark it so the row's action button doesn't try to create a duplicate.
+		invoice.__deliveryRequestCreated = true
+		showSuccess(__("Delivery Request {0} berhasil dibuat", [result.delivery_request]))
+		// Parent opens the Delivery Request edit popup so the outlet team can
+		// fill in the delivery location and other details right away.
+		emit("delivery-request-created", result.delivery_request)
 	} catch (e) {
-		log.error("Error creating delivery note:", e)
+		log.error("Error creating delivery request:", e)
 		showError(friendlyError(e))
 	} finally {
-		deliveryNoteLoading.value = false
+		creatingDeliveryRequestFor.value = null
 	}
 }
 

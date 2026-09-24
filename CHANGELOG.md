@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.90] - 2026-09-25
+
+### Changed
+- **Invoice History — "Buat Delivery Note" jadi "Buat Delivery Request"**
+  - Klik tombolnya sekarang langsung membuat Delivery Request asli (bukan cuma menyimpan alamat di invoice)
+  - Setelah dibuat, langsung muncul popup edit lengkap untuk tim outlet mengisi alamat, patokan, RT/RW, desa, kecamatan, **latitude/longitude** (dengan link ke Google Maps), driver, kendaraan, dan status pengiriman
+  - Tombol berubah jadi "Delivery Request Dibuat" (nonaktif) setelah selesai, mencegah pembuatan ganda
+
 ## [2.2.89] - 2026-09-25
 
 ### Added
