@@ -11,14 +11,15 @@ Link field. An order is only visible to / actionable from a POS Profile
 when their `custom_outlet` values match — this keeps online orders scoped
 to the outlet the cashier is currently logged into.
 
-Note on "Kirim" / Delivery Request: "Delivery Request" is a standalone
-courier-ops doctype (from the separate `courier_app`) with no link field
-back to Sales Order/Sales Invoice — it exists purely for the delivery/courier
-side to track a drop-off (driver, address, status), not as an accounting
-document. Once the Sales Invoice is created, the sale itself is already
-complete as far as ERPNext/accounting is concerned; the Delivery Request
-created here is best-effort denormalized data for tracking the delivery,
-not a strictly-linked system record.
+Note on "Kirim" / Delivery Request: "Delivery Request" is a courier-ops
+doctype (from the separate `courier_app`) used purely for the
+delivery/courier side to track a drop-off (driver, address, status) — not
+an accounting document. It does carry a `sales_invoice` Link field back to
+the Sales Invoice, which is used here both to populate delivery data
+(location, totals, etc.) and to detect/prevent duplicate Delivery Requests
+for the same invoice. The sale itself is already complete as far as
+ERPNext/accounting is concerned once the Sales Invoice exists — the
+Delivery Request is tracking data layered on top.
 """
 
 import frappe
@@ -108,16 +109,20 @@ def get_sales_order_detail(sales_order):
 	if so.pos_profile:
 		_check_pos_profile_access(so.pos_profile)
 
-	# Find whether a Sales Invoice already exists for this order, so the
-	# frontend can grey out "Siapkan" once already actioned. There is no
-	# reliable way to check "already sent" for Delivery Request (no link
-	# field back to this order — see module docstring), so "Kirim" is left
-	# repeatable and is tracked client-side for the current session only.
+	# Find whether a Sales Invoice / Delivery Request already exists for this
+	# order, so the frontend can grey out "Siapkan"/"Kirim" once already
+	# actioned — persisted server-side via Delivery Request's sales_invoice
+	# link, not just tracked for the current viewing session.
 	sales_invoice = frappe.db.get_value(
 		"Sales Invoice Item",
 		{"sales_order": sales_order, "docstatus": 1},
 		"parent",
 	)
+	delivery_request = None
+	if sales_invoice:
+		delivery_request = frappe.db.get_value(
+			"Delivery Request", {"sales_invoice": sales_invoice}, "name"
+		)
 
 	return {
 		"name": so.name,
@@ -148,6 +153,7 @@ def get_sales_order_detail(sales_order):
 			for item in so.items
 		],
 		"sales_invoice": sales_invoice,
+		"delivery_request": delivery_request,
 	}
 
 
@@ -187,6 +193,8 @@ def prepare_sales_invoice_from_order(sales_order, pos_profile, pos_opening_shift
 	si.pos_profile = pos_profile
 	if pos_opening_shift:
 		si.posa_pos_opening_shift = pos_opening_shift
+	si.custom_latitude = so.custom_latitude
+	si.custom_longitude = so.custom_longitude
 
 	si.set("payments", [])
 	si.append("payments", {
@@ -246,11 +254,10 @@ def _build_address_street(address_name, fallback_text=None):
 def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile):
 	"""'Kirim': create a Delivery Request (courier_app) for this order's delivery.
 
-	Delivery Request has no link field back to Sales Order/Sales Invoice — see
-	module docstring. This is denormalized, best-effort tracking data for the
-	delivery/courier side; the sale itself is already complete once the Sales
-	Invoice exists. Any missing detail (address, payment method) can be filled
-	in by hand afterwards on the Delivery Request itself.
+	Delivery Request is a courier-ops tracking doctype, not an accounting
+	document — the sale itself is already complete once the Sales Invoice
+	exists. It does have a `sales_invoice` Link field, which is used here to
+	both record the reference and detect duplicates.
 	"""
 	if not sales_order:
 		frappe.throw(_("Sales Order is required"))
@@ -266,6 +273,10 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 	if si.pos_profile != pos_profile:
 		frappe.throw(_("This invoice does not belong to your outlet"))
 
+	existing = frappe.db.get_value("Delivery Request", {"sales_invoice": sales_invoice})
+	if existing:
+		frappe.throw(_("A Delivery Request ({0}) already exists for this invoice").format(existing))
+
 	so = frappe.get_doc("Sales Order", sales_order)
 
 	customer = so.customer or si.customer
@@ -280,12 +291,16 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 
 	dr = frappe.new_doc("Delivery Request")
 	dr.outlet = outlet
+	dr.delivery_type = "Sales Invoice"
+	dr.sales_invoice = sales_invoice
 	dr.customer_name = so.customer_name or si.customer_name
 	dr.customer_category = customer_info.get("customer_group")
 	dr.phone = phone
 	dr.payment_method = _guess_delivery_request_payment_method(so.custom_payment_method)
 	dr.total_price = si.grand_total
 	dr.address_street = address_street
+	dr.delivery_latitude = si.custom_latitude
+	dr.delivery_longitude = si.custom_longitude
 	dr.product_purchased = ", ".join(product_lines)
 	dr.product_qty = sum(flt(item.qty) for item in si.items)
 	dr.notes = _("Online Order: {0} / Invoice: {1}").format(sales_order, sales_invoice)

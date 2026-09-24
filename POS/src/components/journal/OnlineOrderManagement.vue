@@ -213,9 +213,9 @@ const detailLoading = ref(false)
 const selectedOrder = ref(null)
 const preparing = ref(false)
 const sending = ref(false)
-// Delivery Request has no link field back to the Sales Order (see backend
-// module docstring), so "already sent" can only be tracked for the current
-// viewing session, not persisted/reloaded from the server.
+// Initialized from selectedOrder.delivery_request (server-side, via Delivery
+// Request's sales_invoice link) in openDetail(), then updated locally after
+// a successful "Kirim" — so "already sent" persists across reopens too.
 const lastDeliveryRequest = ref(null)
 
 // ── Sync v-model ──────────────────────────────────────────────────────────────
@@ -277,6 +277,7 @@ async function openDetail(name) {
 		selectedOrder.value = await call("pos_next.api.sales_orders.get_sales_order_detail", {
 			sales_order: name,
 		})
+		lastDeliveryRequest.value = selectedOrder.value?.delivery_request || null
 	} catch (e) {
 		showError(friendlyError(e, __("Failed to load order details.")))
 		view.value = "list"
