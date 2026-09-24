@@ -162,11 +162,11 @@
 								</button>
 								<button
 									@click="handleSend"
-									:disabled="!selectedOrder.sales_invoice || sending"
+									:disabled="!selectedOrder.sales_invoice || sending || !!lastDeliveryRequest"
 									class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
 								>
 									<TruckIcon class="w-4 h-4" />
-									{{ sending ? __('Mengirim...') : (lastDeliveryRequest ? __('Kirim Lagi') : __('Kirim')) }}
+									{{ sending ? __('Mengirim...') : (lastDeliveryRequest ? __('Sudah Dikirim') : __('Kirim')) }}
 								</button>
 								<p v-if="!selectedOrder.custom_payment_method && !selectedOrder.sales_invoice" class="text-xs text-amber-600">
 									{{ __('Order ini belum punya Metode Pembayaran, tidak bisa disiapkan.') }}

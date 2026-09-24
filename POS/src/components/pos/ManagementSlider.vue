@@ -118,6 +118,12 @@
 			:title="__('Online Order')"
 		>
 			<GlobeAltIcon class="w-6 h-6" />
+			<span
+				v-if="pendingOnlineOrderCount > 0"
+				class="absolute -top-1 -end-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+			>
+				{{ pendingOnlineOrderCount > 99 ? '99+' : pendingOnlineOrderCount }}
+			</span>
 			<div class="absolute start-full ms-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
 				{{ __('Online Order') }}
 			</div>
@@ -167,6 +173,10 @@ defineProps({
 	isSyncing: {
 		type: Boolean,
 		default: false,
+	},
+	pendingOnlineOrderCount: {
+		type: Number,
+		default: 0,
 	},
 })
 

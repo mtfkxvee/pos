@@ -82,6 +82,23 @@ def get_sales_orders(pos_profile, page_size=20, page=1, search_term=None):
 
 
 @frappe.whitelist()
+def get_pending_sales_orders_count(pos_profile):
+	"""Count Sales Orders for this outlet that haven't been invoiced yet
+	(per_billed < 100) — used for the "Online Order" sidebar badge."""
+	_check_pos_profile_access(pos_profile)
+	outlet = _get_pos_profile_outlet(pos_profile)
+
+	return frappe.db.count(
+		"Sales Order",
+		{
+			"custom_outlet": outlet,
+			"docstatus": 1,
+			"per_billed": ["<", 100],
+		},
+	)
+
+
+@frappe.whitelist()
 def get_sales_order_detail(sales_order):
 	"""Full Sales Order detail (header + items) for the Online Order detail view."""
 	if not sales_order:
@@ -293,3 +310,54 @@ def get_delivery_requests(pos_profile, page_size=20, page=1):
 		{"outlet": outlet, "page_size": int(page_size), "offset": offset},
 		as_dict=True,
 	)
+
+
+# Fields the Online Order UI is allowed to edit on a Delivery Request. Kept
+# to an explicit list rather than trusting the client with arbitrary fields.
+_DELIVERY_REQUEST_EDITABLE_FIELDS = [
+	"delivery_status", "driver", "vehicle_type",
+	"customer_name", "customer_category", "phone",
+	"payment_method", "total_price",
+	"address_street", "address_landmark", "rt_rw", "village", "district",
+	"item_location_note", "product_purchased", "product_qty",
+	"notes", "issues",
+]
+
+
+def _get_delivery_request_for_profile(name, pos_profile):
+	_check_pos_profile_access(pos_profile, doctype="Delivery Request")
+	outlet = _get_pos_profile_outlet(pos_profile)
+
+	dr = frappe.get_doc("Delivery Request", name)
+	if dr.outlet != outlet:
+		frappe.throw(_("This delivery request does not belong to your outlet"))
+	return dr
+
+
+@frappe.whitelist()
+def get_delivery_request_detail(name, pos_profile):
+	"""Full Delivery Request detail for the edit dialog."""
+	if not name:
+		frappe.throw(_("Delivery Request is required"))
+
+	dr = _get_delivery_request_for_profile(name, pos_profile)
+	return {field: dr.get(field) for field in ["name", "outlet", *_DELIVERY_REQUEST_EDITABLE_FIELDS]}
+
+
+@frappe.whitelist()
+def update_delivery_request(name, pos_profile, data):
+	"""Update editable fields on a Delivery Request (courier/ops tracking edits)."""
+	if not name:
+		frappe.throw(_("Delivery Request is required"))
+	if isinstance(data, str):
+		data = frappe.parse_json(data)
+
+	dr = _get_delivery_request_for_profile(name, pos_profile)
+
+	for field in _DELIVERY_REQUEST_EDITABLE_FIELDS:
+		if field in (data or {}):
+			dr.set(field, data[field])
+
+	dr.save(ignore_permissions=False)
+
+	return {field: dr.get(field) for field in ["name", "outlet", *_DELIVERY_REQUEST_EDITABLE_FIELDS]}

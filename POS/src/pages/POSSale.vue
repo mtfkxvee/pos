@@ -185,6 +185,7 @@
 			>
 				<!-- Icon-Only Management Slider - Always Visible -->
 				<ManagementSlider
+					:pending-online-order-count="pendingOnlineOrderCount"
 					@menu-clicked="handleManagementMenuClick"
 					@sync-clicked="handleSyncClick"
 				/>
@@ -1302,6 +1303,7 @@ const showJournalEntry = ref(false);
 const showPOSClosing = ref(false);
 const showDeliveryNotes = ref(false);
 const showOnlineOrders = ref(false);
+const pendingOnlineOrderCount = ref(0);
 
 // Discount auth dialog (rendered here, outside PaymentDialog, to avoid frappe-ui focus trap)
 const paymentDialogRef = ref(null);
@@ -3405,6 +3407,29 @@ function handleManagementMenuClick(menuItem) {
 		showOnlineOrders.value = true;
 	}
 }
+
+// Online Order badge count (Sales Orders not yet invoiced, for this outlet)
+async function loadPendingOnlineOrderCount() {
+	if (!shiftStore.profileName) return;
+	try {
+		pendingOnlineOrderCount.value = await call(
+			"pos_next.api.sales_orders.get_pending_sales_orders_count",
+			{ pos_profile: shiftStore.profileName },
+		) || 0;
+	} catch (error) {
+		log.error("Failed to load pending online order count:", error);
+	}
+}
+
+watch(() => shiftStore.profileName, (profile) => {
+	if (profile) loadPendingOnlineOrderCount();
+}, { immediate: true });
+
+// Refresh the badge count after the Online Order dialog is closed (Siapkan
+// inside it may have reduced how many orders are still pending).
+watch(showOnlineOrders, (isOpen, wasOpen) => {
+	if (!isOpen && wasOpen) loadPendingOnlineOrderCount();
+});
 
 // Load invoice history data
 async function loadInvoiceHistoryData() {
