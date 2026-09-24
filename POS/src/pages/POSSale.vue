@@ -718,8 +718,8 @@
 				:currency="shiftStore.profileCurrency"
 			/>
 
-			<!-- Delivery Note -->
-			<DeliveryNoteManagement
+			<!-- Delivery Request -->
+			<DeliveryRequestManagement
 				v-model="showDeliveryNotes"
 				:pos-profile="shiftStore.profileName"
 				:currency="shiftStore.profileCurrency"
@@ -1160,7 +1160,7 @@ import POSSettings from "@/components/settings/POSSettings.vue";
 import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import JournalEntryManagement from "@/components/journal/JournalEntryManagement.vue";
 import POSClosingManagement from "@/components/journal/POSClosingManagement.vue";
-import DeliveryNoteManagement from "@/components/journal/DeliveryNoteManagement.vue";
+import DeliveryRequestManagement from "@/components/journal/DeliveryRequestManagement.vue";
 import OnlineOrderManagement from "@/components/journal/OnlineOrderManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";

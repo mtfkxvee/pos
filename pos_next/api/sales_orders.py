@@ -37,11 +37,11 @@ def _get_pos_profile_outlet(pos_profile):
 	return outlet
 
 
-def _check_pos_profile_access(pos_profile):
+def _check_pos_profile_access(pos_profile, doctype="Sales Order"):
 	has_access = frappe.db.exists(
 		"POS Profile User", {"parent": pos_profile, "user": frappe.session.user}
 	)
-	if not has_access and not frappe.has_permission("Sales Order", "read"):
+	if not has_access and not frappe.has_permission(doctype, "read"):
 		frappe.throw(_("You don't have access to this POS Profile"))
 
 
@@ -270,3 +270,26 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 	dr.insert(ignore_permissions=False)
 
 	return {"delivery_request": dr.name}
+
+
+@frappe.whitelist()
+def get_delivery_requests(pos_profile, page_size=20, page=1):
+	"""List Delivery Requests for the outlet linked to this POS Profile, newest first."""
+	_check_pos_profile_access(pos_profile, doctype="Delivery Request")
+	outlet = _get_pos_profile_outlet(pos_profile)
+
+	offset = (int(page) - 1) * int(page_size)
+
+	return frappe.db.sql(
+		"""
+		SELECT
+			name, creation, customer_name, phone, delivery_status,
+			payment_method, total_price, address_street, driver
+		FROM `tabDelivery Request`
+		WHERE outlet = %(outlet)s
+		ORDER BY creation DESC
+		LIMIT %(page_size)s OFFSET %(offset)s
+		""",
+		{"outlet": outlet, "page_size": int(page_size), "offset": offset},
+		as_dict=True,
+	)
