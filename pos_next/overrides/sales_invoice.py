@@ -141,6 +141,20 @@ class CustomSalesInvoice(SalesInvoice):
 					item.discount_percentage = snap["discount_percentage"]
 					item.discount_amount = snap["discount_amount"]
 					item.pricing_rules = snap["pricing_rules"]
+					# Clear margin bookkeeping ERPNext's own calculate_margin() may have
+					# set during super().validate(). pos_next never uses these fields —
+					# but if they were set once (whenever item.rate briefly exceeded a
+					# not-yet-corrected item.price_list_rate during that internal pass),
+					# they stick around and get reapplied on the NEXT calculate_margin()
+					# call below (self.calculate_taxes_and_totals()): with rate now
+					# restored to equal price_list_rate, calculate_margin()'s first
+					# branch (rate > price_list_rate) no longer matches, so it falls
+					# through to reusing the stale margin_rate_or_amount, producing
+					# rate_with_margin = price_list_rate + stale_margin — silently
+					# inflating item.rate. Resetting here every cycle prevents that.
+					item.margin_type = None
+					item.margin_rate_or_amount = 0
+					item.rate_with_margin = 0
 
 			# Also restore invoice-level discount before recalculating totals,
 			# so calculate_taxes_and_totals() uses the correct discount_amount.
