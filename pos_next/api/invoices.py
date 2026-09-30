@@ -420,6 +420,122 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 # ==========================================
 
 
+def resolve_invoice_warehouses(invoice_doc, pos_profile_doc):
+    """Resolve any group warehouse on invoice_doc's items/packed_items down to
+    real leaf warehouses before save/submit — ERPNext rejects group warehouses
+    on a transaction line item (e.g. an outlet's "AREA <outlet> - X" umbrella
+    covering Selling Area + rack warehouses).
+
+    - Regular sale items: split across whichever leaf warehouses (racks) under
+      the group actually have stock for that item_code (largest stock first),
+      falling back to `POS Profile.custom_warehouse_fallback` for any unmet
+      remainder, or entirely when no leaf has stock at all (stock can go
+      negative there — no new blocking validation is added). The cashier only
+      ever sees one line in the cart; this split only happens here, right
+      before persistence, so multiple Sales Invoice Item rows can appear in
+      the saved document without changing anything about checkout.
+    - Return items: always go straight to the fallback warehouse, no
+      stock-based allocation (a return isn't "found" in any particular rack).
+    - packed_items (Product Bundle components): resolved to the fallback only
+      — no per-component rack split. Bundles need a fundamentally different,
+      multi-dimensional split (each component could need its own rack
+      allocation) that's out of scope for this pass; this is just a safety
+      net so a bundle sale doesn't fail outright once a POS Profile points at
+      a group warehouse.
+
+    Safe to call more than once on the same document (e.g. once in
+    update_invoice() and again in submit_invoice()) — a warehouse that's
+    already a leaf is left untouched, so re-running this after an earlier
+    successful resolution is a no-op for those rows.
+    """
+    from pos_next.api.items import _resolve_warehouses
+
+    if not pos_profile_doc:
+        return
+
+    fallback = pos_profile_doc.get("custom_warehouse_fallback")
+    is_return = cint(invoice_doc.get("is_return"))
+
+    def _is_group(wh):
+        return bool(wh) and cint(frappe.db.get_value("Warehouse", wh, "is_group"))
+
+    did_split = False
+
+    for item in list(invoice_doc.get("items") or []):
+        if not _is_group(item.warehouse):
+            continue
+
+        if is_return:
+            item.warehouse = fallback
+            continue
+
+        leaves = _resolve_warehouses(item.warehouse)
+        requested_qty = flt(item.qty)
+
+        if not leaves or requested_qty <= 0:
+            item.warehouse = fallback
+            continue
+
+        stock_rows = frappe.db.sql(
+            """
+            SELECT warehouse, actual_qty FROM `tabBin`
+            WHERE item_code = %(item_code)s
+              AND warehouse IN %(warehouses)s
+              AND actual_qty > 0
+            ORDER BY actual_qty DESC
+            """,
+            {"item_code": item.item_code, "warehouses": tuple(leaves)},
+            as_dict=True,
+        )
+
+        remaining = requested_qty
+        allocations = []
+        for row in stock_rows:
+            if remaining <= 0:
+                break
+            take = min(remaining, flt(row.actual_qty))
+            if take <= 0:
+                continue
+            allocations.append((row.warehouse, take))
+            remaining -= take
+
+        if remaining > 0:
+            allocations.append((fallback, remaining))
+
+        first_warehouse, first_qty = allocations[0]
+        item.warehouse = first_warehouse
+        item.qty = first_qty
+
+        for extra_warehouse, extra_qty in allocations[1:]:
+            invoice_doc.append("items", {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "uom": item.uom,
+                "conversion_factor": item.conversion_factor,
+                "rate": item.rate,
+                "price_list_rate": item.price_list_rate,
+                "discount_percentage": item.discount_percentage,
+                "discount_amount": item.discount_amount,
+                "pricing_rules": item.pricing_rules,
+                "income_account": item.get("income_account"),
+                "expense_account": item.get("expense_account"),
+                "cost_center": item.get("cost_center"),
+                "is_free_item": item.get("is_free_item"),
+                "batch_no": item.get("batch_no"),
+                "warehouse": extra_warehouse,
+                "qty": extra_qty,
+            })
+            did_split = True
+
+    if invoice_doc.get("packed_items"):
+        for packed_item in invoice_doc.packed_items:
+            if _is_group(packed_item.warehouse):
+                packed_item.warehouse = fallback
+
+    if did_split:
+        invoice_doc.calculate_taxes_and_totals()
+
+
 @frappe.whitelist()
 def update_invoice(data):
     """Create or update invoice draft (Step 1)."""
@@ -949,6 +1065,12 @@ def update_invoice(data):
         frontend_remarks = data.get("remarks")
         if frontend_remarks:
             invoice_doc.remarks = frontend_remarks
+
+        # Resolve any group warehouse (e.g. an outlet's rack umbrella) on item/
+        # packed_item rows down to real leaf warehouses — ERPNext rejects group
+        # warehouses on transaction lines. Also re-run in submit_invoice() since
+        # a later .update(invoice) there can overwrite what's resolved here.
+        resolve_invoice_warehouses(invoice_doc, pos_profile_doc)
 
         # Save as draft
         invoice_doc.flags.ignore_permissions = True
@@ -1802,6 +1924,24 @@ def submit_invoice(invoice=None, data=None):
                 frappe.log_error(
                     f"Failed to set branch from POS Profile {pos_profile}: {e}",
                     "POS Profile Branch"
+                )
+
+        # Resolve any group warehouse down to real leaf warehouses. This is the
+        # final guard before persistence — it re-runs the same resolution done
+        # in update_invoice() because the "draft already exists" branch above
+        # (invoice_doc.update(invoice)) replaces the whole items child table
+        # with whatever the frontend/offline-sync payload sent, which can
+        # reintroduce an unresolved group warehouse. Every submission path
+        # (fresh sale, resumed draft, offline sync — all of which call
+        # submit_invoice()) converges here before .submit() below.
+        if pos_profile:
+            try:
+                _submit_pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+                resolve_invoice_warehouses(invoice_doc, _submit_pos_profile_doc)
+            except Exception as e:
+                frappe.log_error(
+                    f"POS Next: failed to resolve invoice warehouses for {invoice_doc.get('name')}: {e}",
+                    "POS Warehouse Resolution"
                 )
 
         # Fix payment amounts BEFORE save.

@@ -30,15 +30,28 @@ ITEM_RESULT_FIELDS = [
 ITEM_RESULT_COLUMNS = ",\n\t".join(ITEM_RESULT_FIELDS)
 
 
+def _resolve_warehouses(warehouse):
+	"""Expand a warehouse into the list of leaf warehouses to query stock from.
+
+	A leaf warehouse resolves to itself. A group warehouse (e.g. an outlet's
+	"AREA <outlet> - X" umbrella covering Selling Area + rack warehouses)
+	resolves to all of its descendant leaves, so stock can be read/aggregated
+	from wherever it actually sits without the caller needing to know the
+	rack structure.
+	"""
+	if not warehouse:
+		return []
+	if frappe.db.get_value("Warehouse", warehouse, "is_group"):
+		return frappe.db.get_descendants("Warehouse", warehouse) or [warehouse]
+	return [warehouse]
+
+
 def get_stock_availability(item_code, warehouse):
 	"""Return total available quantity for an item in the given warehouse."""
 	if not warehouse:
 		return 0.0
 
-	warehouses = [warehouse]
-	if frappe.db.get_value("Warehouse", warehouse, "is_group"):
-		# Include all child warehouses when a group warehouse is set
-		warehouses = frappe.db.get_descendants("Warehouse", warehouse) or []
+	warehouses = _resolve_warehouses(warehouse)
 
 	Bin = DocType("Bin")
 	result = (
@@ -592,14 +605,16 @@ def get_item_variants(template_item, pos_profile):
 		stock_map = {}
 		if variant_codes and pos_profile_doc.warehouse:
 			Bin = DocType("Bin")
+			variant_warehouses = _resolve_warehouses(pos_profile_doc.warehouse)
 			stocks = (
 				frappe.qb.from_(Bin)
 				.select(
 					Bin.item_code,
-					Bin.actual_qty
+					fn.Sum(Bin.actual_qty).as_("actual_qty")
 				)
 				.where(Bin.item_code.isin(variant_codes))
-				.where(Bin.warehouse == pos_profile_doc.warehouse)
+				.where(Bin.warehouse.isin(variant_warehouses))
+				.groupby(Bin.item_code)
 				.run(as_dict=True)
 			)
 			stock_map = {s["item_code"]: s["actual_qty"] for s in stocks}
@@ -831,11 +846,7 @@ def _calculate_bundle_availability_bulk(bundle_codes, warehouse):
 	# Example:
 	#   Input: "Main Store" (group warehouse)
 	#   Output: ["Main Store - A", "Main Store - B", "Main Store - C"]
-	warehouses = [warehouse]
-	if frappe.db.get_value("Warehouse", warehouse, "is_group"):
-		child_warehouses = frappe.db.get_descendants("Warehouse", warehouse)
-		# Fallback to original warehouse if no children found
-		warehouses = child_warehouses or [warehouse]
+	warehouses = _resolve_warehouses(warehouse)
 
 	# ===========================================================================
 	# STEP 4: Fetch Stock Availability for All Components (Bulk Query)
@@ -1070,7 +1081,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 		])
 
 		# Build query based on whether a search term is provided
-		bin_warehouse = pos_profile_doc.warehouse or ""
+		bin_warehouses = tuple(_resolve_warehouses(pos_profile_doc.warehouse)) or ("",)
 
 		if effective_search_term and effective_search_term.strip():
 			term = effective_search_term.strip()
@@ -1123,13 +1134,13 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 				) cands
 				JOIN `tabItem` i ON i.name = cands.name
 				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
+				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse IN %s
 				GROUP BY {group_by_columns}
 				ORDER BY {order_by}
 				LIMIT %s OFFSET %s
 			"""
-			# inner_params first (for derived table), then bin_warehouse (outer JOIN), then scoring + pagination
-			all_params = tuple(inner_params + [bin_warehouse] + score_params + [limit, start])
+			# inner_params first (for derived table), then bin_warehouses (outer JOIN), then scoring + pagination
+			all_params = tuple(inner_params + [bin_warehouses] + score_params + [limit, start])
 		else:
 			# No search term — simple sort, no relevance overhead
 			where_clause = " AND ".join(conditions)
@@ -1141,13 +1152,13 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 					GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 				FROM `tabItem` i
 				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
+				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse IN %s
 				WHERE {where_clause}
 				GROUP BY {group_by_columns}
 				ORDER BY {order_by}
 				LIMIT %s OFFSET %s
 			"""
-			all_params = tuple([bin_warehouse] + params + [limit, start])
+			all_params = tuple([bin_warehouses] + params + [limit, start])
 
 		items = frappe.db.sql(query, all_params, as_dict=1)
 
@@ -1198,14 +1209,16 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 			stock_items = [item["item_code"] for item in items if item.get("is_stock_item")]
 			if stock_items:
 				Bin = DocType("Bin")
+				list_warehouses = _resolve_warehouses(pos_profile_doc.warehouse)
 				stocks = (
 					frappe.qb.from_(Bin)
 					.select(
 						Bin.item_code,
-						Bin.actual_qty
+						fn.Sum(Bin.actual_qty).as_("actual_qty")
 					)
 					.where(Bin.item_code.isin(stock_items))
-					.where(Bin.warehouse == pos_profile_doc.warehouse)
+					.where(Bin.warehouse.isin(list_warehouses))
+					.groupby(Bin.item_code)
 					.run(as_dict=True)
 				)
 				stock_map = {s["item_code"]: s["actual_qty"] for s in stocks}
@@ -1436,7 +1449,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		item_columns = ",\n\t".join([f"i.{col}" for col in ITEM_RESULT_FIELDS])
 		group_by_columns = ", ".join([f"i.{col.split(' as ')[0]}" for col in ITEM_RESULT_FIELDS])
 
-		bin_warehouse = pos_profile_doc.warehouse or ""
+		bin_warehouses = tuple(_resolve_warehouses(pos_profile_doc.warehouse)) or ("",)
 		where_clause = " AND ".join(conditions)
 		query = f"""
 			SELECT {item_columns},
@@ -1445,7 +1458,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 			FROM `tabItem` i
 			LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-			LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse = %s
+			LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse IN %s
 			WHERE {where_clause}
 			GROUP BY {group_by_columns}
 			ORDER BY i.item_name ASC
@@ -1453,7 +1466,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		"""
 		params.append(int(limit))
 		params.append(int(start))
-		items = frappe.db.sql(query, tuple([bin_warehouse] + params), as_dict=1)
+		items = frappe.db.sql(query, tuple([bin_warehouses] + params), as_dict=1)
 
 		if not items:
 			return []
@@ -1497,9 +1510,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		warehouse = pos_profile_doc.warehouse
 		stock_map = {}
 		if warehouse and item_codes:
-			warehouses = [warehouse]
-			if frappe.db.get_value("Warehouse", warehouse, "is_group"):
-				warehouses = frappe.db.get_descendants("Warehouse", warehouse) or []
+			warehouses = _resolve_warehouses(warehouse)
 
 			Bin = DocType("Bin")
 			stock_data = (
@@ -1733,11 +1744,7 @@ def get_stock_quantities(item_codes, warehouse):
 			return []
 
 		# Support group warehouses by expanding to leaf warehouses
-		warehouses = [warehouse]
-		if frappe.db.get_value("Warehouse", warehouse, "is_group"):
-			child_warehouses = frappe.db.get_descendants("Warehouse", warehouse) or []
-			# Fallback to original warehouse if no children are returned
-			warehouses = child_warehouses or [warehouse]
+		warehouses = _resolve_warehouses(warehouse)
 
 		if not warehouses:
 			return []
@@ -2034,9 +2041,7 @@ def get_product_bundle_availability(item_code, warehouse):
 			return {"available_qty": 0, "components": []}
 
 		# Get warehouses (support group warehouses)
-		warehouses = [warehouse]
-		if frappe.db.get_value("Warehouse", warehouse, "is_group"):
-			warehouses = frappe.db.get_descendants("Warehouse", warehouse) or [warehouse]
+		warehouses = _resolve_warehouses(warehouse)
 
 		# Get component stock (use available = actual - reserved)
 		component_codes = [c["item_code"] for c in components]

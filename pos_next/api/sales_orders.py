@@ -202,6 +202,16 @@ def prepare_sales_invoice_from_order(sales_order, pos_profile, pos_opening_shift
 		"amount": payment_amount,
 	})
 
+	# Resolve any group warehouse (e.g. an outlet's rack umbrella) copied from
+	# the Sales Order's items down to real leaf warehouses — make_sales_invoice()
+	# just copies whatever warehouse the Sales Order items had, and ERPNext
+	# rejects group warehouses on transaction lines. This flow bypasses
+	# update_invoice()/submit_invoice() entirely (direct si.insert()/si.submit()
+	# below), so it needs its own call to the same resolution logic.
+	from pos_next.api.invoices import resolve_invoice_warehouses
+	pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+	resolve_invoice_warehouses(si, pos_profile_doc)
+
 	si.insert(ignore_permissions=False)
 	si.submit()
 
