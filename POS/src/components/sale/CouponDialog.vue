@@ -301,10 +301,10 @@ async function applyCoupon() {
 
 		// Calculate discount on subtotal (before tax) using centralized helper
 		// Transform server coupon format to discount object format
+		const isPercentage = coupon.discount_type === "Percentage"
 		const discountObj = {
-			percentage:
-				coupon.discount_type === "Percentage" ? coupon.discount_percentage : 0,
-			amount: coupon.discount_type === "Amount" ? coupon.discount_amount : 0,
+			percentage: isPercentage ? coupon.discount_percentage : 0,
+			amount: isPercentage ? 0 : coupon.discount_amount,
 		}
 
 		let discountAmount = calculateDiscountAmount(discountObj, props.subtotal)
@@ -320,7 +320,7 @@ async function applyCoupon() {
 		appliedDiscount.value = {
 			name: coupon.coupon_name || coupon.coupon_code,
 			code: couponCode.value.toUpperCase(),
-			percentage: coupon.discount_percentage || 0,
+			percentage: isPercentage ? coupon.discount_percentage || 0 : 0,
 			amount: discountAmount,
 			type: coupon.discount_type,
 			coupon: coupon,

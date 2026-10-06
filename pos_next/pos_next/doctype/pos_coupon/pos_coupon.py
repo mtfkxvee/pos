@@ -36,11 +36,13 @@ class POSCoupon(Document):
                 frappe.throw(_("Discount Percentage is required"))
             if flt(self.discount_percentage) <= 0 or flt(self.discount_percentage) > 100:
                 frappe.throw(_("Discount Percentage must be between 0 and 100"))
+            self.discount_amount = 0
         elif self.discount_type == "Amount":
             if not self.discount_amount:
                 frappe.throw(_("Discount Amount is required"))
             if flt(self.discount_amount) <= 0:
                 frappe.throw(_("Discount Amount must be greater than 0"))
+            self.discount_percentage = 0
 
         # Minimum amount validation
         if self.min_amount and flt(self.min_amount) < 0:
