@@ -420,6 +420,48 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 # ==========================================
 
 
+def normalize_item_income_accounts(invoice_doc, pos_profile=None):
+    """Force every item row's income_account to the correct account.
+
+    ERPNext only fills a blank item.income_account via get_item_details()
+    inside set_missing_values() — and that fallback silently leaves the field
+    empty for items that have no "Item Default" income account configured
+    for this company (common: an item group default also missing). When that
+    happens, validate_income_account() later throws "Row N: Income Account
+    None does not belong to Company X" and the whole save fails.
+
+    submit_invoice() already force-sets this for every row right before the
+    final .submit() (so payment always succeeds); this mirrors the same
+    logic so update_invoice()'s earlier draft save doesn't fail first.
+
+    Must run BEFORE resolve_invoice_warehouses() so any row it clones for a
+    rack split inherits an already-correct income_account.
+    """
+    if not invoice_doc.get("company"):
+        return
+
+    try:
+        if invoice_doc.get("is_return") and pos_profile:
+            retur_account = frappe.db.get_value("POS Profile", pos_profile, "custom_retur")
+            if retur_account:
+                for item in invoice_doc.get("items", []):
+                    item.income_account = retur_account
+                return
+
+        company_income_account = frappe.get_cached_value(
+            "Company", invoice_doc.company, "default_income_account"
+        )
+        if company_income_account:
+            for item in invoice_doc.get("items", []):
+                if item.income_account != company_income_account:
+                    item.income_account = company_income_account
+    except Exception as e:
+        frappe.log_error(
+            f"POS Next: failed to normalize income_account: {e}",
+            "POS Income Account Override"
+        )
+
+
 def resolve_invoice_warehouses(invoice_doc, pos_profile_doc):
     """Resolve any group warehouse on invoice_doc's items/packed_items down to
     real leaf warehouses before save/submit — ERPNext rejects group warehouses
@@ -1065,6 +1107,12 @@ def update_invoice(data):
         frontend_remarks = data.get("remarks")
         if frontend_remarks:
             invoice_doc.remarks = frontend_remarks
+
+        # Force income_account before any save - ERPNext's own fallback can
+        # leave it blank for items without a per-company Item Default, which
+        # later fails validate_income_account(). Must run before the
+        # warehouse split below so cloned rows inherit a correct value.
+        normalize_item_income_accounts(invoice_doc, pos_profile)
 
         # Resolve any group warehouse (e.g. an outlet's rack umbrella) on item/
         # packed_item rows down to real leaf warehouses — ERPNext rejects group
@@ -1872,42 +1920,11 @@ def submit_invoice(invoice=None, data=None):
         if invoice_doc.get("is_return") and invoice_doc.get("return_against"):
             invoice_doc.update_outstanding_for_self = 0
 
-        # For POS returns: redirect revenue GL entries to custom_retur account.
-        # Without this, ERPNext debits the regular income/sales account with a
-        # negative amount.  Using custom_retur lets the COA show sales and returns
-        # as separate positive/negative lines for cleaner reporting.
-        if invoice_doc.get("is_return") and pos_profile:
-            try:
-                retur_account = frappe.db.get_value(
-                    "POS Profile", pos_profile, "custom_retur"
-                )
-                if retur_account:
-                    for item in invoice_doc.get("items", []):
-                        item.income_account = retur_account
-            except Exception as e:
-                frappe.log_error(
-                    f"POS Return: failed to set custom_retur account: {e}",
-                    "POS Return Account"
-                )
-
-        # For regular invoices, ensure all item rows use the company default income
-        # account. Some items have income_account = 'Retur Penjualan' in tabItem
-        # Default which ERPNext picks up automatically — for non-return transactions
-        # this posts revenue to the wrong GL account.
-        if not invoice_doc.get("is_return") and invoice_doc.get("company"):
-            try:
-                company_income_account = frappe.get_cached_value(
-                    "Company", invoice_doc.company, "default_income_account"
-                )
-                if company_income_account:
-                    for item in invoice_doc.get("items", []):
-                        if item.income_account != company_income_account:
-                            item.income_account = company_income_account
-            except Exception as e:
-                frappe.log_error(
-                    f"POS Invoice: failed to normalize income_account: {e}",
-                    "POS Income Account Override"
-                )
+        # Redirect revenue GL entries to the right account: custom_retur for
+        # returns, company default for regular sales. Some items have
+        # income_account = 'Retur Penjualan' in tabItem Default which
+        # ERPNext picks up automatically for non-return transactions too.
+        normalize_item_income_accounts(invoice_doc, pos_profile)
 
         # Copy accounting dimensions from POS Profile if not already set
         if pos_profile and not invoice_doc.get("branch"):

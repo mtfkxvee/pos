@@ -20,6 +20,17 @@
  */
 
 /**
+ * Server messages that are purely informational (ERPNext msgprint alerts,
+ * not the actual failure reason) and should never be shown as *the* error
+ * when a more specific message is available in the same response.
+ */
+const BENIGN_SERVER_MESSAGE_PATTERNS = [/payment methods refreshed/i]
+
+function isBenignServerMessage(message) {
+	return BENIGN_SERVER_MESSAGE_PATTERNS.some((pattern) => pattern.test(message))
+}
+
+/**
  * Clean HTML and extra whitespace from error messages
  */
 function cleanErrorMessage(rawMessage) {
@@ -88,22 +99,45 @@ export function parseError(error) {
 		context.title = __("Server Error")
 	}
 
-	// Extract primary message
+	// Extract primary message.
+	// A single request can carry several server messages: informational
+	// msgprint() alerts fired earlier (e.g. ERPNext's own "Payment methods
+	// refreshed. Please review before proceeding.") followed by the actual
+	// frappe.throw() that failed the request. The throw's message is always
+	// the LAST one in the list (it's what stopped execution), so prefer the
+	// last non-informational entry instead of blindly taking the first.
 	if (
 		error.messages &&
 		Array.isArray(error.messages) &&
 		error.messages.length > 0
 	) {
-		context.message = cleanErrorMessage(error.messages[0])
+		const cleaned = error.messages.map(cleanErrorMessage).filter(Boolean)
+		const meaningful = cleaned.filter((m) => !isBenignServerMessage(m))
+		context.message =
+			meaningful[meaningful.length - 1] ||
+			cleaned[cleaned.length - 1] ||
+			context.message
 	} else if (error._server_messages) {
 		try {
 			const serverMessages = JSON.parse(error._server_messages)
-			if (serverMessages && serverMessages.length > 0) {
-				const firstMessage = JSON.parse(serverMessages[0])
-				context.message = cleanErrorMessage(
-					firstMessage.message || firstMessage.title,
-				)
-				if (firstMessage.title) context.title = firstMessage.title
+			const parsed = (serverMessages || [])
+				.map((m) => {
+					try {
+						return JSON.parse(m)
+					} catch {
+						return null
+					}
+				})
+				.filter(Boolean)
+				.map((m) => ({ ...m, _clean: cleanErrorMessage(m.message || m.title) }))
+				.filter((m) => m._clean)
+
+			const meaningful = parsed.filter((m) => !isBenignServerMessage(m._clean))
+			const chosen = meaningful[meaningful.length - 1] || parsed[parsed.length - 1]
+
+			if (chosen) {
+				context.message = chosen._clean
+				if (chosen.title) context.title = chosen.title
 			}
 		} catch (parseError) {
 			console.error("Error parsing _server_messages:", parseError)
@@ -147,6 +181,27 @@ export function parseError(error) {
 		}
 
 		context.retryable = true
+	}
+	// Item Missing Accounting Setup (income/expense account not configured
+	// for this item + company combination)
+	else if (
+		normalizedMessage.includes("income account") ||
+		normalizedMessage.includes("expense account")
+	) {
+		context.type = "error"
+		context.title = __("Item Setup Error")
+
+		const rowMatch = context.message.match(/row\s+(\d+)/i)
+		context.message = rowMatch
+			? __(
+					"Item on row {0} doesn't have a sales account set up for this company yet.\n\nPlease contact your admin to configure it, or remove this item and try again.",
+					[rowMatch[1]],
+				)
+			: __(
+					"One of the items doesn't have a sales account set up for this company yet.\n\nPlease contact your admin to configure it, or remove this item and try again.",
+				)
+
+		context.retryable = false
 	}
 	// Validation Errors
 	else if (excType === "validationerror" || context.type === "validation") {
