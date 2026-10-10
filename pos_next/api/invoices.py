@@ -2768,6 +2768,38 @@ def get_draft_invoices(pos_opening_shift, doctype="Sales Invoice"):
     return data
 
 
+def _delete_draft_with_retry(doctype, name, max_attempts=3):
+    """Delete a draft doc, retrying on MySQL deadlock.
+
+    Deleting a Sales Invoice touches shared rows (tabSeries, for reverting
+    the naming counter; __global_search) that many concurrent checkouts can
+    collide on when they each delete the draft they just replaced — this
+    produces frequent "Deadlock found when trying to get lock" errors under
+    normal multi-cashier load. Those failures were previously silent
+    (frontend only logs a warning) and left the draft orphaned in the
+    database. Retrying a few times with a small backoff clears almost all
+    of them without the caller needing to know anything changed.
+    """
+    import random
+    import time
+
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            frappe.delete_doc(doctype, name, force=True, ignore_permissions=True)
+            return True
+        except frappe.QueryDeadlockError as e:
+            last_error = e
+            frappe.db.rollback()
+            time.sleep(0.15 * (attempt + 1) + random.uniform(0, 0.15))
+
+    frappe.log_error(
+        f"POS Next: failed to delete {doctype} {name} after {max_attempts} retries: {last_error}",
+        "POS Draft Delete Deadlock",
+    )
+    return False
+
+
 @frappe.whitelist()
 def delete_invoice(invoice):
     """Delete draft invoice."""
@@ -2780,7 +2812,9 @@ def delete_invoice(invoice):
     if frappe.db.get_value(doctype, invoice, "docstatus") != 0:
         frappe.throw(_("Cannot delete submitted invoice {0}").format(invoice))
 
-    frappe.delete_doc(doctype, invoice, force=1)
+    if not _delete_draft_with_retry(doctype, invoice):
+        frappe.throw(_("Invoice {0} could not be deleted right now - please try again").format(invoice))
+
     return _("Invoice {0} Deleted").format(invoice)
 
 
@@ -2815,10 +2849,8 @@ def cleanup_old_drafts(pos_profile=None, max_age_hours=24):
     deleted_count = 0
     for draft in old_drafts:
         try:
-            frappe.delete_doc(
-                doctype, draft["name"], force=True, ignore_permissions=True
-            )
-            deleted_count += 1
+            if _delete_draft_with_retry(doctype, draft["name"]):
+                deleted_count += 1
         except Exception as e:
             frappe.log_error(
                 f"Failed to delete draft {draft['name']}: {str(e)}",

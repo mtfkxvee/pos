@@ -1180,7 +1180,7 @@ import { printInvoice, printInvoiceByName, printInvoiceCustom } from "@/utils/pr
 import { usePrintFormat } from "@/composables/usePrintFormat";
 import { useVersionCheck } from "@/composables/useVersionCheck";
 import PrintFormatDialog from "@/components/pos/PrintFormatDialog.vue";
-import { Button, Dialog, createResource, frappeRequest } from "frappe-ui";
+import { Button, Dialog, createResource } from "frappe-ui";
 import { call } from "@/utils/apiWrapper";
 import { computed, onMounted, onUnmounted, ref, watch, toRaw } from "vue";
 import { useToast } from "@/composables/useToast";
@@ -2334,10 +2334,8 @@ async function saveCurrentTransactionOffline(paymentData, customerValue, draftId
 	// Delete draft after successful save
 	if (draftIdToDelete) {
 		if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
-			frappeRequest({
-				url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
-				method: 'DELETE'
-			}).catch(e => log.warn("Failed to delete server draft after checkout", e));
+			call("pos_next.api.invoices.delete_invoice", { invoice: draftIdToDelete })
+				.catch(e => log.warn("Failed to delete server draft after checkout", e));
 		} else {
 			draftsStore.deleteDraft(draftIdToDelete);
 		}
@@ -2433,10 +2431,8 @@ async function saveCurrentTransactionAsDraft(customerValue, draftIdToDelete) {
 	// Delete the old draft if we were continuing from a different one
 	if (draftIdToDelete && draftIdToDelete !== invoiceName) {
 		if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
-			frappeRequest({
-				url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
-				method: 'DELETE'
-			}).catch(e => log.warn("Failed to delete replaced server draft", e));
+			call("pos_next.api.invoices.delete_invoice", { invoice: draftIdToDelete })
+				.catch(e => log.warn("Failed to delete replaced server draft", e));
 		} else {
 			draftsStore.deleteDraft(draftIdToDelete);
 		}
@@ -2532,10 +2528,8 @@ async function handlePaymentCompleted(paymentData) {
 				// Delete draft after successful submission
 				if (draftIdToDelete) {
 					if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
-						frappeRequest({
-							url: `/api/resource/Sales Invoice/${draftIdToDelete}`,
-							method: 'DELETE'
-						}).catch(e => log.warn("Failed to delete server draft after checkout", e));
+						call("pos_next.api.invoices.delete_invoice", { invoice: draftIdToDelete })
+							.catch(e => log.warn("Failed to delete server draft after checkout", e));
 					} else {
 						draftsStore.deleteDraft(draftIdToDelete);
 					}
@@ -2790,19 +2784,17 @@ async function handleSaveDraft() {
 
 				if (draftInvoice && (draftInvoice.name || draftInvoice.data?.name)) {
 					const invoiceName = draftInvoice.name || draftInvoice.data?.name;
-					
+
 					// Optional: Delete local draft if we were continuing from one
 					if (cartStore.currentDraftId) {
 						if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
-							await frappeRequest({
-								url: `/api/resource/Sales Invoice/${cartStore.currentDraftId}`,
-								method: 'DELETE'
-							}).catch(e => log.warn("Failed to delete replacing server draft", e));
+							await call("pos_next.api.invoices.delete_invoice", { invoice: cartStore.currentDraftId })
+								.catch(e => log.warn("Failed to delete replacing server draft", e));
 						} else {
 							draftsStore.deleteDraft(cartStore.currentDraftId);
 						}
 					}
-					
+
 					showSuccess(__("Invoice {0} saved as draft successfully", [invoiceName]));
 					cartStore.clearCart();
 					previousCartHash = "";
@@ -2873,10 +2865,8 @@ async function handleLoadDraft(draft) {
 					if (draftInvoice && (draftInvoice.name || draftInvoice.data?.name)) {
 						if (cartStore.currentDraftId) {
 							if (cartStore.currentDraftIsServer && !offlineStore.isOffline) {
-								await frappeRequest({
-									url: `/api/resource/Sales Invoice/${cartStore.currentDraftId}`,
-									method: 'DELETE'
-								}).catch(e => log.warn("Failed to delete replacing server draft", e));
+								await call("pos_next.api.invoices.delete_invoice", { invoice: cartStore.currentDraftId })
+									.catch(e => log.warn("Failed to delete replacing server draft", e));
 							} else {
 								draftsStore.deleteDraft(cartStore.currentDraftId);
 							}
