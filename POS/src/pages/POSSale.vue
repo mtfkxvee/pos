@@ -2911,7 +2911,17 @@ async function handleLoadDraft(draft) {
 		// Customer is stored as a string ID on the invoice; reconstruct a minimal object.
 		const draftData = draft.is_server
 			? {
-				items: (draft.items || []).map(item => {
+				items: (draft.items || []).filter(item => {
+					// Drop promo-generated free rows: forceRefreshOffers() below
+					// regenerates them from the purchased rows. Keeping them would let
+					// recursive rules (B1G1) count their qty as purchased again and
+					// double it on every save/reopen cycle. Also drops legacy ghost
+					// rows saved before is_free_item was returned (rate 0 + pricing rule).
+					if (Number(item.is_free_item)) return false
+					const hasPrice = Number(item.price_list_rate) || Number(item.rate)
+					const hasRule = String(item.pricing_rules || "").trim().length > 0
+					return !(hasRule && !hasPrice)
+				}).map(item => {
 					// Restore the ORIGINAL (pre-discount) price as both rate and
 					// price_list_rate, and clear any persisted item-level discount.
 					// The saved invoice's `rate`/`discount_amount` reflect a promo

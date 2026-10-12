@@ -1159,6 +1159,11 @@ def get_pos_draft_invoices(pos_profile=None):
                 "price_list_rate", "discount_percentage", "discount_amount",
                 "pricing_rules", "uom", "conversion_factor", "warehouse",
                 "batch_no", "serial_no",
+                # is_free_item must travel back so the cart can tell promo-generated
+                # free rows from purchased rows. Without it, reopened drafts load free
+                # rows (rate 0) as normal items and recursive rules (B1G1) count their
+                # qty as purchased qty again on every re-evaluation (exponential growth).
+                "is_free_item",
                 # item_group/brand are required for offer eligibility checks
                 # (e.g. "Item Group" / "Brand" apply_on rules) when the draft
                 # is reopened and offers are re-evaluated against the cart.
@@ -3843,6 +3848,13 @@ def apply_offers(invoice_data, selected_offers=None):
 
             # Skip free items — they must not re-trigger pricing rules
             if item.get("is_free_item"):
+                continue
+
+            # Skip zero-priced rows: a purchased row always has a price, so a row
+            # with neither rate nor price_list_rate is a promo-generated free row
+            # that lost its is_free_item flag (e.g. legacy drafts). Counting its qty
+            # would make recursive rules (free_qty per recurse_for) multiply it again.
+            if not flt(item.get("price_list_rate") or 0) and not flt(item.get("rate") or 0):
                 continue
 
             # Use batch-fetched item details

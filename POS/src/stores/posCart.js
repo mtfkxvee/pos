@@ -586,8 +586,14 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		let hasDiscounts = false
 
-		invoiceItems.value.forEach((item, index) => {
-			const serverItem = serverItems[index] || {}
+		// serverItems mirrors buildOfferEvaluationPayload(), which excludes free
+		// rows — so align by position among non-free rows only. Indexing by the
+		// full cart position shifted every row after a free item and applied the
+		// wrong row's discount to the wrong item.
+		let serverIndex = 0
+		invoiceItems.value.forEach((item) => {
+			if (item.is_free_item) return
+			const serverItem = serverItems[serverIndex++] || {}
 			const discountPct = Number.parseFloat(serverItem.discount_percentage) || 0
 			const discountAmt = Number.parseFloat(serverItem.discount_amount) || 0
 
@@ -1352,26 +1358,31 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				const isProductDiscount = offer.offer === "Give Product"
 
 				// Find eligible items based on offer.apply_on
+				// Free rows are never eligible: counting their qty would make
+				// recursive rules multiply the free qty on top of itself.
+				const purchasedItems = invoiceItems.value.filter(
+					(item) => !item.is_free_item,
+				)
 				let eligibleItems = []
 
 				if (offer.apply_on === "Item Code") {
 					const eligibleCodes = offer.eligible_items || []
-					eligibleItems = invoiceItems.value.filter((item) =>
+					eligibleItems = purchasedItems.filter((item) =>
 						eligibleCodes.includes(item.item_code),
 					)
 				} else if (offer.apply_on === "Item Group") {
 					const eligibleGroups = offer.eligible_item_groups || []
-					eligibleItems = invoiceItems.value.filter((item) =>
+					eligibleItems = purchasedItems.filter((item) =>
 						eligibleGroups.includes(item.item_group),
 					)
 				} else if (offer.apply_on === "Brand") {
 					const eligibleBrands = offer.eligible_brands || []
-					eligibleItems = invoiceItems.value.filter((item) =>
+					eligibleItems = purchasedItems.filter((item) =>
 						eligibleBrands.includes(item.brand),
 					)
 				} else if (offer.apply_on === "Transaction") {
-					// Transaction-level discount applies to all items
-					eligibleItems = invoiceItems.value
+					// Transaction-level discount applies to all purchased items
+					eligibleItems = purchasedItems
 				}
 
 				if (eligibleItems.length === 0) continue
