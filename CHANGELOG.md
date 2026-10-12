@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.91] - 2026-10-12
+
+### Fixed
+- Promo recursive (mis. B1G1) tidak lagi menggandakan qty barang gratis (16 → 32 → 64 → ...) setelah draft server dibuka & disimpan berulang
+  - `get_pos_draft_invoices` sekarang mengembalikan `is_free_item`; baris gratis & baris ghost lama dibuang saat draft dibuka lalu dihitung ulang dari qty yang benar-benar dibeli
+  - `apply_offers` mengabaikan baris tanpa harga saat menghitung qty beli
+  - Diskon dari server dipetakan ke baris non-gratis saja (sebelumnya bisa menempel ke item yang salah setelah ada baris gratis)
+  - Evaluasi promo offline tidak lagi menyertakan baris gratis
+
 ## [2.2.90] - 2026-09-25
 
 ### Changed
