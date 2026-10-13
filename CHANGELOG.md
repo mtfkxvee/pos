@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.92] - 2026-10-13
+
+### Changed
+- Peringatan harga jual di bawah HPP sekarang memakai **Average Rate** dari Item (`custom_average_rate`), bukan valuation rate tertinggi dari Bin
+  - Jika Average Rate kosong/0, tetap fallback ke `last_purchase_rate`
+  - Join ke tabel Bin pada `get_items` / `get_items_bulk` dihapus karena tidak lagi dibutuhkan
+  - Cache item offline perlu di-sync ulang agar nilai baru terpakai
+
 ## [2.2.91] - 2026-10-12
 
 ### Fixed

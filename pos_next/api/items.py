@@ -1081,7 +1081,6 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 		])
 
 		# Build query based on whether a search term is provided
-		bin_warehouses = tuple(_resolve_warehouses(pos_profile_doc.warehouse)) or ("",)
 
 		if effective_search_term and effective_search_term.strip():
 			term = effective_search_term.strip()
@@ -1122,7 +1121,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 			# Use derived table (not IN subquery) so LIMIT works on older MariaDB versions
 			query = f"""
 				SELECT {item_columns},
-					COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
+					COALESCE(NULLIF(MAX(i.custom_average_rate), 0), MAX(i.last_purchase_rate), 0) as valuation_rate,
 					GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 					GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 				FROM (
@@ -1134,31 +1133,29 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 				) cands
 				JOIN `tabItem` i ON i.name = cands.name
 				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse IN %s
 				GROUP BY {group_by_columns}
 				ORDER BY {order_by}
 				LIMIT %s OFFSET %s
 			"""
-			# inner_params first (for derived table), then bin_warehouses (outer JOIN), then scoring + pagination
-			all_params = tuple(inner_params + [bin_warehouses] + score_params + [limit, start])
+			# inner_params first (for derived table), then scoring + pagination
+			all_params = tuple(inner_params + score_params + [limit, start])
 		else:
 			# No search term — simple sort, no relevance overhead
 			where_clause = " AND ".join(conditions)
 			order_by = "i.item_name ASC"
 			query = f"""
 				SELECT {item_columns},
-					COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
+					COALESCE(NULLIF(MAX(i.custom_average_rate), 0), MAX(i.last_purchase_rate), 0) as valuation_rate,
 					GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 					GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 				FROM `tabItem` i
 				LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-				LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse IN %s
 				WHERE {where_clause}
 				GROUP BY {group_by_columns}
 				ORDER BY {order_by}
 				LIMIT %s OFFSET %s
 			"""
-			all_params = tuple([bin_warehouses] + params + [limit, start])
+			all_params = tuple(params + [limit, start])
 
 		items = frappe.db.sql(query, all_params, as_dict=1)
 
@@ -1449,16 +1446,14 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		item_columns = ",\n\t".join([f"i.{col}" for col in ITEM_RESULT_FIELDS])
 		group_by_columns = ", ".join([f"i.{col.split(' as ')[0]}" for col in ITEM_RESULT_FIELDS])
 
-		bin_warehouses = tuple(_resolve_warehouses(pos_profile_doc.warehouse)) or ("",)
 		where_clause = " AND ".join(conditions)
 		query = f"""
 			SELECT {item_columns},
-				COALESCE(NULLIF(MAX(bin.valuation_rate), 0), i.last_purchase_rate, 0) as valuation_rate,
+				COALESCE(NULLIF(MAX(i.custom_average_rate), 0), MAX(i.last_purchase_rate), 0) as valuation_rate,
 				GROUP_CONCAT(DISTINCT ib.barcode) as barcode,
 				GROUP_CONCAT(DISTINCT ib.uom) as barcode_uoms
 			FROM `tabItem` i
 			LEFT JOIN `tabItem Barcode` ib ON ib.parent = i.name
-			LEFT JOIN `tabBin` bin ON bin.item_code = i.name AND bin.warehouse IN %s
 			WHERE {where_clause}
 			GROUP BY {group_by_columns}
 			ORDER BY i.item_name ASC
@@ -1466,7 +1461,7 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		"""
 		params.append(int(limit))
 		params.append(int(start))
-		items = frappe.db.sql(query, tuple([bin_warehouses] + params), as_dict=1)
+		items = frappe.db.sql(query, tuple(params), as_dict=1)
 
 		if not items:
 			return []
