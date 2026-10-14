@@ -314,6 +314,10 @@ def create_delivery_request_from_invoice(sales_order, sales_invoice, pos_profile
 	dr.product_purchased = ", ".join(product_lines)
 	dr.product_qty = sum(flt(item.qty) for item in si.items)
 	dr.notes = _("Online Order: {0} / Invoice: {1}").format(sales_order, sales_invoice)
+	# Orders sent via "Kirim" always originate from the online order flow, so flag
+	# them as Consumer Apps (the field is a custom Check on Delivery Request).
+	if frappe.get_meta("Delivery Request").has_field("custom_consumer_apps"):
+		dr.custom_consumer_apps = 1
 
 	dr.insert(ignore_permissions=False)
 

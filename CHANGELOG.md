@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.93] - 2026-10-14
+
+### Changed
+- Tombol **Kirim** di Online Order sekarang otomatis mencentang `custom_consumer_apps` (Consumer Apps) pada Delivery Request yang dibuat
+
 ## [2.2.92] - 2026-10-13
 
 ### Changed
