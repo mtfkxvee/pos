@@ -159,6 +159,11 @@ import { ref, onMounted, onUnmounted } from "vue"
 import { call } from "frappe-ui"
 import { useToast } from "@/composables/useToast"
 
+const props = defineProps({
+	// POS Profile in use — the monitor only shows this outlet's orders
+	posProfile: { type: String, default: "" },
+})
+
 const { showError } = useToast()
 
 const orders = ref([])
@@ -167,7 +172,9 @@ const loading = ref(false)
 async function fetchOrders() {
 	loading.value = true
 	try {
-		const result = await call("pos_next.api.order_tracking.get_order_tracking")
+		const result = await call("pos_next.api.order_tracking.get_order_tracking", {
+			pos_profile: props.posProfile || undefined,
+		})
 		orders.value = (result || []).map((o) => ({
 			...o,
 			_updating: false,
@@ -233,6 +240,12 @@ function formatTime(t) {
 
 function handleNewOrder(data) {
 	if (orders.value.some((o) => o.name === data.name)) return
+	// Realtime events are broadcast to every outlet: ignore other profiles' orders.
+	// If the payload doesn't say which profile it belongs to, let the server decide.
+	if (props.posProfile) {
+		if (!data.pos_profile) return fetchOrders()
+		if (data.pos_profile !== props.posProfile) return
+	}
 	orders.value.push({
 		...data,
 		_updating: false,

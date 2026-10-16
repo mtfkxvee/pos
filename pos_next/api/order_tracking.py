@@ -4,13 +4,21 @@ from frappe.utils import nowdate
 
 
 @frappe.whitelist()
-def get_order_tracking(date=None):
-	"""Return today's Sales Order Tracking records (status != Complete)."""
+def get_order_tracking(date=None, pos_profile=None):
+	"""Return today's Sales Order Tracking records (status != Complete).
+
+	When `pos_profile` is given only that outlet's orders are returned, so a POS
+	Profile (e.g. UIN vs XSM GROW) never sees another outlet's queue.
+	"""
 	target_date = date or nowdate()
+
+	filters = {"posting_date": target_date, "status": ["!=", "Complete"]}
+	if pos_profile:
+		filters["pos_profile"] = pos_profile
 
 	records = frappe.get_all(
 		"Sales Order Tracking",
-		filters={"posting_date": target_date, "status": ["!=", "Complete"]},
+		filters=filters,
 		fields=["name", "customer", "status", "grand_total", "remarks", "serving", "sales_invoice", "creation"],
 		order_by="creation asc",
 	)

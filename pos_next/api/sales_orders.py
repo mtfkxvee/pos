@@ -70,8 +70,18 @@ def get_sales_orders(pos_profile, page_size=20, page=1, search_term=None):
 		f"""
 		SELECT
 			so.name, so.customer, so.customer_name, so.transaction_date,
-			so.grand_total, so.status, so.per_billed, so.per_delivered,
-			so.custom_payment_method, so.custom_payment_amount
+			so.grand_total, so.per_billed, so.per_delivered,
+			so.custom_payment_method, so.custom_payment_amount,
+			so.status AS erp_status,
+			-- Once "Kirim" has created a Delivery Request for one of the order's
+			-- invoices the order is finished from the outlet's point of view, so
+			-- show "Complete" instead of ERPNext's "To Deliver" (display only —
+			-- the Sales Order's own status is left untouched).
+			CASE WHEN EXISTS (
+				SELECT 1 FROM `tabSales Invoice Item` sii
+				JOIN `tabDelivery Request` dr ON dr.sales_invoice = sii.parent
+				WHERE sii.sales_order = so.name AND sii.docstatus = 1
+			) THEN 'Complete' ELSE so.status END AS status
 		FROM `tabSales Order` so
 		WHERE {where_clause}
 		ORDER BY so.creation DESC
@@ -131,7 +141,9 @@ def get_sales_order_detail(sales_order):
 		"transaction_date": so.transaction_date,
 		"delivery_date": so.delivery_date,
 		"company": so.company,
-		"status": so.status,
+		# Display status: "Complete" once a Delivery Request exists (see get_sales_orders)
+		"status": "Complete" if delivery_request else so.status,
+		"erp_status": so.status,
 		"per_billed": so.per_billed,
 		"per_delivered": so.per_delivered,
 		"grand_total": so.grand_total,

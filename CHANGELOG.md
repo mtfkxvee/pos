@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.94] - 2026-10-16
+
+### Fixed
+- Order Monitor sekarang hanya menampilkan order milik POS Profile yang sedang dipakai (sebelumnya menampilkan semua outlet, mis. UIN dan XSM GROW tercampur)
+  - `get_order_tracking` menerima `pos_profile`; realtime order dari profile lain diabaikan; reminder antrean dihitung ulang dari server
+
+### Changed
+- Online Order: status tampil **Complete** (bukan To Deliver) setelah Delivery Request dibuat lewat Kirim. Status Sales Order di ERPNext tidak diubah
+
 ## [2.2.93] - 2026-10-14
 
 ### Changed
