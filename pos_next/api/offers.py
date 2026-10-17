@@ -767,6 +767,13 @@ def validate_coupon(coupon_code: str, customer: str, company: str) -> Dict:
 	if coupon.customer and coupon.customer != customer:
 		return {"valid": False, "message": _("This coupon is not valid for this customer")}
 
+	# Only one use per customer
+	from pos_next.pos_next.doctype.pos_coupon.pos_coupon import check_one_use
+
+	one_use_msg = check_one_use(coupon, customer)
+	if one_use_msg:
+		return {"valid": False, "message": one_use_msg}
+
 	return {
 		"valid": True,
 		"coupon": coupon

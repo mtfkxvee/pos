@@ -760,6 +760,10 @@ def update_coupon(coupon_name, data):
 			coupon.max_amount = flt(data["max_amount"]) if data["max_amount"] else None
 		if "discount_account" in data:
 			coupon.discount_account = data["discount_account"] or None
+		if "customer" in data:
+			# Gift Cards must keep a customer (enforced by POS Coupon.validate);
+			# Promotional coupons may set or clear the restriction.
+			coupon.customer = data["customer"] or None
 		if "apply_on" in data:
 			coupon.apply_on = data["apply_on"]
 

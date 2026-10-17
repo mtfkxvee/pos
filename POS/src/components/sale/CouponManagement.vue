@@ -284,18 +284,21 @@
 										</template>
 									</FormControl>
 
-									<!-- Customer field for Gift Cards -->
-									<div v-if="form.coupon_type === 'Gift Card'" class="col-span-2">
-										<div v-if="isCreating">
-											<label class="block text-xs font-medium text-gray-500 mb-1.5">{{ __('Customer') }} <span class="text-red-500">*</span></label>
+									<!-- Customer: required for Gift Cards, optional restriction for Promotional coupons -->
+									<div class="col-span-2">
+										<div v-if="isCreating || form.coupon_type === 'Promotional'">
+											<label class="block text-xs font-medium text-gray-500 mb-1.5">{{ __('Customer') }} <span v-if="form.coupon_type === 'Gift Card'" class="text-red-500">*</span></label>
 											<AutocompleteSelect
 												v-model="form.customer"
 												:options="customerOptions"
 												:loading="customerLoading"
 												:placeholder="__('Search customer by name or mobile...')"
 												@search="handleCustomerSearch"
-												required
+												:required="form.coupon_type === 'Gift Card'"
 											/>
+											<p v-if="form.coupon_type === 'Promotional'" class="mt-1 text-xs text-gray-500 text-start">
+												{{ __('Opsional. Jika diisi, kupon hanya bisa dipakai oleh pelanggan ini.') }}
+											</p>
 										</div>
 										<div v-else>
 											<label class="block text-sm font-medium text-gray-700 mb-2 text-start">{{ __('Customer') }}</label>
@@ -691,11 +694,22 @@ const accountOptions = computed(() => {
 })
 
 const customerOptions = computed(() => {
-	return filteredCustomers.value.map((c) => ({
+	const options = filteredCustomers.value.map((c) => ({
 		label: c.customer_name,
 		value: c.name,
 		subtitle: c.mobile_no || c.email_id,
 	}))
+	// Keep the coupon's saved customer selectable/visible even when it is not
+	// in the current search results
+	const saved = form.value.customer
+	if (saved && !options.some((o) => o.value === saved)) {
+		options.unshift({
+			label: couponDetails.value?.customer_name || saved,
+			value: saved,
+			subtitle: saved,
+		})
+	}
+	return options
 })
 
 // Resources
@@ -805,6 +819,7 @@ const updateCouponResource = createResource({
 				min_amount: form.value.min_amount,
 				max_amount: form.value.max_amount,
 				discount_account: form.value.discount_account,
+				...(form.value.coupon_type === "Promotional" ? { customer: form.value.customer || "" } : {}),
 				apply_on: form.value.apply_on,
 				valid_from: form.value.valid_from,
 				valid_upto: form.value.valid_upto,

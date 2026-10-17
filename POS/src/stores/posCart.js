@@ -489,6 +489,28 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 	function setCustomer(selectedCustomer) {
 		customer.value = selectedCustomer
+		releaseCustomerRestrictedCoupon(selectedCustomer)
+	}
+
+	/**
+	 * A coupon can be limited to one customer. If the cashier switches the cart to a
+	 * different customer, drop that coupon (only the coupon — other promos/discounts stay).
+	 */
+	function releaseCustomerRestrictedCoupon(selectedCustomer) {
+		const applied = appliedCoupon.value
+		const restrictedTo = applied?.coupon?.customer
+		if (!restrictedTo) return
+		const newName = selectedCustomer?.name || selectedCustomer || null
+		if (newName === restrictedTo) return
+
+		manualDiscountAmount.value = 0
+		appliedCoupon.value = null
+		additionalDiscount.value = Math.min(
+			complimentDiscountAmount.value || 0,
+			subtotal.value,
+		)
+		rebuildIncrementalCache()
+		showWarning(__("Kupon {0} khusus pelanggan lain, kupon dilepas.", [applied.code || applied.name]))
 	}
 
 	function setPendingItem(item, qty = 1, mode = "uom") {

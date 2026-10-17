@@ -113,29 +113,67 @@ def check_coupon_code(coupon_code, customer=None, company=None):
         res["msg"] = _("Sorry, this coupon is not valid for this company")
         return res
 
-    # Check customer (for Gift Cards)
-    if coupon.coupon_type == "Gift Card" and coupon.customer:
+    # Customer restriction: Gift Cards always have one; Promotional coupons may
+    # optionally be limited to a single customer.
+    if coupon.customer:
         if not customer or coupon.customer != customer:
-            res["msg"] = _("Sorry, this gift card is assigned to a specific customer")
+            if coupon.coupon_type == "Gift Card":
+                res["msg"] = _("Sorry, this gift card is assigned to a specific customer")
+            else:
+                res["msg"] = _("Sorry, this coupon is only valid for a specific customer")
             return res
 
     # Check one-time use per customer
-    if coupon.one_use and customer:
-        # Check if customer has already used this coupon
-        used_count = frappe.db.count("POS Invoice", filters={
-            "customer": customer,
-            "coupon_code": coupon.coupon_code,
-            "docstatus": 1
-        })
-        if used_count > 0:
-            res["msg"] = _("Sorry, you have already used this coupon code")
-            return res
+    one_use_msg = check_one_use(coupon, customer)
+    if one_use_msg:
+        res["msg"] = one_use_msg
+        return res
 
     # All validations passed
     res["coupon"] = coupon
     res["valid"] = True
 
     return res
+
+
+def check_one_use(coupon, customer):
+    """Enforce "Only One Use Per Customer". Returns an error message, or None if OK.
+
+    A customer counts as having used the coupon when a submitted (not cancelled,
+    not return) Sales Invoice for that customer records it in custom_pos_coupon.
+    The POS Profile default customer (e.g. WALK IN CUST) is one shared record for
+    every anonymous buyer, so it can't be told apart: a registered customer must be
+    chosen for these coupons.
+    """
+    if not coupon.get("one_use"):
+        return None
+
+    if not customer:
+        return _("This coupon can only be used once per customer. Please select a customer.")
+
+    default_customers = {
+        c for c in frappe.get_all("POS Profile", pluck="customer", filters={"disabled": 0}) if c
+    }
+    if customer in default_customers:
+        return _(
+            "This coupon can only be used once per customer. Please select a registered customer instead of {0}."
+        ).format(customer)
+
+    if not frappe.db.has_column("Sales Invoice", "custom_pos_coupon"):
+        return None
+
+    already_used = frappe.db.count(
+        "Sales Invoice",
+        {
+            "custom_pos_coupon": coupon.get("name"),
+            "customer": customer,
+            "docstatus": 1,
+            "is_return": 0,
+        },
+    )
+    if already_used:
+        return _("Sorry, this customer has already used this coupon")
+    return None
 
 
 def apply_coupon_discount(coupon, cart_total, net_total=None):

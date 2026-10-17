@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.96] - 2026-10-17
+
+### Added
+- Kupon **Promotional** bisa dibatasi ke satu pelanggan (kolom Customer, opsional). Kosong = semua pelanggan bisa memakai
+  - Dicek di dialog kupon dan saat bayar; jika pelanggan di keranjang diganti ke orang lain, kupon khusus itu otomatis dilepas
+- **Only One Use Per Customer** sekarang benar-benar berlaku: satu pelanggan hanya bisa memakai kupon itu sekali (berdasarkan invoice yang tercatat dan belum dibatalkan)
+  - Pelanggan default seperti WALK IN CUST tidak bisa dibedakan antar orang, jadi kupon `one_use` mengharuskan memilih pelanggan terdaftar
+
 ## [2.2.95] - 2026-10-17
 
 ### Added
