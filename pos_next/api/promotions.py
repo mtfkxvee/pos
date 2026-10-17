@@ -574,7 +574,7 @@ def get_coupons(company=None, include_disabled=False, coupon_type=None):
 		"name", "coupon_name", "coupon_code", "coupon_type",
 		"customer", "customer_name",
 		"valid_from", "valid_upto", "maximum_use", "used",
-		"one_use", "company", "campaign"
+		"one_use", "company", "campaign", "discount_account"
 	]
 
 	# Check for optional fields
@@ -700,6 +700,7 @@ def create_coupon(data):
 			"discount_amount": flt(data.get("discount_amount")) if data.get("discount_type") == "Amount" else None,
 			"min_amount": flt(data.get("min_amount")) if data.get("min_amount") else None,
 			"max_amount": flt(data.get("max_amount")) if data.get("max_amount") else None,
+			"discount_account": data.get("discount_account") or None,
 			"apply_on": data.get("apply_on", "Grand Total"),
 			"company": data.get("company"),
 			"customer": data.get("customer"),
@@ -757,6 +758,8 @@ def update_coupon(coupon_name, data):
 			coupon.min_amount = flt(data["min_amount"]) if data["min_amount"] else None
 		if "max_amount" in data:
 			coupon.max_amount = flt(data["max_amount"]) if data["max_amount"] else None
+		if "discount_account" in data:
+			coupon.discount_account = data["discount_account"] or None
 		if "apply_on" in data:
 			coupon.apply_on = data["apply_on"]
 

@@ -862,6 +862,7 @@ export function useInvoice() {
 		appliedTransactionRules = [],
 		promoDiscountAmount = 0,
 		uiGrandTotal = null,
+		couponInfo = null,
 	) {
 		/**
 		 * Two-step submission process with mutex protection:
@@ -908,7 +909,10 @@ export function useInvoice() {
 					})),
 					discount_amount: additionalDiscount.value || 0,
 					apply_discount_on: "Grand Total",
-					coupon_code: couponCode.value,
+					// couponInfo comes from the cart's applied coupon (the legacy couponCode
+					// ref is only set by the old applyDiscount path)
+					coupon_code: couponInfo?.code || couponCode.value,
+					coupon_discount_amount: couponInfo?.amount || 0,
 					custom_compliment_reason: complimentReason.value || undefined,
 					is_pos: 1,
 					update_stock: 1, // Critical: Ensures stock is updated

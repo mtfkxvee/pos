@@ -400,6 +400,16 @@
 										:placeholder="__('Optional cap in {0}', [currency])"
 										:min="0"
 									/>
+
+									<FormControl
+										type="select"
+										:label="__('Discount Account')"
+										v-model="form.discount_account"
+										:options="accountOptions"
+									/>
+									<p class="-mt-2 text-xs text-gray-500 text-start">
+										{{ __('Akun tempat diskon kupon ini dibukukan. Kosong = Potongan Penjualan.') }}
+									</p>
 								</div>
 								<div v-if="!isCreating && couponDetails.discount_type" class="mt-4 p-3 bg-purple-50 rounded-lg">
 									<p class="text-sm text-gray-700">
@@ -612,6 +622,7 @@ const filterType = ref("all")
 
 // Data for dropdowns
 const campaigns = ref([])
+const accounts = ref([])
 
 // Form
 const form = ref({
@@ -623,6 +634,7 @@ const form = ref({
 	discount_amount: null,
 	min_amount: null,
 	max_amount: null,
+	discount_account: "",
 	apply_on: "Grand Total",
 	customer: "",
 	campaign: "",
@@ -668,6 +680,13 @@ const campaignOptions = computed(() => {
 	return [
 		{ label: __("-- No Campaign --"), value: "" },
 		...campaigns.value.map((c) => ({ label: c.name, value: c.name })),
+	]
+})
+
+const accountOptions = computed(() => {
+	return [
+		{ label: __("-- Default (Potongan Penjualan) --"), value: "" },
+		...accounts.value.map((a) => ({ label: a.name, value: a.name })),
 	]
 })
 
@@ -732,6 +751,28 @@ const campaignsResource = createResource({
 	},
 })
 
+const accountsResource = createResource({
+	url: "frappe.client.get_list",
+	makeParams() {
+		return {
+			doctype: "Account",
+			fields: ["name"],
+			filters: {
+				company: props.company,
+				is_group: 0,
+				disabled: 0,
+				root_type: ["in", ["Income", "Expense"]],
+			},
+			order_by: "name asc",
+			limit_page_length: 500,
+		}
+	},
+	auto: false,
+	onSuccess(data) {
+		accounts.value = data || []
+	},
+})
+
 const createCouponResource = createResource({
 	url: "pos_next.api.promotions.create_coupon",
 	makeParams() {
@@ -763,6 +804,7 @@ const updateCouponResource = createResource({
 				discount_amount: form.value.discount_amount,
 				min_amount: form.value.min_amount,
 				max_amount: form.value.max_amount,
+				discount_account: form.value.discount_account,
 				apply_on: form.value.apply_on,
 				valid_from: form.value.valid_from,
 				valid_upto: form.value.valid_upto,
@@ -862,6 +904,7 @@ function loadCoupons() {
 
 function loadCampaigns() {
 	campaignsResource.reload()
+	accountsResource.reload()
 }
 
 function handleCreateNew() {
@@ -961,6 +1004,7 @@ function resetForm() {
 		discount_amount: null,
 		min_amount: null,
 		max_amount: null,
+		discount_account: "",
 		apply_on: "Grand Total",
 		customer: "",
 		campaign: "",
@@ -982,6 +1026,7 @@ function populateFormFromCoupon(coupon) {
 		discount_amount: coupon.discount_amount || null,
 		min_amount: coupon.min_amount || null,
 		max_amount: coupon.max_amount || null,
+		discount_account: coupon.discount_account || "",
 		apply_on: coupon.apply_on || __("Grand Total"),
 		customer: coupon.customer || "",
 		campaign: coupon.campaign || "",

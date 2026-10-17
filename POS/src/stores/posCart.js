@@ -447,6 +447,13 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					auditRules.push({ rule, item_code: "" })
 				}
 			}
+			// Real coupons only (not manual / compliment discounts): sent so the backend
+			// records the coupon on the invoice and routes its discount to the coupon's account.
+			const _c = appliedCoupon.value
+			const couponInfo =
+				_c && !_c.is_manual && _c.code !== "MANUAL" && _c.code !== "COMPLIMENT"
+					? { code: _c.code || _c.name, amount: roundCurrency(manualDiscountAmount.value || 0) }
+					: null
 			result = await baseSubmitInvoice(
 				targetDoctype.value,
 				deliveryDate.value,
@@ -455,6 +462,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				auditRules,
 				promoTransactionDiscount.value || 0,
 				uiGrandTotalAtConfirm,
+				couponInfo,
 			)
 		} finally {
 			// Always restore — even on error — so cart state is consistent

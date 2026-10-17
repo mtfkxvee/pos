@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.95] - 2026-10-17
+
+### Added
+- POS Coupon sekarang punya **Discount Account** (opsional; kosong = Potongan Penjualan). Bisa diisi di form kupon POS dan di Desk
+  - Diskon kupon dibukukan ke akun tersebut (DR akun kupon, CR Potongan Penjualan), sama seperti diskon promo
+- Invoice kini mencatat kupon yang dipakai: field `custom_pos_coupon` dan `custom_coupon_discount_amount` (dasar untuk laporan kupon per transaksi/pelanggan)
+
+### Fixed
+- Kode kupon tidak pernah terkirim saat submit sehingga `used` selalu 0; sekarang dihitung +1 saat invoice di-submit dan -1 saat dibatalkan
+- Kupon yang sudah habis/kedaluwarsa sekarang ditolak saat bayar (sebelumnya tidak pernah divalidasi di submit)
+
 ## [2.2.94] - 2026-10-16
 
 ### Fixed

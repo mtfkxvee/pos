@@ -287,7 +287,82 @@ class CustomSalesInvoice(SalesInvoice):
 		# Net: diskon_akun receives only the manual portion.
 		self._adjust_promo_transaction_discount_gl(gl_entries)
 
+		# POS Coupon discount: same idea, routed to the coupon's own discount account.
+		self._adjust_coupon_discount_gl(gl_entries)
+
 		return gl_entries
+
+	def on_submit(self):
+		super().on_submit()
+		self._track_coupon_usage(+1)
+
+	def on_cancel(self):
+		super().on_cancel()
+		self._track_coupon_usage(-1)
+
+	def _track_coupon_usage(self, delta):
+		"""Count this invoice against its POS Coupon's `used` (+1 on submit, -1 on cancel)."""
+		coupon = self.get("custom_pos_coupon")
+		if not coupon or cint(self.get("is_return")):
+			return
+		try:
+			from pos_next.pos_next.doctype.pos_coupon.pos_coupon import adjust_coupon_usage
+
+			adjust_coupon_usage(coupon, delta)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "POS Coupon usage tracking")
+
+	def _adjust_coupon_discount_gl(self, gl_entries):
+		"""Re-route the coupon portion of the invoice discount from diskon_akun
+		(Potongan Penjualan) to the coupon's Discount Account:
+		  DR coupon.discount_account : coupon_amount
+		  CR diskon_akun             : coupon_amount
+		Does nothing when the coupon has no Discount Account (stays in Potongan Penjualan).
+		"""
+		coupon = self.get("custom_pos_coupon")
+		coupon_amount = flt(self.get("custom_coupon_discount_amount") or 0)
+		if not coupon or coupon_amount <= 0.01:
+			return
+
+		coupon_account = frappe.db.get_value("POS Coupon", coupon, "discount_account")
+		diskon_akun = self.get("additional_discount_account") or self._get_diskon_akun()
+		if not coupon_account or not diskon_akun or coupon_account == diskon_akun:
+			return
+
+		# Never re-route more than what is left of the invoice discount once the
+		# transaction-level promo portion has been taken out.
+		available = flt(self.discount_amount) - flt(self.get("custom_promo_discount_amount") or 0)
+		coupon_amount = min(coupon_amount, max(available, 0))
+		if coupon_amount <= 0.01:
+			return
+
+		remarks = f"POS Coupon: {coupon}"
+		gl_entries.append(
+			self.get_gl_dict(
+				{
+					"account": coupon_account,
+					"debit": coupon_amount,
+					"debit_in_account_currency": coupon_amount,
+					"against": self.customer,
+					"cost_center": self.cost_center,
+					"remarks": remarks,
+				},
+				item=self,
+			)
+		)
+		gl_entries.append(
+			self.get_gl_dict(
+				{
+					"account": diskon_akun,
+					"credit": coupon_amount,
+					"credit_in_account_currency": coupon_amount,
+					"against": self.customer,
+					"cost_center": self.cost_center,
+					"remarks": remarks,
+				},
+				item=self,
+			)
+		)
 
 	def _get_diskon_akun(self):
 		"""Resolve discount account from POS Profile."""

@@ -1100,8 +1100,24 @@ def update_invoice(data):
                     error_msg = coupon_result.get("msg", "Invalid coupon code") if coupon_result else "Invalid coupon code"
                     frappe.throw(_(error_msg))
 
-                # Store coupon code on invoice for tracking
-                invoice_doc.coupon_code = coupon_code
+                # Record which coupon was used and how much it discounted, so
+                # reports can list coupon -> invoice -> customer and the GL can
+                # route the discount to the coupon's own account.
+                _si_meta = frappe.get_meta(invoice_doc.doctype)
+                if _si_meta.has_field("custom_pos_coupon"):
+                    invoice_doc.custom_pos_coupon = coupon_result["coupon"].name
+                if _si_meta.has_field("custom_coupon_discount_amount"):
+                    invoice_doc.custom_coupon_discount_amount = flt(
+                        data.get("coupon_discount_amount") or 0
+                    )
+        else:
+            # No coupon on this (re)submission — clear anything left over from an
+            # earlier attempt on the same draft.
+            _si_meta = frappe.get_meta(invoice_doc.doctype)
+            if _si_meta.has_field("custom_pos_coupon"):
+                invoice_doc.custom_pos_coupon = None
+            if _si_meta.has_field("custom_coupon_discount_amount"):
+                invoice_doc.custom_coupon_discount_amount = 0
 
         # ERPNext might overwrite remarks for Returns during validation. Reinforce it.
         frontend_remarks = data.get("remarks")
@@ -2025,19 +2041,9 @@ def submit_invoice(invoice=None, data=None):
                         "allocated_percentage": member.get("allocated_percentage", 0),
                     })
 
-        # Handle POS Coupon if coupon_code is provided
-        coupon_code = invoice.get("coupon_code") or data.get("coupon_code")
-        if coupon_code:
-            # Increment usage counter for POS Coupon
-            if frappe.db.table_exists("POS Coupon"):
-                try:
-                    from pos_next.pos_next.doctype.pos_coupon.pos_coupon import increment_coupon_usage
-                    increment_coupon_usage(coupon_code)
-                except Exception as e:
-                    frappe.log_error(
-                        title="Failed to increment coupon usage",
-                        message=f"Coupon: {coupon_code}, Error: {str(e)}"
-                    )
+        # POS Coupon usage is counted in CustomSalesInvoice.on_submit / on_cancel
+        # (based on the invoice's custom_pos_coupon), so it stays in step with the
+        # invoice and is not double-counted on retries.
 
         # Auto-set batch numbers for returns
         _auto_set_return_batches(invoice_doc)

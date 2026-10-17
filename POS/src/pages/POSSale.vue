@@ -2294,6 +2294,9 @@ async function saveCurrentTransactionOffline(paymentData, customerValue, draftId
 		coupon_code: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
 			? (cartStore.appliedCoupon.code || cartStore.appliedCoupon.name)
 			: undefined,
+		coupon_discount_amount: (cartStore.appliedCoupon && !cartStore.appliedCoupon.is_manual && cartStore.appliedCoupon.code !== 'MANUAL' && cartStore.appliedCoupon.code !== 'COMPLIMENT')
+			? (cartStore.manualDiscountAmount || 0)
+			: 0,
 		write_off_amount: paymentData.write_off_amount || 0,
 		redeem_loyalty_points: paymentData.redeem_loyalty_points || 0,
 		loyalty_points: paymentData.loyalty_points || 0,

@@ -29,6 +29,7 @@
   "column_break_discount",
   "min_amount",
   "max_amount",
+  "discount_account",
   "apply_on",
   "uses",
   "valid_from",
@@ -181,6 +182,13 @@
    "precision": "2"
   },
   {
+   "description": "Akun tempat diskon kupon ini dibukukan di GL. Kosong = Potongan Penjualan (akun diskon POS Profile).",
+   "fieldname": "discount_account",
+   "fieldtype": "Link",
+   "label": "Discount Account",
+   "options": "Account"
+  },
+  {
    "default": "Grand Total",
    "fieldname": "apply_on",
    "fieldtype": "Select",
@@ -263,7 +271,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2021-07-30 00:17:17.711972",
+ "modified": "2026-10-17 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "POS Next",
  "name": "POS Coupon",

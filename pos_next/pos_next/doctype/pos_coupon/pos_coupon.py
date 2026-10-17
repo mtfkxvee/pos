@@ -44,6 +44,24 @@ class POSCoupon(Document):
                 frappe.throw(_("Discount Amount must be greater than 0"))
             self.discount_percentage = 0
 
+        # Discount account validation (optional: empty = POS Profile's diskon akun)
+        if self.discount_account:
+            acct = frappe.db.get_value(
+                "Account", self.discount_account, ["is_group", "company", "disabled"], as_dict=True
+            )
+            if not acct:
+                frappe.throw(_("Discount Account {0} does not exist").format(self.discount_account))
+            if acct.is_group:
+                frappe.throw(_("Discount Account {0} is a group account").format(self.discount_account))
+            if acct.disabled:
+                frappe.throw(_("Discount Account {0} is disabled").format(self.discount_account))
+            if self.company and acct.company != self.company:
+                frappe.throw(
+                    _("Discount Account {0} belongs to {1}, not {2}").format(
+                        self.discount_account, acct.company, self.company
+                    )
+                )
+
         # Minimum amount validation
         if self.min_amount and flt(self.min_amount) < 0:
             frappe.throw(_("Minimum Amount cannot be negative"))
@@ -171,6 +189,20 @@ def increment_coupon_usage(coupon_code):
             title="Coupon Usage Increment Failed",
             message=f"Failed to increment usage for coupon {coupon_code}: {str(e)}"
         )
+
+
+def adjust_coupon_usage(coupon_name, delta):
+    """Atomically add `delta` (+1 on submit, -1 on cancel) to a coupon's `used`.
+
+    Runs inside the caller's transaction (no commit) so it rolls back together with
+    the invoice, and never drops below zero.
+    """
+    if not coupon_name or not frappe.db.exists("POS Coupon", coupon_name):
+        return
+    frappe.db.sql(
+        "UPDATE `tabPOS Coupon` SET used = GREATEST(IFNULL(used, 0) + %s, 0) WHERE name = %s",
+        (int(delta), coupon_name),
+    )
 
 
 def decrement_coupon_usage(coupon_code):
