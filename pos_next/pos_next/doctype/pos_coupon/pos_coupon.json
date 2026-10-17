@@ -59,7 +59,8 @@
    "reqd": 1
   },
   {
-   "depends_on": "eval: doc.coupon_type == \"Gift Card\"",
+   "description": "Gift Card: wajib. Promotional: opsional — jika diisi, kupon hanya bisa dipakai oleh pelanggan ini; kosong = semua pelanggan.",
+   "mandatory_depends_on": "eval: doc.coupon_type == \"Gift Card\"",
    "fieldname": "customer",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -271,7 +272,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-17 12:00:00.000000",
+ "modified": "2026-10-17 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "POS Next",
  "name": "POS Coupon",
