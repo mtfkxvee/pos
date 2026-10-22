@@ -43,8 +43,9 @@ def get_csrf_token():
 @frappe.whitelist()
 def generate_device_api_key():
 	"""
-	Generate (or rotate) the Frappe API key/secret for the CURRENTLY LOGGED IN
-	user only, for use by a POS Desktop device as a long-lived credential.
+	Return the Frappe API key/secret for the CURRENTLY LOGGED IN user only,
+	generating it on first use, for use by a POS Desktop device as a
+	long-lived credential.
 
 	Frappe's own `frappe.core.doctype.user.user.generate_keys` is restricted to
 	System Manager (`frappe.only_for("System Manager")`), so a regular cashier
@@ -55,12 +56,14 @@ def generate_device_api_key():
 	Security notes:
 	- Requires an authenticated (non-Guest) session — i.e. the caller must have
 	  just logged in via the normal cookie-session login flow.
-	- The returned api_secret is only ever available at generation time (same
-	  behavior as core Frappe) — it is hashed/opaque in storage afterwards, so
-	  losing it means generating a new one (which invalidates the old secret).
-	- Calling this again for the same user ROTATES the secret (old one stops
-	  working). The desktop app should only call this once during first-time
-	  device setup and persist the result (encrypted) itself.
+	- An existing key/secret is returned as-is, NOT rotated. User.api_secret is
+	  a Password field — stored encrypted (not hashed), and decryptable
+	  server-side, which is exactly how Frappe's own token auth checks it.
+	  Rotating on every call meant the same account logging in on a second
+	  device silently invalidated the first device's secret (it then saw every
+	  request rejected and fell back to offline mode), and vice versa.
+	- To revoke a leaked/lost device's secret, an admin regenerates the keys
+	  from the User form; devices then pick up the new one on next login.
 	"""
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
@@ -70,6 +73,15 @@ def generate_device_api_key():
 
 	user = frappe.session.user
 	user_doc = frappe.get_doc("User", user)
+
+	if user_doc.api_key:
+		existing_secret = user_doc.get_password("api_secret", raise_exception=False)
+		if existing_secret:
+			return {
+				"user": user,
+				"api_key": user_doc.api_key,
+				"api_secret": existing_secret,
+			}
 
 	api_secret = frappe.generate_hash(length=15)
 	if not user_doc.api_key:
