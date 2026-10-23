@@ -1910,9 +1910,13 @@ def submit_invoice(invoice=None, data=None):
             # Rename auto-generated draft to our custom offline name
             if custom_offline_name and auto_name != custom_offline_name:
                 try:
+                    # rebuild_search=False: the default enqueues
+                    # rebuild_for_doctype for the whole doctype on every rename,
+                    # which deadlocks __global_search under multi-cashier load.
+                    # The new name is indexed by save()/submit() below.
                     frappe.rename_doc(
                         doctype, auto_name, custom_offline_name,
-                        force=True
+                        force=True, rebuild_search=False
                     )
                     invoice_name = custom_offline_name
                 except Exception as rename_err:
@@ -1921,6 +1925,18 @@ def submit_invoice(invoice=None, data=None):
                         "Offline Invoice Rename"
                     )
                     invoice_name = auto_name
+
+                # Drop only the stale global search row of the draft name.
+                # Kept outside the rename try so a failure here can't send
+                # invoice_name back to auto_name, which no longer exists.
+                if invoice_name == custom_offline_name:
+                    try:
+                        frappe.db.delete("__global_search", {"doctype": doctype, "name": auto_name})
+                    except Exception as gs_err:
+                        frappe.log_error(
+                            f"Failed to delete global search entry for {auto_name}: {gs_err}",
+                            "Offline Invoice Rename"
+                        )
             else:
                 invoice_name = auto_name
 
