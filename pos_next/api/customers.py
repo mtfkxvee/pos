@@ -9,7 +9,7 @@ from frappe.utils import cint, flt, get_datetime
 
 
 @frappe.whitelist()
-def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=None, modified_after=None):
+def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=None, modified_after=None, customer_names=None):
 
     """
     Search customers for inline customer selection in POS.
@@ -20,6 +20,7 @@ def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=No
         limit (int): Maximum number of results to return
         modified_after (int): Optional epoch ms timestamp; if provided, only
             customers modified after this time are returned (incremental sync)
+        customer_names (list): Optional; only return these customers
 
     Returns:
         list: List of customer dictionaries with name, customer_name, mobile_no, email_id
@@ -59,6 +60,14 @@ def get_customers(search_term="", pos_profile=None, limit=20, start=0, fields=No
 
         if modified_after:
             filters["modified"] = [">", get_datetime(cint(modified_after) / 1000)]
+
+        if customer_names is not None:
+            if isinstance(customer_names, str):
+                import json
+                customer_names = json.loads(customer_names)
+            if not customer_names:
+                return []
+            filters["name"] = ["in", customer_names]
 
         start = int(start or 0)
         # limit=0 means "no limit" — return all matching customers.
