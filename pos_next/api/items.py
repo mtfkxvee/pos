@@ -1411,7 +1411,7 @@ def get_items(pos_profile, search_term=None, item_group=None, start=0, limit=20,
 
 
 @frappe.whitelist()
-def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_variants=0, modified_after=None):
+def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_variants=0, modified_after=None, changed_since=None):
 	"""
 	Fetch items from multiple item groups in a SINGLE query.
 	Eliminates N+1 problem where frontend was making one API call per group.
@@ -1422,6 +1422,9 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		start: Offset for pagination (default 0)
 		limit: Max items to return (default 2000)
 		include_variants: If 1, include variant items (for offline caching)
+		changed_since: Server datetime string; if given, only items whose Item,
+			selling Item Price or Bin in the profile's warehouse changed after it
+			(incremental offline sync - see pos_next.api.sync.get_items_delta)
 	"""
 	try:
 		if isinstance(item_groups, str):
@@ -1432,6 +1435,26 @@ def get_items_bulk(pos_profile, item_groups=None, start=0, limit=2000, include_v
 		# Build base conditions using shared helper
 		exclude_variants = not int(include_variants)
 		conditions, params = _build_item_base_conditions(pos_profile_doc, exclude_variants=exclude_variants, modified_after=modified_after)
+
+		if changed_since:
+			# A price or stock change doesn't touch Item.modified, so check those too
+			changed = ["i.modified > %s"]
+			params.append(changed_since)
+			if pos_profile_doc.selling_price_list:
+				changed.append(
+					"i.name IN (SELECT ip.item_code FROM `tabItem Price` ip"
+					" WHERE ip.price_list = %s AND ip.modified > %s)"
+				)
+				params.extend([pos_profile_doc.selling_price_list, changed_since])
+			warehouses = _resolve_warehouses(pos_profile_doc.warehouse)
+			if warehouses:
+				placeholders = ", ".join(["%s"] * len(warehouses))
+				changed.append(
+					f"i.name IN (SELECT b.item_code FROM `tabBin` b"
+					f" WHERE b.warehouse IN ({placeholders}) AND b.modified > %s)"
+				)
+				params.extend([*warehouses, changed_since])
+			conditions.append(f"({' OR '.join(changed)})")
 
 		if item_groups:
 			# Expand all groups to include their descendants
