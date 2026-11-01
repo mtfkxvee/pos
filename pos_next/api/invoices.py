@@ -636,6 +636,9 @@ def update_invoice(data):
             if _offline_name:
                 invoice_doc.name = _offline_name
                 invoice_doc.flags.name_set = True
+                # save() treats a doc that has a name as existing and loads it
+                # from the DB; mark it new so save() goes to insert().
+                invoice_doc.set("__islocal", 1)
 
         pos_profile_doc = None
         if pos_profile:
