@@ -628,6 +628,15 @@ def update_invoice(data):
             data_no_name = {k: v for k, v in data.items() if k != "name"}
             invoice_doc = frappe.get_doc(data_no_name)
 
+            # Offline sync (submit_invoice) passes the invoice's own final name
+            # (e.g. TASMAR011122020184). Insert under it directly: this skips
+            # the naming-series counter — a tabSeries row lock every checkout
+            # shares, the main deadlock source — and the rename_doc afterwards.
+            _offline_name = frappe.flags.get("pos_next_offline_name")
+            if _offline_name:
+                invoice_doc.name = _offline_name
+                invoice_doc.flags.name_set = True
+
         pos_profile_doc = None
         if pos_profile:
             try:
@@ -1903,7 +1912,13 @@ def submit_invoice(invoice=None, data=None):
 
         # Get or create invoice
         if not invoice_name or not frappe.db.exists(doctype, invoice_name):
-            created = update_invoice(json.dumps(invoice))
+            # See update_invoice(): a flag, not an argument, so the whitelisted
+            # endpoint can't be used to pick arbitrary invoice names.
+            frappe.flags.pos_next_offline_name = custom_offline_name
+            try:
+                created = update_invoice(json.dumps(invoice))
+            finally:
+                frappe.flags.pos_next_offline_name = None
             if not created or not isinstance(created, dict):
                 frappe.throw(_("Failed to create invoice draft"))
             auto_name = created.get("name")
