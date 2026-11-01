@@ -1023,7 +1023,7 @@ def update_invoice(data):
                 # any rounding tolerance.  The only guard we need: ui_gt must be
                 # positive and not exceed ERPNext's computed total (can't discount to
                 # a higher number than the list price).
-                target_discount = flt(invoice_doc.net_total) - ui_gt
+                target_discount = flt(invoice_doc.net_total) + flt(invoice_doc.get("total_taxes_and_charges") or 0) - ui_gt
                 invoice_doc.flags.pos_next_rounding_info = {
                     "rule": "Anchor grand_total to UI display value",
                     "before_rounding": gt,

@@ -249,7 +249,9 @@ class CustomSalesInvoice(SalesInvoice):
 			# without a matching discount leaves debit != credit on the GL
 			# ("Debit and Credit not equal ... Difference is N"). Keep ERPNext's
 			# figure in that case: the invoice stays balanced.
-			_target_da = flt(self.net_total) - _locked_gt
+			# Pre-discount total = net + taxes (discount is applied on Grand Total).
+			# Using net_total alone ignores tax and leaves the GL off by the tax.
+			_target_da = flt(self.net_total) + flt(self.get("total_taxes_and_charges") or 0) - _locked_gt
 			if abs(flt(self.grand_total) - _locked_gt) > 1 and _target_da >= 0:
 				self.discount_amount = _target_da
 				self.additional_discount_percentage = 0
