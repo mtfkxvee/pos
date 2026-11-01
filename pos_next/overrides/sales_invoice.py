@@ -243,11 +243,16 @@ class CustomSalesInvoice(SalesInvoice):
 		_locked_gt = self.flags.get("pos_next_ui_grand_total")
 		if _locked_gt and cint(self.is_pos) and not cint(self.is_return):
 			_locked_gt = flt(_locked_gt)
-			if abs(flt(self.grand_total) - _locked_gt) > 1:
-				_target_da = flt(self.net_total) - _locked_gt
-				if _target_da >= 0:
-					self.discount_amount = _target_da
-					self.additional_discount_percentage = 0
+			# Only lock DOWN. When ERPNext's own total is already below what the
+			# cashier collected (it applied a bit more discount than the POS did),
+			# there is no discount that can raise it — forcing grand_total up
+			# without a matching discount leaves debit != credit on the GL
+			# ("Debit and Credit not equal ... Difference is N"). Keep ERPNext's
+			# figure in that case: the invoice stays balanced.
+			_target_da = flt(self.net_total) - _locked_gt
+			if abs(flt(self.grand_total) - _locked_gt) > 1 and _target_da >= 0:
+				self.discount_amount = _target_da
+				self.additional_discount_percentage = 0
 				self.grand_total = _locked_gt
 				self.base_grand_total = _locked_gt
 				_total_paid = sum(

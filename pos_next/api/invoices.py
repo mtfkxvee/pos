@@ -1047,7 +1047,10 @@ def update_invoice(data):
                     "applied": rounded_gt != gt,
                     "difference": gt - rounded_gt,
                 }
-                if rounded_gt != gt:
+                # Rounding UP needs a negative discount, which ERPNext does not post
+                # to the GL (invoice ends up with Debit != Credit). Only round when
+                # the resulting discount stays >= 0.
+                if rounded_gt != gt and flt(invoice_doc.discount_amount) + (gt - rounded_gt) >= 0:
                     rounding_diff = gt - rounded_gt  # positive = round down, negative = round up
                     invoice_doc.discount_amount = flt(invoice_doc.discount_amount) + rounding_diff
                     invoice_doc.grand_total = rounded_gt
