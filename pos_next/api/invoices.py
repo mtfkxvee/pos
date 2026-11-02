@@ -1059,10 +1059,10 @@ def update_invoice(data):
                     "applied": rounded_gt != gt,
                     "difference": gt - rounded_gt,
                 }
-                # Rounding UP needs a negative discount, which ERPNext does not post
-                # to the GL (invoice ends up with Debit != Credit). Only round when
-                # the resulting discount stays >= 0.
-                if rounded_gt != gt and flt(invoice_doc.discount_amount) + (gt - rounded_gt) >= 0:
+                # Rounding UP gives a small negative discount. That is intended: it
+                # is how the cashier's "Pembulatan +N" reaches the ERP, and ERPNext
+                # books a negative discount on the credit side (GL stays balanced).
+                if rounded_gt != gt:
                     rounding_diff = gt - rounded_gt  # positive = round down, negative = round up
                     invoice_doc.discount_amount = flt(invoice_doc.discount_amount) + rounding_diff
                     invoice_doc.grand_total = rounded_gt

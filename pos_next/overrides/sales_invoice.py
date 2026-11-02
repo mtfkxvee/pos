@@ -243,17 +243,19 @@ class CustomSalesInvoice(SalesInvoice):
 		_locked_gt = self.flags.get("pos_next_ui_grand_total")
 		if _locked_gt and cint(self.is_pos) and not cint(self.is_return):
 			_locked_gt = flt(_locked_gt)
-			# Only lock DOWN. When ERPNext's own total is already below what the
-			# cashier collected (it applied a bit more discount than the POS did),
-			# there is no discount that can raise it — forcing grand_total up
-			# without a matching discount leaves debit != credit on the GL
-			# ("Debit and Credit not equal ... Difference is N"). Keep ERPNext's
-			# figure in that case: the invoice stays balanced.
+			# Lock to what the cashier collected by moving the invoice discount.
+			# The cashier's round-to-100 can round UP ("Pembulatan +N", N < 100),
+			# which makes the discount slightly negative — fine, ERPNext books it
+			# on the credit side. A bigger gap with ERPNext's total below the
+			# cashier's is not rounding (e.g. a qty stored with less precision):
+			# don't paper over it, keep ERPNext's figure.
 			# Pre-discount total = net + taxes (discount is applied on Grand Total).
-			# Using net_total alone ignores tax and leaves the GL off by the tax.
 			_target_da = flt(self.net_total) + flt(self.get("total_taxes_and_charges") or 0) - _locked_gt
-			if abs(flt(self.grand_total) - _locked_gt) > 1 and _target_da >= 0:
+			_gap = abs(flt(self.grand_total) - _locked_gt)
+			if _gap > 1 and (_target_da >= 0 or _gap < 100):
 				self.discount_amount = _target_da
+				# GL books the invoice discount from base_discount_amount.
+				self.base_discount_amount = _target_da
 				self.additional_discount_percentage = 0
 				self.grand_total = _locked_gt
 				self.base_grand_total = _locked_gt
@@ -268,6 +270,10 @@ class CustomSalesInvoice(SalesInvoice):
 					- flt(self.loyalty_amount or 0)
 					- flt(self.write_off_amount or 0),
 				)
+				# Change was worked out from the pre-lock total.
+				if flt(self.change_amount):
+					self.change_amount = max(0, _total_paid - _locked_gt - flt(self.write_off_amount or 0))
+					self.base_change_amount = self.change_amount
 				self.set_status()
 
 	def get_gl_entries(self, warehouse_account=None):
