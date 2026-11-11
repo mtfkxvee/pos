@@ -1532,6 +1532,27 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		let applied = false
 
+		// A Transaction-level fixed amount is granted once per cart, not once per
+		// line: put it on the single largest line instead of every eligible item.
+		if (
+			offer.apply_on === "Transaction" &&
+			discountType === "Discount Amount" &&
+			discountAmount > 0
+		) {
+			const lineBase = (item) =>
+				(Number.parseFloat(item.price_list_rate || item.rate) || 0) *
+				(Number.parseFloat(item.quantity ?? item.qty) || 0)
+			const target = eligibleItems
+				.filter((item) => !(item.pricing_rules && item.pricing_rules.length > 0))
+				.sort((a, b) => lineBase(b) - lineBase(a))[0]
+			if (!target || lineBase(target) <= 0) return false
+			target.discount_percentage = 0
+			target.discount_amount = Math.min(discountAmount, lineBase(target))
+			target.pricing_rules = [offer.name]
+			recalculateItem(target)
+			return true
+		}
+
 		for (const item of eligibleItems) {
 			// Only apply if no existing pricing rule
 			if (item.pricing_rules && item.pricing_rules.length > 0) continue

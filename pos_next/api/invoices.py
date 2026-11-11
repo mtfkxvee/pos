@@ -4163,6 +4163,7 @@ def apply_offers(invoice_data, selected_offers=None):
         applied_rules = set()
         free_items = []
         transaction_discount_amount = 0.0  # Accumulator for Transaction-level rule discounts
+        tx_rule_discounts = {}  # Transaction-level rule name -> discount (one entry per rule)
 
         for result, item_index in zip(pricing_results, index_map):
             if not result:
@@ -4214,15 +4215,17 @@ def apply_offers(invoice_data, selected_offers=None):
                 else:
                     item_rule_names.append((rn, full_r))
 
-            # Accumulate Transaction-level rule discounts (handled at invoice level)
+            # Accumulate Transaction-level rule discounts (handled at invoice level).
+            # A percentage is summed over every line, but a fixed Discount Amount
+            # is granted once per transaction — ERPNext returns the rule on every
+            # cart line, so adding it per line multiplied it by the item count.
             for rn, full_r in tx_rule_names:
-                tx_per_item = 0.0
                 if full_r.discount_percentage:
-                    tx_per_item = price_list_rate * qty * flt(full_r.discount_percentage) / 100
+                    tx_rule_discounts[rn] = flt(tx_rule_discounts.get(rn)) + (
+                        price_list_rate * qty * flt(full_r.discount_percentage) / 100
+                    )
                 elif full_r.discount_amount:
-                    tx_per_item = flt(full_r.discount_amount)
-                if tx_per_item > 0:
-                    transaction_discount_amount += tx_per_item
+                    tx_rule_discounts[rn] = flt(full_r.discount_amount)
 
             # Get discount from result or fetch from pricing rule (Item-level only)
             discount_percentage = flt(result.get("discount_percentage") or 0)
@@ -4303,6 +4306,8 @@ def apply_offers(invoice_data, selected_offers=None):
                 free_item_doc.warehouse = profile.warehouse
                 free_items.append(free_item_doc)
 
+        transaction_discount_amount += sum(d for d in tx_rule_discounts.values() if d > 0)
+
         # Post-process: apply selected offers skipped by ERPNext's priority resolution
         # OR completely missed by the engine (e.g. Promotional Scheme rules with
         # customer_group + min_amount that ERPNext evaluates at transaction level,
@@ -4366,15 +4371,16 @@ def apply_offers(invoice_data, selected_offers=None):
                         # the frontend can preview the grand total reduction without
                         # sending per-item discounts to ERPNext at submission.
                         tx_discount = 0.0
-                        for item_doc in prepared_items:
-                            if item_doc.get("is_free_item"):
-                                continue
-                            price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
-                            qty = flt(item_doc.get("qty") or 0)
-                            if full_rule.discount_percentage:
+                        if full_rule.discount_percentage:
+                            for item_doc in prepared_items:
+                                if item_doc.get("is_free_item"):
+                                    continue
+                                price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
+                                qty = flt(item_doc.get("qty") or 0)
                                 tx_discount += price_list_rate * qty * flt(full_rule.discount_percentage) / 100
-                            elif full_rule.discount_amount:
-                                tx_discount += flt(full_rule.discount_amount)
+                        elif full_rule.discount_amount:
+                            # Fixed amount: once per transaction, not once per cart line.
+                            tx_discount = flt(full_rule.discount_amount)
                         if tx_discount > 0:
                             transaction_discount_amount += tx_discount
                             applied_rules.add(rule_name)
