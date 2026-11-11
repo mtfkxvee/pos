@@ -861,9 +861,18 @@ def update_invoice(data):
             elif has_pricing_rule and discount_amt_item > 0 and plr > 0:
                 # Pricing-rule discount: convert frontend TOTAL to per-unit for ERPNext
                 discount_per_unit = flt(discount_amt_item / item_qty, 2)
-                item.rate = flt(max(0, plr - discount_per_unit), 2)
-                item.discount_amount = discount_per_unit
-                item.discount_percentage = 0
+                if discount_per_unit >= plr:
+                    # Fully discounted line (stacked promos are capped at the
+                    # price). ERPNext reads rate 0 as "not set" and re-prices the
+                    # line from discount_percentage, which with 0 would drop the
+                    # whole discount; 100% keeps the line at 0 with its promo.
+                    item.rate = 0
+                    item.discount_amount = plr
+                    item.discount_percentage = 100
+                else:
+                    item.rate = flt(plr - discount_per_unit, 2)
+                    item.discount_amount = discount_per_unit
+                    item.discount_percentage = 0
             elif has_pricing_rule and discount_pct > 0 and plr > 0:
                 expected_rate = flt(plr * (1 - discount_pct / 100), 2)
                 if flt(item.rate) > expected_rate + 0.01:
@@ -3754,6 +3763,72 @@ def _item_qualifies_for_rule(item_doc, rule_doc):
     return False
 
 
+def _pricing_rules_of(item_doc):
+    raw = item_doc.get("pricing_rules") or ""
+    if isinstance(raw, (list, tuple, set)):
+        return [cstr(r).strip() for r in raw if cstr(r).strip()]
+    return [r.strip() for r in cstr(raw).split(",") if r.strip()]
+
+
+def _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules):
+    """Apply item-level discount rules that ERPNext's engine did not apply itself.
+
+    Store policy for rules that overlap on one item:
+    - none of them has a priority -> all of them apply (they stack);
+    - some have a priority -> only the highest priority applies (several
+      rules sharing that top priority stack with each other).
+    ERPNext refuses to price an item whose rules share the top priority
+    (MultiplePricingRuleConflict); those items arrive here unpriced. An item
+    ERPNext did price keeps its rule, and only rules of at least that rule's
+    priority are added to it. The line is capped at its own value afterwards
+    in apply_offers, so a stack can make an item free but never negative.
+    """
+    if not item_price_rules:
+        return
+
+    for item_doc in prepared_items:
+        if item_doc.get("is_free_item"):
+            continue
+        price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
+        qty = flt(item_doc.get("qty") or item_doc.get("quantity") or 0)
+        if not price_list_rate or not qty:
+            continue
+
+        candidates = []
+        for rule_name, rule in item_price_rules:
+            if not _item_qualifies_for_rule(item_doc, rule):
+                continue
+            if flt(rule.discount_percentage):
+                line = price_list_rate * qty * flt(rule.discount_percentage) / 100
+            else:
+                line = flt(rule.discount_amount) * qty
+            if line > 0:
+                candidates.append((rule_name, rule, line))
+        if not candidates:
+            continue
+
+        existing = _pricing_rules_of(item_doc)
+        if existing:
+            top = max(cint(frappe.get_cached_value("Pricing Rule", r, "priority")) for r in existing)
+            chosen = [c for c in candidates if cint(c[1].priority) >= top]
+        else:
+            top = max(cint(c[1].priority) for c in candidates)
+            chosen = [c for c in candidates if cint(c[1].priority) == top]
+
+        if not chosen:
+            continue
+
+        names = list(existing)
+        for rule_name, _rule, line in chosen:
+            item_doc.discount_amount = flt(item_doc.get("discount_amount")) + line
+            names.append(rule_name)
+            applied_rules.add(rule_name)
+        item_doc.pricing_rules = ",".join(names)
+        # Re-derive the percentage from the line total so it reflects every
+        # rule on the line (the frontend prices off discount_amount first).
+        item_doc.discount_percentage = flt(item_doc.discount_amount) / (price_list_rate * qty) * 100
+
+
 def _resolve_pricing_warehouses(pricing_items: list) -> None:
     """Replace each item's warehouse with the most-specific ancestor warehouse
     that appears in an active pricing rule.
@@ -4042,12 +4117,33 @@ def apply_offers(invoice_data, selected_offers=None):
         # Call ERPNext pricing engine when available; otherwise fall through to
         # our own post-processing (which handles selected_offers directly).
         if erpnext_apply_pricing_rule:
+            _message_log_len = len(frappe.local.message_log or [])
             try:
                 pricing_results = erpnext_apply_pricing_rule(pricing_args, doc=pricing_args) or []
             except Exception:
-                # MultiplePricingRuleConflict or other ERPNext engine errors —
-                # fall through to post-process path.
+                # One item whose rules conflict (MultiplePricingRuleConflict: two
+                # rules with the same criteria and no priority) makes ERPNext reject
+                # the WHOLE cart, leaving every item — including ones with a single,
+                # clear rule — to the post-process below. Re-run item by item so
+                # only the conflicting item loses ERPNext's answer; the
+                # post-process then applies the store policy to it (see
+                # _resolve_item_price_rules).
                 pricing_results = []
+                _all_pricing_items = list(pricing_items)
+                for _pi in _all_pricing_items:
+                    _single = frappe._dict(pricing_args)
+                    _single["items"] = [_pi]
+                    _ctx = frappe._dict(pricing_args)
+                    _ctx["items"] = _all_pricing_items
+                    try:
+                        _res = erpnext_apply_pricing_rule(_single, doc=_ctx) or [None]
+                        pricing_results.append(_res[0])
+                    except Exception:
+                        pricing_results.append(None)
+            # The conflict is handled here; don't send ERPNext's "Multiple Price
+            # Rules exists" message to the cashier.
+            if frappe.local.message_log and len(frappe.local.message_log) > _message_log_len:
+                del frappe.local.message_log[_message_log_len:]
         else:
             pricing_results = []
 
@@ -4163,7 +4259,8 @@ def apply_offers(invoice_data, selected_offers=None):
         applied_rules = set()
         free_items = []
         transaction_discount_amount = 0.0  # Accumulator for Transaction-level rule discounts
-        tx_rule_discounts = {}  # Transaction-level rule name -> discount (one entry per rule)
+        tx_rule_discounts = {}  # Transaction-level rule name -> fixed discount (one entry per rule)
+        tx_rule_percentages = {}  # Transaction-level rule name -> percentage, applied at the end
 
         for result, item_index in zip(pricing_results, index_map):
             if not result:
@@ -4219,11 +4316,10 @@ def apply_offers(invoice_data, selected_offers=None):
             # A percentage is summed over every line, but a fixed Discount Amount
             # is granted once per transaction — ERPNext returns the rule on every
             # cart line, so adding it per line multiplied it by the item count.
+            # A percentage is worked out at the end, on the cart after item discounts.
             for rn, full_r in tx_rule_names:
                 if full_r.discount_percentage:
-                    tx_rule_discounts[rn] = flt(tx_rule_discounts.get(rn)) + (
-                        price_list_rate * qty * flt(full_r.discount_percentage) / 100
-                    )
+                    tx_rule_percentages[rn] = flt(full_r.discount_percentage)
                 elif full_r.discount_amount:
                     tx_rule_discounts[rn] = flt(full_r.discount_amount)
 
@@ -4306,8 +4402,6 @@ def apply_offers(invoice_data, selected_offers=None):
                 free_item_doc.warehouse = profile.warehouse
                 free_items.append(free_item_doc)
 
-        transaction_discount_amount += sum(d for d in tx_rule_discounts.values() if d > 0)
-
         # Post-process: apply selected offers skipped by ERPNext's priority resolution
         # OR completely missed by the engine (e.g. Promotional Scheme rules with
         # customer_group + min_amount that ERPNext evaluates at transaction level,
@@ -4330,6 +4424,7 @@ def apply_offers(invoice_data, selected_offers=None):
                         rule_map[rec.name] = frappe._dict(rec)
 
             unapplied = [n for n in selected_offer_names if n not in applied_rules and n in rule_map]
+            item_price_rules = []  # (name, rule) item-level discount rules, resolved per item below
             for rule_name in unapplied:
                 rule_info = rule_map[rule_name]
                 full_rule = frappe.get_cached_doc("Pricing Rule", rule_name)
@@ -4370,47 +4465,50 @@ def apply_offers(invoice_data, selected_offers=None):
                         # Instead, compute the total discount and return it separately so
                         # the frontend can preview the grand total reduction without
                         # sending per-item discounts to ERPNext at submission.
-                        tx_discount = 0.0
+                        # Percentage: worked out at the end on the cart after item
+                        # discounts. Fixed amount: once per transaction.
                         if full_rule.discount_percentage:
-                            for item_doc in prepared_items:
-                                if item_doc.get("is_free_item"):
-                                    continue
-                                price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
-                                qty = flt(item_doc.get("qty") or 0)
-                                tx_discount += price_list_rate * qty * flt(full_rule.discount_percentage) / 100
+                            tx_rule_percentages[rule_name] = flt(full_rule.discount_percentage)
                         elif full_rule.discount_amount:
-                            # Fixed amount: once per transaction, not once per cart line.
-                            tx_discount = flt(full_rule.discount_amount)
-                        if tx_discount > 0:
-                            transaction_discount_amount += tx_discount
-                            applied_rules.add(rule_name)
+                            tx_rule_discounts[rule_name] = flt(full_rule.discount_amount)
                     else:
-                        for item_doc in prepared_items:
-                            if item_doc.get("is_free_item"):
-                                continue
-                            if not _item_qualifies_for_rule(item_doc, full_rule):
-                                continue
-                            price_list_rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
-                            qty = flt(item_doc.get("qty") or 0)
-                            if full_rule.discount_percentage:
-                                item_doc.discount_amount = flt(item_doc.discount_amount or 0) + price_list_rate * qty * flt(full_rule.discount_percentage) / 100
-                            elif full_rule.discount_amount:
-                                item_doc.discount_amount = flt(item_doc.discount_amount or 0) + flt(full_rule.discount_amount) * qty
-                            # Re-derive discount_percentage from the running discount_amount total
-                            # (rather than accumulating raw percentages) so it always reflects
-                            # every stacked rule. Without this, a rule already resolved by
-                            # ERPNext's own engine (which sets discount_percentage for the
-                            # winning rule before this loop stacks additional rules on top via
-                            # discount_amount) leaves discount_percentage stuck at the first
-                            # rule's value while discount_amount correctly grows — the frontend
-                            # then prices off the stale, smaller discount_percentage.
-                            base_amount = price_list_rate * qty
-                            if base_amount:
-                                item_doc.discount_percentage = flt(item_doc.discount_amount) / base_amount * 100
-                            # Append rule name to item's pricing_rules string
-                            existing = item_doc.pricing_rules or ""
-                            item_doc.pricing_rules = (existing + "," + rule_name).strip(",")
-                            applied_rules.add(rule_name)
+                        item_price_rules.append((rule_name, full_rule))
+
+            _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules)
+
+        # No line may be discounted below zero: a stack of rules (or a fixed
+        # amount on a cheap item) can make an item free, never negative — a
+        # discount bigger than the line is what left the GL unbalanced.
+        for item_doc in prepared_items:
+            if item_doc.get("is_free_item"):
+                continue
+            _plr = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
+            _qty = flt(item_doc.get("qty") or item_doc.get("quantity") or 0)
+            _base = _plr * _qty
+            if _base > 0 and flt(item_doc.get("discount_amount")) > _base:
+                item_doc.discount_amount = _base
+                item_doc.discount_percentage = 100
+
+        # Transaction-level discounts. A percentage is taken from the cart after
+        # item discounts — the same base ERPNext uses for additional_discount_percentage
+        # (applied on the Grand Total) — not from the list prices.
+        if tx_rule_percentages:
+            _net_after_items = sum(
+                max(
+                    0,
+                    flt(d.get("price_list_rate") or d.get("rate") or 0) * flt(d.get("qty") or d.get("quantity") or 0)
+                    - flt(d.get("discount_amount")),
+                )
+                for d in prepared_items
+                if not d.get("is_free_item")
+            )
+            for rn, pct in tx_rule_percentages.items():
+                _amt = _net_after_items * pct / 100
+                if _amt > 0:
+                    tx_rule_discounts[rn] = _amt
+                    applied_rules.add(rn)
+        transaction_discount_amount += sum(d for d in tx_rule_discounts.values() if d > 0)
+        applied_rules.update(rn for rn, d in tx_rule_discounts.items() if d > 0)
 
         # Deduplicate free items: ERPNext may return the same free item once per
         # evaluated cart item that matches the rule. Keep only the first occurrence

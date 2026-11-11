@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 
 
 # ============================================================================
@@ -92,6 +92,9 @@ class Offer:
 	customer_group: Optional[str] = None   # required group when applicable_for = "Customer Group"
 	# Warehouse restriction (None = applies to all warehouses)
 	warehouse: Optional[str] = None
+	# Pricing Rule priority (0 = none). When item-level rules overlap on one item,
+	# only the highest priority is applied; without priorities they all stack.
+	priority: int = 0
 
 	def to_dict(self) -> Dict:
 		"""Convert to dictionary for API response"""
@@ -403,6 +406,7 @@ class OfferBuilder:
 			applicable_for=rule.get("applicable_for") or None,
 			customer_group=rule.get("customer_group") or None,
 			warehouse=rule.get("warehouse") or None,
+			priority=cint(rule.get("priority")),
 		)
 
 	@staticmethod
@@ -461,6 +465,7 @@ class OfferBuilder:
 			applicable_for=rule.get("applicable_for") or None,
 			customer_group=rule.get("customer_group") or None,
 			warehouse=rule.get("warehouse") or None,
+			priority=cint(rule.get("priority")),
 		)
 
 

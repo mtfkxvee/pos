@@ -1553,6 +1553,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return true
 		}
 
+		if (offer.apply_on !== "Transaction") {
+			return applyOfflineItemPriceRule(offer, eligibleItems)
+		}
+
 		for (const item of eligibleItems) {
 			// Only apply if no existing pricing rule
 			if (item.pricing_rules && item.pricing_rules.length > 0) continue
@@ -1577,6 +1581,70 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			}
 		}
 
+		return applied
+	}
+
+	function pricingRulesOf(item) {
+		const raw = item.pricing_rules
+		if (!raw) return []
+		if (Array.isArray(raw)) return raw.map((r) => String(r).trim()).filter(Boolean)
+		return String(raw).split(",").map((r) => r.trim()).filter(Boolean)
+	}
+
+	function offerPriority(name) {
+		const offer = (offersStore.availableOffers || []).find((o) => o.name === name)
+		return Number.parseInt(offer?.priority) || 0
+	}
+
+	/**
+	 * Item-level promo, offline. Promos that overlap on one item follow the same
+	 * store policy as the server's apply_offers (_resolve_item_price_rules), so
+	 * the cashier sees the same price online and offline:
+	 * - none of them has a priority -> they all apply (stack);
+	 * - otherwise only the highest priority applies (equal top priorities stack).
+	 * The line is capped at its own value: a stack can make an item free, never
+	 * negative. Discounts are kept as a line-total discount_amount (a fixed
+	 * amount is per unit, x qty — as ERPNext and apply_offers do).
+	 */
+	function applyOfflineItemPriceRule(offer, eligibleItems) {
+		const discountType = offer.discount_type || offer.rate_or_discount
+		const pct = Number.parseFloat(offer.discount_percentage) || 0
+		const amt = Number.parseFloat(offer.discount_amount) || 0
+		const fixedRate = Number.parseFloat(offer.rate) || 0
+		const priority = Number.parseInt(offer.priority) || 0
+
+		let applied = false
+		for (const item of eligibleItems) {
+			const qty = Number.parseFloat(item.quantity ?? item.qty) || 0
+			const plr = Number.parseFloat(item.price_list_rate || item.rate) || 0
+			const base = roundCurrency(plr * qty)
+			if (base <= 0) continue
+
+			let line = 0
+			if (discountType === "Discount Percentage" && pct > 0) line = (base * pct) / 100
+			else if (discountType === "Discount Amount" && amt > 0) line = amt * qty
+			else if (discountType === "Rate" && fixedRate > 0) line = Math.max(0, (plr - fixedRate) * qty)
+			if (line <= 0) continue
+
+			let rules = pricingRulesOf(item)
+			if (rules.includes(offer.name)) continue
+			let current = rules.length ? Number.parseFloat(item.discount_amount) || 0 : 0
+			if (rules.length) {
+				const existingTop = Math.max(...rules.map(offerPriority))
+				if (priority < existingTop) continue
+				if (priority > existingTop) {
+					// A higher priority replaces what was there.
+					rules = []
+					current = 0
+				}
+			}
+
+			item.discount_percentage = 0
+			item.discount_amount = roundCurrency(Math.min(base, current + line))
+			item.pricing_rules = [...rules, offer.name]
+			recalculateItem(item)
+			applied = true
+		}
 		return applied
 	}
 
