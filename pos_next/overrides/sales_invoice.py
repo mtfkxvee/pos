@@ -217,10 +217,12 @@ class CustomSalesInvoice(SalesInvoice):
 		):
 			self.discount_amount = flt(intended_da)
 			self.additional_discount_percentage = 0
-			# Directly fix grand_total — do NOT call calculate_taxes_and_totals()
-			# which would trigger set_pos_fields() again and loop back here.
-			self.grand_total = flt(self.net_total) - flt(intended_da)
-			self.base_grand_total = self.grand_total
+			# Recalculate rather than set grand_total directly: the discount has to
+			# be spread over the items (net_amount / distributed_discount_amount),
+			# which is what the GL entries are built from. Setting only the header
+			# left the items on the old discount and GL Debit != Credit.
+			# calculate_taxes_and_totals() does not call validate()/set_pos_fields().
+			self.calculate_taxes_and_totals()
 			# Recalculate outstanding from corrected grand_total
 			total_paid = sum(
 				flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
@@ -249,16 +251,10 @@ class CustomSalesInvoice(SalesInvoice):
 			# on the credit side. A bigger gap with ERPNext's total below the
 			# cashier's is not rounding (e.g. a qty stored with less precision):
 			# don't paper over it, keep ERPNext's figure.
-			# Pre-discount total = net + taxes (discount is applied on Grand Total).
-			_target_da = flt(self.net_total) + flt(self.get("total_taxes_and_charges") or 0) - _locked_gt
-			_gap = abs(flt(self.grand_total) - _locked_gt)
-			if _gap > 1 and (_target_da >= 0 or _gap < 100):
-				self.discount_amount = _target_da
-				# GL books the invoice discount from base_discount_amount.
-				self.base_discount_amount = _target_da
-				self.additional_discount_percentage = 0
-				self.grand_total = _locked_gt
-				self.base_grand_total = _locked_gt
+			_gap = flt(self.grand_total) - _locked_gt
+			_target_da = flt(self.discount_amount) + _gap
+			if abs(_gap) > 1 and (_target_da >= 0 or abs(_gap) < 100):
+				self._lock_grand_total(_locked_gt)
 				_total_paid = sum(
 					flt(getattr(p, "amount", 0) if hasattr(p, "amount") else p.get("amount", 0))
 					for p in (self.get("payments") or [])
@@ -275,6 +271,30 @@ class CustomSalesInvoice(SalesInvoice):
 					self.change_amount = max(0, _total_paid - _locked_gt - flt(self.write_off_amount or 0))
 					self.base_change_amount = self.change_amount
 				self.set_status()
+
+	def _lock_grand_total(self, locked_gt):
+		"""Bring grand_total to ``locked_gt`` by moving the invoice discount.
+
+		The discount is changed and the totals recalculated, so ERPNext spreads
+		it over the items (net_amount / distributed_discount_amount) — the GL
+		books revenue and the discount from those. Setting discount_amount and
+		grand_total on the header alone left the items on the old discount and
+		made the GL unbalanced (Debit != Credit by exactly that difference).
+		Moving the discount by the remaining gap converges in one step; the
+		extra rounds only absorb item-level rounding.
+		"""
+		for _ in range(3):
+			gap = flt(self.grand_total) - locked_gt
+			if abs(gap) < 0.005:
+				break
+			new_da = flt(self.discount_amount) + gap
+			# Later validate cycles (save -> submit) restore this value.
+			self.flags.pos_next_discount_amount = new_da
+			self.discount_amount = new_da
+			self.additional_discount_percentage = 0
+			if not self.apply_discount_on:
+				self.apply_discount_on = "Grand Total"
+			self.calculate_taxes_and_totals()
 
 	def get_gl_entries(self, warehouse_account=None):
 		"""
