@@ -140,40 +140,65 @@ def check_one_use(coupon, customer):
     """Enforce "Only One Use Per Customer". Returns an error message, or None if OK.
 
     A customer counts as having used the coupon when a submitted (not cancelled,
-    not return) Sales Invoice for that customer records it in custom_pos_coupon.
-    The POS Profile default customer (e.g. WALK IN CUST) is one shared record for
-    every anonymous buyer, so it can't be told apart: a registered customer must be
-    chosen for these coupons.
+    not return) Sales Invoice for that customer records it, in custom_pos_coupon
+    or in its custom_pos_coupons table.
+
+    No customer, or the POS Profile default customer (e.g. WALK IN CUST), is
+    allowed: that one record stands for every anonymous buyer, so there is no
+    single person to hold to "once". The coupon's Maximum Use still caps it.
     """
     if not coupon.get("one_use"):
         return None
 
-    if not customer:
-        return _("This coupon can only be used once per customer. Please select a customer.")
-
-    default_customers = {
-        c for c in frappe.get_all("POS Profile", pluck="customer", filters={"disabled": 0}) if c
-    }
-    if customer in default_customers:
-        return _(
-            "This coupon can only be used once per customer. Please select a registered customer instead of {0}."
-        ).format(customer)
-
-    if not frappe.db.has_column("Sales Invoice", "custom_pos_coupon"):
+    if not customer or is_walk_in_customer(customer):
         return None
 
-    already_used = frappe.db.count(
-        "Sales Invoice",
-        {
-            "custom_pos_coupon": coupon.get("name"),
-            "customer": customer,
-            "docstatus": 1,
-            "is_return": 0,
-        },
-    )
-    if already_used:
+    if coupon_used_by_customer(coupon.get("name"), customer):
         return _("Sorry, this customer has already used this coupon")
     return None
+
+
+def is_walk_in_customer(customer):
+    """True when `customer` is the default customer of an active POS Profile."""
+    return bool(
+        customer
+        and frappe.db.exists("POS Profile", {"customer": customer, "disabled": 0})
+    )
+
+
+def coupon_used_by_customer(coupon_name, customer):
+    """Whether `customer` has a submitted, non-return Sales Invoice with this coupon."""
+    if frappe.db.has_column("Sales Invoice", "custom_pos_coupon"):
+        if frappe.db.count(
+            "Sales Invoice",
+            {
+                "custom_pos_coupon": coupon_name,
+                "customer": customer,
+                "docstatus": 1,
+                "is_return": 0,
+            },
+        ):
+            return True
+
+    if frappe.db.table_exists("POS Invoice Coupon"):
+        rows = frappe.db.sql(
+            """
+            SELECT 1
+            FROM `tabPOS Invoice Coupon` c
+            JOIN `tabSales Invoice` si ON si.name = c.parent
+            WHERE c.parenttype = 'Sales Invoice'
+              AND c.coupon = %s
+              AND si.customer = %s
+              AND si.docstatus = 1
+              AND si.is_return = 0
+            LIMIT 1
+            """,
+            (coupon_name, customer),
+        )
+        if rows:
+            return True
+
+    return False
 
 
 def apply_coupon_discount(coupon, cart_total, net_total=None):

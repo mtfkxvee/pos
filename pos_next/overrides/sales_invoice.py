@@ -333,42 +333,68 @@ class CustomSalesInvoice(SalesInvoice):
 		super().on_cancel()
 		self._track_coupon_usage(-1)
 
-	def _track_coupon_usage(self, delta):
-		"""Count this invoice against its POS Coupon's `used` (+1 on submit, -1 on cancel)."""
+	def _pos_coupon_rows(self):
+		"""[(coupon name, discount amount)] for every POS Coupon on this invoice.
+
+		Read from the custom_pos_coupons table; an invoice saved before coupons
+		could be stacked only has custom_pos_coupon / custom_coupon_discount_amount.
+		"""
+		rows = [
+			(row.coupon, flt(row.discount_amount))
+			for row in (self.get("custom_pos_coupons") or [])
+			if row.get("coupon")
+		]
+		if rows:
+			return rows
 		coupon = self.get("custom_pos_coupon")
-		if not coupon or cint(self.get("is_return")):
+		if coupon:
+			return [(coupon, flt(self.get("custom_coupon_discount_amount") or 0))]
+		return []
+
+	def _track_coupon_usage(self, delta):
+		"""Count this invoice against each POS Coupon's `used` (+1 on submit, -1 on cancel)."""
+		if cint(self.get("is_return")):
 			return
 		try:
 			from pos_next.pos_next.doctype.pos_coupon.pos_coupon import adjust_coupon_usage
 
-			adjust_coupon_usage(coupon, delta)
+			for coupon in dict.fromkeys(name for name, _amount in self._pos_coupon_rows()):
+				adjust_coupon_usage(coupon, delta)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "POS Coupon usage tracking")
 
 	def _adjust_coupon_discount_gl(self, gl_entries):
-		"""Re-route the coupon portion of the invoice discount from diskon_akun
-		(Potongan Penjualan) to the coupon's Discount Account:
+		"""Re-route each coupon's portion of the invoice discount from diskon_akun
+		(Potongan Penjualan) to that coupon's Discount Account:
 		  DR coupon.discount_account : coupon_amount
 		  CR diskon_akun             : coupon_amount
-		Does nothing when the coupon has no Discount Account (stays in Potongan Penjualan).
+		A coupon without a Discount Account stays in Potongan Penjualan.
 		"""
-		coupon = self.get("custom_pos_coupon")
-		coupon_amount = flt(self.get("custom_coupon_discount_amount") or 0)
-		if not coupon or coupon_amount <= 0.01:
+		rows = [(c, amount) for c, amount in self._pos_coupon_rows() if amount > 0.01]
+		if not rows:
 			return
 
-		coupon_account = frappe.db.get_value("POS Coupon", coupon, "discount_account")
 		diskon_akun = self.get("additional_discount_account") or self._get_diskon_akun()
-		if not coupon_account or not diskon_akun or coupon_account == diskon_akun:
+		if not diskon_akun:
 			return
 
 		# Never re-route more than what is left of the invoice discount once the
-		# transaction-level promo portion has been taken out.
-		available = flt(self.discount_amount) - flt(self.get("custom_promo_discount_amount") or 0)
-		coupon_amount = min(coupon_amount, max(available, 0))
-		if coupon_amount <= 0.01:
-			return
+		# transaction-level promo portion has been taken out; coupons take from
+		# it in the order they were applied.
+		available = max(
+			flt(self.discount_amount) - flt(self.get("custom_promo_discount_amount") or 0), 0
+		)
+		for coupon, amount in rows:
+			amount = flt(min(amount, available), self.precision("discount_amount"))
+			if amount <= 0.01:
+				break
+			available -= amount
+			coupon_account = frappe.db.get_value("POS Coupon", coupon, "discount_account")
+			if not coupon_account or coupon_account == diskon_akun:
+				continue
+			self._append_coupon_gl(gl_entries, coupon, coupon_account, diskon_akun, amount)
 
+	def _append_coupon_gl(self, gl_entries, coupon, coupon_account, diskon_akun, coupon_amount):
 		remarks = f"POS Coupon: {coupon}"
 		gl_entries.append(
 			self.get_gl_dict(

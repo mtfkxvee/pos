@@ -100,6 +100,7 @@ fixtures = [
 					"Sales Invoice-custom_shipping_address",
 					"Sales Invoice-custom_pos_coupon",
 					"Sales Invoice-custom_coupon_discount_amount",
+					"Sales Invoice-custom_pos_coupons",
 					"Item-custom_company",
 					"POS Profile-posa_cash_mode_of_payment",
 					"POS Profile-posa_allow_delete",

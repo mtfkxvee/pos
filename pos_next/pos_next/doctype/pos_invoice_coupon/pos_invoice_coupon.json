@@ -1,0 +1,57 @@
+{
+ "actions": [],
+ "creation": "2026-11-12 15:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "coupon",
+  "coupon_code",
+  "coupon_type",
+  "discount_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "coupon",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Coupon",
+   "options": "POS Coupon",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "coupon_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Coupon Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "coupon_type",
+   "fieldtype": "Data",
+   "label": "Coupon Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "discount_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Discount Amount",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-12 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POS Next",
+ "name": "POS Invoice Coupon",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

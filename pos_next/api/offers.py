@@ -747,8 +747,11 @@ def get_active_coupons(customer: str, company: str) -> List[Dict]:
 
 
 @frappe.whitelist()
-def validate_coupon(coupon_code: str, customer: str, company: str) -> Dict:
-	"""Validate a coupon code and return its details"""
+def validate_coupon(coupon_code: str, company: str, customer: Optional[str] = None) -> Dict:
+	"""Validate a coupon code and return its details.
+
+	customer may be empty: the POS then sells to its default (walk-in) customer.
+	"""
 	if not frappe.db.table_exists("POS Coupon"):
 		return {"valid": False, "message": _("Coupons are not enabled")}
 

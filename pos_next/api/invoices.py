@@ -578,6 +578,90 @@ def resolve_invoice_warehouses(invoice_doc, pos_profile_doc):
         invoice_doc.calculate_taxes_and_totals()
 
 
+def _pos_coupon_entries(data):
+    """The coupons a POS payload carries, as [{coupon_code, discount_amount}].
+
+    `pos_coupons` (a list, several coupons stacked) wins; an older client sends
+    one `coupon_code` + `coupon_discount_amount` instead.
+    """
+    entries = []
+    for row in data.get("pos_coupons") or []:
+        if isinstance(row, dict):
+            code = cstr(row.get("coupon_code") or row.get("code")).strip()
+            amount = flt(row.get("discount_amount") or row.get("amount"))
+        else:
+            code, amount = cstr(row).strip(), 0
+        if code:
+            entries.append({"coupon_code": code, "discount_amount": amount})
+
+    if not entries and cstr(data.get("coupon_code")).strip():
+        entries.append(
+            {
+                "coupon_code": cstr(data.get("coupon_code")).strip(),
+                "discount_amount": flt(data.get("coupon_discount_amount")),
+            }
+        )
+    return entries
+
+
+def _apply_pos_coupons(invoice_doc, data):
+    """Validate every POS Coupon on the payload and record them on the invoice.
+
+    Each coupon goes in the custom_pos_coupons table with the discount it gave
+    (the GL routes each to its coupon's Discount Account; usage is counted per
+    coupon on submit). custom_pos_coupon / custom_coupon_discount_amount keep
+    the first coupon and the coupons' total, for reports written against them.
+    No coupon clears anything an earlier attempt on the same draft left behind.
+    """
+    meta = frappe.get_meta(invoice_doc.doctype)
+    has_table = meta.has_field("custom_pos_coupons")
+    if has_table:
+        invoice_doc.set("custom_pos_coupons", [])
+
+    applied = []
+    entries = _pos_coupon_entries(data)
+    if entries and frappe.db.table_exists("POS Coupon"):
+        from pos_next.pos_next.doctype.pos_coupon.pos_coupon import check_coupon_code
+
+        seen = set()
+        for entry in entries:
+            result = check_coupon_code(
+                entry["coupon_code"],
+                customer=invoice_doc.customer,
+                company=invoice_doc.company,
+            )
+            if not result or not result.get("valid"):
+                msg = (result or {}).get("msg") or _("Invalid coupon code")
+                frappe.throw(_("Coupon {0}: {1}").format(entry["coupon_code"].upper(), msg))
+
+            coupon = result["coupon"]
+            if coupon.name in seen:
+                frappe.throw(_("Coupon {0} is applied more than once").format(coupon.coupon_code))
+            seen.add(coupon.name)
+            applied.append((coupon, max(flt(entry["discount_amount"]), 0)))
+
+    if len(applied) > 1 and not has_table:
+        frappe.throw(
+            _("This site cannot record more than one coupon per invoice yet. Please run bench migrate.")
+        )
+
+    if has_table:
+        for coupon, amount in applied:
+            invoice_doc.append(
+                "custom_pos_coupons",
+                {
+                    "coupon": coupon.name,
+                    "coupon_code": coupon.coupon_code,
+                    "coupon_type": coupon.coupon_type,
+                    "discount_amount": amount,
+                },
+            )
+    if meta.has_field("custom_pos_coupon"):
+        invoice_doc.custom_pos_coupon = applied[0][0].name if applied else None
+    if meta.has_field("custom_coupon_discount_amount"):
+        invoice_doc.custom_coupon_discount_amount = sum(amount for _c, amount in applied)
+
+
 @frappe.whitelist()
 def update_invoice(data):
     """Create or update invoice draft (Step 1)."""
@@ -1107,41 +1191,8 @@ def update_invoice(data):
                     sum(p.base_amount or 0 for p in invoice_doc.payments)
                 )
 
-        # Validate and track POS Coupon if coupon_code is provided
-        coupon_code = data.get("coupon_code")
-        if coupon_code:
-            # Validate POS Coupon exists and is valid
-            if frappe.db.table_exists("POS Coupon"):
-                from pos_next.pos_next.doctype.pos_coupon.pos_coupon import check_coupon_code
-
-                coupon_result = check_coupon_code(
-                    coupon_code,
-                    customer=invoice_doc.customer,
-                    company=invoice_doc.company
-                )
-
-                if not coupon_result or not coupon_result.get("valid"):
-                    error_msg = coupon_result.get("msg", "Invalid coupon code") if coupon_result else "Invalid coupon code"
-                    frappe.throw(_(error_msg))
-
-                # Record which coupon was used and how much it discounted, so
-                # reports can list coupon -> invoice -> customer and the GL can
-                # route the discount to the coupon's own account.
-                _si_meta = frappe.get_meta(invoice_doc.doctype)
-                if _si_meta.has_field("custom_pos_coupon"):
-                    invoice_doc.custom_pos_coupon = coupon_result["coupon"].name
-                if _si_meta.has_field("custom_coupon_discount_amount"):
-                    invoice_doc.custom_coupon_discount_amount = flt(
-                        data.get("coupon_discount_amount") or 0
-                    )
-        else:
-            # No coupon on this (re)submission — clear anything left over from an
-            # earlier attempt on the same draft.
-            _si_meta = frappe.get_meta(invoice_doc.doctype)
-            if _si_meta.has_field("custom_pos_coupon"):
-                invoice_doc.custom_pos_coupon = None
-            if _si_meta.has_field("custom_coupon_discount_amount"):
-                invoice_doc.custom_coupon_discount_amount = 0
+        # Validate the POS Coupon(s) and record them on the invoice.
+        _apply_pos_coupons(invoice_doc, data)
 
         # ERPNext might overwrite remarks for Returns during validation. Reinforce it.
         frontend_remarks = data.get("remarks")
@@ -2094,7 +2145,7 @@ def submit_invoice(invoice=None, data=None):
                     })
 
         # POS Coupon usage is counted in CustomSalesInvoice.on_submit / on_cancel
-        # (based on the invoice's custom_pos_coupon), so it stays in step with the
+        # (one count per coupon in custom_pos_coupons), so it stays in step with the
         # invoice and is not double-counted on retries.
 
         # Auto-set batch numbers for returns
