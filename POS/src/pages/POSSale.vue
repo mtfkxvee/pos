@@ -2932,12 +2932,17 @@ async function handleLoadDraft(draft) {
 					// that was already applied — reusing them here would let
 					// forceRefreshOffers() apply the same promo again on top of
 					// the already-discounted rate (double discount).
-					const originalRate = Number(item.price_list_rate) || Number(item.rate) || 0
+					// The saved price_list_rate also includes any margin a pricing
+					// rule added (margin_amount, per unit): take it off for the same
+					// reason — the refreshed offers add it again.
+					const savedRate = Number(item.price_list_rate) || Number(item.rate) || 0
+					const originalRate = Math.max(0, savedRate - (Number(item.margin_amount) || 0))
 					return {
 						...item,
 						quantity: Number(item.qty) || Number(item.quantity) || 0,
 						rate: originalRate,
 						price_list_rate: originalRate,
+						margin_amount: 0,
 						discount_percentage: 0,
 						discount_amount: 0,
 						pricing_rules: "",

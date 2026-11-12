@@ -95,6 +95,11 @@ class Offer:
 	# Pricing Rule priority (0 = none). When item-level rules overlap on one item,
 	# only the highest priority is applied; without priorities they all stack.
 	priority: int = 0
+	# Margin the rule adds on top of the price list rate ("Percentage" or "Amount").
+	# It raises the unit price; any discount is then taken from the raised price.
+	margin_type: Optional[str] = None
+	margin_rate_or_amount: float = 0
+	currency: Optional[str] = None
 
 	def to_dict(self) -> Dict:
 		"""Convert to dictionary for API response"""
@@ -432,6 +437,14 @@ class OfferBuilder:
 			eligible_brands = eligibility.brands
 
 		is_price_discount = rule.get("price_or_product_discount") == DiscountType.PRICE
+		# Same conditions as apply_offers (_rule_margin_per_unit): item-level
+		# price rules with a positive margin.
+		has_margin = (
+			is_price_discount
+			and rule["apply_on"] != "Transaction"
+			and rule.get("margin_type") in ("Percentage", "Amount")
+			and flt(rule.get("margin_rate_or_amount")) > 0
+		)
 
 		return Offer(
 			name=rule["name"],
@@ -466,6 +479,9 @@ class OfferBuilder:
 			customer_group=rule.get("customer_group") or None,
 			warehouse=rule.get("warehouse") or None,
 			priority=cint(rule.get("priority")),
+			margin_type=(rule.get("margin_type") or None) if has_margin else None,
+			margin_rate_or_amount=flt(rule.get("margin_rate_or_amount")) if has_margin else 0,
+			currency=rule.get("currency") or None,
 		)
 
 
@@ -643,6 +659,7 @@ def _get_standalone_pricing_rule_offers(company: str, date: str, pos_warehouse: 
 			name, title, apply_on, selling,
 			coupon_code_based, price_or_product_discount,
 			rate_or_discount, rate, discount_amount, discount_percentage,
+			margin_type, margin_rate_or_amount, currency,
 			min_qty, max_qty, min_amt, max_amt,
 			free_item, free_qty, free_item_uom, same_item,
 			priority, valid_from, valid_upto,

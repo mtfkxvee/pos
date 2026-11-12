@@ -583,15 +583,20 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				appliedCoupon.value.code !== "COMPLIMENT"
 					? appliedCoupon.value.code || appliedCoupon.value.name
 					: "",
+			// Offers are always evaluated on the list price: a margin a rule
+			// already added to the cart price is taken off again here, so the
+			// server never adds it on top of itself.
 			items: rawItems.map((item) => ({
 				item_code: item.item_code,
 				item_name: item.item_name,
 				qty: item.quantity,
-				rate: item.rate,
+				rate: item.margin_amount ? listPriceOf(item) : item.rate,
 				uom: item.uom,
 				warehouse: item.warehouse,
 				conversion_factor: item.conversion_factor || 1,
-				price_list_rate: item.price_list_rate || item.rate,
+				price_list_rate: item.margin_amount
+					? listPriceOf(item)
+					: item.price_list_rate || item.rate,
 				discount_percentage: item.discount_percentage || 0,
 				discount_amount: item.discount_amount || 0,
 			})),
@@ -605,6 +610,44 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		if (!value) return false
 		if (Array.isArray(value)) return value.length > 0
 		return typeof value === "string" && value.trim().length > 0
+	}
+
+	/**
+	 * A Pricing Rule margin raises an item's unit price. The cart keeps the
+	 * raised price in price_list_rate / rate — every total, the receipt and the
+	 * submitted invoice price off those — and records how much of it is margin
+	 * in margin_amount (per unit), so the list price can always be recovered.
+	 */
+	function listPriceOf(item) {
+		const price = Number.parseFloat(item.price_list_rate || item.rate) || 0
+		return roundCurrency(price - (Number.parseFloat(item.margin_amount) || 0))
+	}
+
+	/**
+	 * Set the per-unit margin on a cart item (0 removes it), repricing the item
+	 * from its list price.
+	 */
+	function setItemMargin(item, marginPerUnit) {
+		const margin = Math.max(0, Number.parseFloat(marginPerUnit) || 0)
+		if (!margin && !item.margin_amount) return
+		const listPrice = listPriceOf(item)
+		const price = roundCurrency(listPrice + margin)
+		item.margin_amount = roundCurrency(price - listPrice)
+		item.price_list_rate = price
+		item.rate = price
+	}
+
+	/**
+	 * Per-unit margin an offer adds to a list price (offline calculation;
+	 * the server works it out the same way in apply_offers).
+	 */
+	function offerMarginPerUnit(offer, listPrice) {
+		if (offer.apply_on === "Transaction") return 0
+		const value = Number.parseFloat(offer.margin_rate_or_amount) || 0
+		if (value <= 0) return 0
+		if (offer.margin_type === "Percentage") return (listPrice * value) / 100
+		if (offer.margin_type === "Amount") return value
+		return 0
 	}
 
 	/**
@@ -626,6 +669,10 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			const serverItem = serverItems[serverIndex++] || {}
 			const discountPct = Number.parseFloat(serverItem.discount_percentage) || 0
 			const discountAmt = Number.parseFloat(serverItem.discount_amount) || 0
+
+			// Rule margin: raise (or restore) the unit price before the discount
+			// below is taken from it.
+			setItemMargin(item, serverItem.margin_amount)
 
 			// Only update if server applied a pricing rule or discount
 			if (
@@ -1111,6 +1158,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 							item.discount_percentage = 0
 							item.discount_amount = 0
 							item.pricing_rules = []
+							setItemMargin(item, 0)
 							recalculateItem(item)
 						}
 					})
@@ -1502,6 +1550,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				item.discount_percentage = 0
 				item.discount_amount = 0
 				item.pricing_rules = []
+				setItemMargin(item, 0)
 				item.rate = item.price_list_rate || item.rate
 				recalculateItem(item)
 			}
@@ -1613,22 +1662,25 @@ export const usePOSCartStore = defineStore("posCart", () => {
 		const fixedRate = Number.parseFloat(offer.rate) || 0
 		const priority = Number.parseInt(offer.priority) || 0
 
+		const hasDiscount =
+			(discountType === "Discount Percentage" && pct > 0) ||
+			(discountType === "Discount Amount" && amt > 0) ||
+			(discountType === "Rate" && fixedRate > 0)
+
 		let applied = false
 		for (const item of eligibleItems) {
 			const qty = Number.parseFloat(item.quantity ?? item.qty) || 0
-			const plr = Number.parseFloat(item.price_list_rate || item.rate) || 0
-			const base = roundCurrency(plr * qty)
-			if (base <= 0) continue
+			if (qty <= 0 || listPriceOf(item) <= 0) continue
 
-			let line = 0
-			if (discountType === "Discount Percentage" && pct > 0) line = (base * pct) / 100
-			else if (discountType === "Discount Amount" && amt > 0) line = amt * qty
-			else if (discountType === "Rate" && fixedRate > 0) line = Math.max(0, (plr - fixedRate) * qty)
-			if (line <= 0) continue
+			// The offer's margin raises the unit price; its discount is then
+			// taken from the raised price (as ERPNext and apply_offers do).
+			const margin = offerMarginPerUnit(offer, listPriceOf(item))
+			if (!hasDiscount && margin <= 0) continue
 
 			let rules = pricingRulesOf(item)
 			if (rules.includes(offer.name)) continue
 			let current = rules.length ? Number.parseFloat(item.discount_amount) || 0 : 0
+			let currentMargin = rules.length ? Number.parseFloat(item.margin_amount) || 0 : 0
 			if (rules.length) {
 				const existingTop = Math.max(...rules.map(offerPriority))
 				if (priority < existingTop) continue
@@ -1636,8 +1688,21 @@ export const usePOSCartStore = defineStore("posCart", () => {
 					// A higher priority replaces what was there.
 					rules = []
 					current = 0
+					currentMargin = 0
 				}
 			}
+
+			if (margin > 0 || currentMargin !== (Number.parseFloat(item.margin_amount) || 0)) {
+				setItemMargin(item, currentMargin + margin)
+			}
+			const plr = Number.parseFloat(item.price_list_rate || item.rate) || 0
+			const base = roundCurrency(plr * qty)
+
+			let line = 0
+			if (discountType === "Discount Percentage" && pct > 0) line = (base * pct) / 100
+			else if (discountType === "Discount Amount" && amt > 0) line = amt * qty
+			else if (discountType === "Rate" && fixedRate > 0) line = Math.max(0, (plr - fixedRate) * qty)
+			if (line <= 0 && margin <= 0) continue
 
 			item.discount_percentage = 0
 			item.discount_amount = roundCurrency(Math.min(base, current + line))
@@ -1914,6 +1979,9 @@ export const usePOSCartStore = defineStore("posCart", () => {
 
 		cartItem.uom = newUom
 		cartItem.conversion_factor = newConversionFactor
+		// A freshly looked-up price is a list price: the margin a rule added to
+		// the old one no longer applies (offers are re-evaluated after this).
+		if (newPriceListRate !== cartItem.price_list_rate) cartItem.margin_amount = 0
 		cartItem.rate = newRate
 		cartItem.price_list_rate = newPriceListRate
 		return true
@@ -1996,8 +2064,12 @@ export const usePOSCartStore = defineStore("posCart", () => {
 				cartItem.discount_percentage = updates.discount_percentage
 			if (updates.discount_amount !== undefined)
 				cartItem.discount_amount = updates.discount_amount
-			if (updates.price_list_rate !== undefined)
+			if (updates.price_list_rate !== undefined) {
+				// A changed price is a new list price, without the rule margin.
+				if (updates.price_list_rate !== cartItem.price_list_rate)
+					cartItem.margin_amount = 0
 				cartItem.price_list_rate = updates.price_list_rate
+			}
 			if (updates.serial_no !== undefined)
 				cartItem.serial_no = updates.serial_no
 

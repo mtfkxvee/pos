@@ -1183,6 +1183,7 @@ def get_pos_draft_invoices(pos_profile=None):
         fields=[
             "name", "customer", "customer_name", "grand_total", "creation",
             "discount_amount", "additional_discount_percentage", "apply_discount_on",
+            "currency",
         ]
     )
 
@@ -1210,8 +1211,13 @@ def get_pos_draft_invoices(pos_profile=None):
                 "item_group", "brand",
             ]
         )
+        currency_by_invoice = {inv.name: inv.currency for inv in invoices}
         items_by_invoice = {}
         for item in all_items:
+            # A pricing rule's margin is saved inside price_list_rate. Tell the
+            # cart how much of it is margin so it reopens on the list price —
+            # re-applied offers add the margin again.
+            item.margin_amount = _saved_margin_per_unit(item, currency_by_invoice.get(item.parent))
             items_by_invoice.setdefault(item.parent, []).append(item)
 
         # Fetch customer_group for each unique customer so the frontend can
@@ -3770,8 +3776,62 @@ def _pricing_rules_of(item_doc):
     return [r.strip() for r in cstr(raw).split(",") if r.strip()]
 
 
-def _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules):
-    """Apply item-level discount rules that ERPNext's engine did not apply itself.
+def _rule_margin_per_unit(rule, price_list_rate, currency=None):
+    """Margin a Pricing Rule adds on top of one unit's price list rate.
+
+    Mirrors ERPNext's calculate_margin(): a Percentage margin always applies,
+    an Amount margin only when the rule is in the invoice currency. Only a
+    positive margin counts — it raises the price; lowering it is what the
+    rule's discount fields are for.
+    """
+    if rule.get("price_or_product_discount") != "Price" or rule.get("apply_on") == "Transaction":
+        return 0.0
+    value = flt(rule.get("margin_rate_or_amount"))
+    if value <= 0:
+        return 0.0
+    if rule.get("margin_type") == "Percentage":
+        return flt(price_list_rate) * value / 100
+    if rule.get("margin_type") == "Amount" and (not currency or rule.get("currency") == currency):
+        return value
+    return 0.0
+
+
+def _saved_margin_per_unit(item_doc, currency=None):
+    """Per-unit margin contained in a saved item's price_list_rate.
+
+    The cart submits a margined item with the margin folded into
+    price_list_rate. This works it back out from the item's pricing rules:
+    saved price = list price x (1 + percentage margins) + amount margins.
+    """
+    saved_price = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
+    if saved_price <= 0:
+        return 0.0
+
+    percentage = amount = 0.0
+    for rule_name in _pricing_rules_of(item_doc):
+        if not frappe.db.exists("Pricing Rule", rule_name):
+            continue
+        rule = frappe.get_cached_doc("Pricing Rule", rule_name)
+        if rule.margin_type == "Percentage":
+            percentage += _rule_margin_per_unit(rule, 100, currency)
+        else:
+            amount += _rule_margin_per_unit(rule, saved_price, currency)
+    if not percentage and not amount:
+        return 0.0
+
+    list_price = (saved_price - amount) / (1 + percentage / 100)
+    return flt(max(0, saved_price - list_price), 2)
+
+
+def _priced_line_total(item_doc):
+    """Line value before discount: (price list rate + rule margin) x qty."""
+    rate = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
+    qty = flt(item_doc.get("qty") or item_doc.get("quantity") or 0)
+    return (rate + flt(item_doc.get("margin_amount"))) * qty
+
+
+def _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules, currency=None):
+    """Apply item-level price rules that ERPNext's engine did not apply itself.
 
     Store policy for rules that overlap on one item:
     - none of them has a priority -> all of them apply (they stack);
@@ -3782,6 +3842,9 @@ def _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules):
     ERPNext did price keeps its rule, and only rules of at least that rule's
     priority are added to it. The line is capped at its own value afterwards
     in apply_offers, so a stack can make an item free but never negative.
+
+    A rule's margin raises the unit price first; percentage discounts are then
+    taken from the raised price, as ERPNext does (discount on rate_with_margin).
     """
     if not item_price_rules:
         return
@@ -3798,12 +3861,12 @@ def _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules):
         for rule_name, rule in item_price_rules:
             if not _item_qualifies_for_rule(item_doc, rule):
                 continue
-            if flt(rule.discount_percentage):
-                line = price_list_rate * qty * flt(rule.discount_percentage) / 100
-            else:
-                line = flt(rule.discount_amount) * qty
-            if line > 0:
-                candidates.append((rule_name, rule, line))
+            if (
+                flt(rule.discount_percentage) > 0
+                or flt(rule.discount_amount) > 0
+                or _rule_margin_per_unit(rule, price_list_rate, currency) > 0
+            ):
+                candidates.append((rule_name, rule))
         if not candidates:
             continue
 
@@ -3818,15 +3881,26 @@ def _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules):
         if not chosen:
             continue
 
+        margin_per_unit = flt(item_doc.get("margin_amount")) + sum(
+            _rule_margin_per_unit(rule, price_list_rate, currency) for _name, rule in chosen
+        )
+        priced_rate = price_list_rate + margin_per_unit
+
         names = list(existing)
-        for rule_name, _rule, line in chosen:
+        for rule_name, rule in chosen:
+            if flt(rule.discount_percentage) > 0:
+                line = priced_rate * qty * flt(rule.discount_percentage) / 100
+            else:
+                line = max(0, flt(rule.discount_amount)) * qty
             item_doc.discount_amount = flt(item_doc.get("discount_amount")) + line
             names.append(rule_name)
             applied_rules.add(rule_name)
+        item_doc.margin_amount = flt(margin_per_unit, 2)
+        item_doc.rate_with_margin = flt(priced_rate, 2) if margin_per_unit else 0
         item_doc.pricing_rules = ",".join(names)
         # Re-derive the percentage from the line total so it reflects every
         # rule on the line (the frontend prices off discount_amount first).
-        item_doc.discount_percentage = flt(item_doc.discount_amount) / (price_list_rate * qty) * 100
+        item_doc.discount_percentage = flt(item_doc.discount_amount) / (priced_rate * qty) * 100
 
 
 def _resolve_pricing_warehouses(pricing_items: list) -> None:
@@ -3956,6 +4030,8 @@ def apply_offers(invoice_data, selected_offers=None):
             _pi.discount_percentage = 0
             _pi.discount_amount = 0
             _pi.pricing_rules = ""
+            _pi.margin_amount = 0
+            _pi.rate_with_margin = 0
 
         for idx, item in enumerate(prepared_items):
             item_code = item.get("item_code")
@@ -4355,9 +4431,19 @@ def apply_offers(invoice_data, selected_offers=None):
                 discount_percentage = 0
                 per_unit_discount = 0
 
+            # A rule's margin raises the unit price; the discount is then taken
+            # from the raised price (ERPNext: discount on rate_with_margin).
+            # price_list_rate itself stays the list price — the cart adds
+            # margin_amount on top of it.
+            margin_per_unit = sum(
+                _rule_margin_per_unit(full_r, price_list_rate, pricing_args.get("currency"))
+                for _rn, full_r in item_rule_names
+            )
+            priced_rate = price_list_rate + margin_per_unit
+
             line_discount_amount = 0
-            if discount_percentage and qty and price_list_rate:
-                line_discount_amount = price_list_rate * qty * discount_percentage / 100
+            if discount_percentage and qty and priced_rate:
+                line_discount_amount = priced_rate * qty * discount_percentage / 100
             elif per_unit_discount and qty:
                 line_discount_amount = per_unit_discount * qty
             else:
@@ -4367,12 +4453,14 @@ def apply_offers(invoice_data, selected_offers=None):
                 not discount_percentage
                 and line_discount_amount
                 and qty
-                and price_list_rate
+                and priced_rate
             ):
-                base_amount = price_list_rate * qty
+                base_amount = priced_rate * qty
                 if base_amount:
                     discount_percentage = (line_discount_amount / base_amount) * 100
 
+            item_doc.margin_amount = flt(margin_per_unit, 2)
+            item_doc.rate_with_margin = flt(priced_rate, 2) if margin_per_unit else 0
             item_doc.discount_percentage = discount_percentage
             item_doc.discount_amount = line_discount_amount
             item_doc.price_list_rate = price_list_rate
@@ -4454,8 +4542,13 @@ def apply_offers(invoice_data, selected_offers=None):
                             break  # one free item entry per rule
 
                 elif rule_info.price_or_product_discount == "Price":
-                    # Discount rule — apply to all matching items manually
-                    if not full_rule.discount_percentage and not full_rule.discount_amount:
+                    # Price rule (discount and/or margin) — apply to all matching items manually
+                    _has_margin = (
+                        full_rule.apply_on != "Transaction"
+                        and flt(full_rule.margin_rate_or_amount) > 0
+                        and full_rule.margin_type in ("Percentage", "Amount")
+                    )
+                    if not full_rule.discount_percentage and not full_rule.discount_amount and not _has_margin:
                         continue
 
                     if full_rule.apply_on == "Transaction":
@@ -4474,7 +4567,9 @@ def apply_offers(invoice_data, selected_offers=None):
                     else:
                         item_price_rules.append((rule_name, full_rule))
 
-            _resolve_item_price_rules(prepared_items, item_price_rules, applied_rules)
+            _resolve_item_price_rules(
+                prepared_items, item_price_rules, applied_rules, pricing_args.get("currency")
+            )
 
         # No line may be discounted below zero: a stack of rules (or a fixed
         # amount on a cheap item) can make an item free, never negative — a
@@ -4482,9 +4577,7 @@ def apply_offers(invoice_data, selected_offers=None):
         for item_doc in prepared_items:
             if item_doc.get("is_free_item"):
                 continue
-            _plr = flt(item_doc.get("price_list_rate") or item_doc.get("rate") or 0)
-            _qty = flt(item_doc.get("qty") or item_doc.get("quantity") or 0)
-            _base = _plr * _qty
+            _base = _priced_line_total(item_doc)
             if _base > 0 and flt(item_doc.get("discount_amount")) > _base:
                 item_doc.discount_amount = _base
                 item_doc.discount_percentage = 100
@@ -4494,11 +4587,7 @@ def apply_offers(invoice_data, selected_offers=None):
         # (applied on the Grand Total) — not from the list prices.
         if tx_rule_percentages:
             _net_after_items = sum(
-                max(
-                    0,
-                    flt(d.get("price_list_rate") or d.get("rate") or 0) * flt(d.get("qty") or d.get("quantity") or 0)
-                    - flt(d.get("discount_amount")),
-                )
+                max(0, _priced_line_total(d) - flt(d.get("discount_amount")))
                 for d in prepared_items
                 if not d.get("is_free_item")
             )

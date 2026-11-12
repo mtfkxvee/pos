@@ -88,8 +88,15 @@
 								<div class="text-lg font-bold">
 									<span v-if="offer.discount_percentage">{{ __('{0}% OFF', [Number(offer.discount_percentage).toFixed(2)]) }}</span>
 									<span v-else-if="offer.discount_amount">{{ __('{0} OFF', [formatCurrency(offer.discount_amount)]) }}</span>
+									<span v-else-if="marginLabel(offer)">{{ marginLabel(offer) }}</span>
 									<span v-else>{{ __('Special Offer') }}</span>
 								</div>
+							</div>
+							<div
+								v-if="marginLabel(offer) && (offer.discount_percentage || offer.discount_amount)"
+								class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-semibold"
+							>
+								{{ marginLabel(offer) }}
 							</div>
 							<div v-if="offer.offer === 'Give Product'" class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">
 								{{ __('+ Free Item') }}
@@ -280,6 +287,19 @@ function isOfferApplied(offer) {
 
 function formatCurrency(amount) {
 	return formatCurrencyUtil(Number.parseFloat(amount || 0), props.currency)
+}
+
+/** Label for a rule that raises the price ("+10% Margin" / "+Rp 100 Margin"), or "" when it has no margin. */
+function marginLabel(offer) {
+	const value = Number.parseFloat(offer?.margin_rate_or_amount) || 0
+	if (value <= 0) return ""
+	if (offer.margin_type === "Percentage") {
+		return __("+{0}% Margin", [Number(value.toFixed(2))])
+	}
+	if (offer.margin_type === "Amount") {
+		return __("+{0} Margin", [formatCurrency(value)])
+	}
+	return ""
 }
 
 function formatDate(dateStr) {
