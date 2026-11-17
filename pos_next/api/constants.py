@@ -11,6 +11,7 @@ used across multiple API modules to maintain DRY principles.
 Note: Some settings are derived from POS Profile as single source of truth:
 - allow_write_off_change: derived from POS Profile (write_off_account + write_off_limit > 0)
 - disable_rounded_total: uses POS Profile value directly
+- round_discounted_total: POS Profile.custom_round_discounted_total (default on)
 """
 
 # Fields to fetch from POS Settings
@@ -72,6 +73,7 @@ DEFAULT_POS_SETTINGS = {
 	"use_percentage_discount": 0,
 	"max_discount_allowed": 0,
 	"disable_rounded_total": 0,  # Derived from POS Profile
+	"round_discounted_total": 1,  # Derived from POS Profile.custom_round_discounted_total
 	"allow_credit_sale": 0,
 	"allow_customer_credit_payment": 0,
 	"allow_return": 0,

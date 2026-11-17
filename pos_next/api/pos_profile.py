@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from pos_next.api.utilities import check_user_company
 from pos_next.api.utilities import _parse_list_parameter
+from pos_next.api.utilities import round_discounted_total_enabled
 
 
 @frappe.whitelist()
@@ -85,8 +86,9 @@ def get_pos_settings(pos_profile):
 		)
 
 		if not pos_settings:
-			return DEFAULT_POS_SETTINGS.copy()
+			pos_settings = DEFAULT_POS_SETTINGS.copy()
 
+		pos_settings["round_discounted_total"] = round_discounted_total_enabled(pos_profile)
 		return pos_settings
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Get POS Settings Error")

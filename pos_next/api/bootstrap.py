@@ -30,6 +30,7 @@ from frappe.query_builder import DocType
 from frappe.query_builder.functions import Coalesce
 
 from pos_next.api.constants import POS_SETTINGS_FIELDS, DEFAULT_POS_SETTINGS
+from pos_next.api.utilities import round_discounted_total_enabled
 
 
 @frappe.whitelist()
@@ -193,6 +194,7 @@ def _get_pos_settings(pos_profile_doc):
 	Some settings are derived from POS Profile (single source of truth):
 	- allow_write_off_change: Based on write_off_account and write_off_limit
 	- disable_rounded_total: Directly from POS Profile
+	- round_discounted_total: POS Profile.custom_round_discounted_total
 
 	Args:
 		pos_profile_doc: POS Profile document object
@@ -213,6 +215,7 @@ def _get_pos_settings(pos_profile_doc):
 			pos_profile_doc.write_off_account and (pos_profile_doc.write_off_limit or 0) > 0
 		) else 0
 		settings["disable_rounded_total"] = pos_profile_doc.disable_rounded_total or 0
+		settings["round_discounted_total"] = round_discounted_total_enabled(pos_profile_doc)
 
 		# Cache ALL loyalty programs and their conversion_factors.
 		# Used offline so PaymentDialog can look up the correct rate for ANY

@@ -23,6 +23,9 @@ const DEFAULT_SETTINGS = {
 	allow_user_to_edit_additional_discount: 0,
 	allow_user_to_edit_item_discount: 1,
 	disable_rounded_total: 1,
+	// From POS Profile.custom_round_discounted_total: round a discounted total
+	// to the nearest 100 (the gap goes into the discount).
+	round_discounted_total: 1,
 	allow_credit_sale: 0,
 	allow_customer_credit_payment: 0,
 	allow_return: 0,
@@ -130,6 +133,10 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 	)
 	const disableRoundedTotal = computed(() =>
 		Boolean(settings.value.disable_rounded_total),
+	)
+	// Missing (older cached settings) counts as on, the long-standing behaviour.
+	const roundDiscountedTotal = computed(
+		() => Number(settings.value.round_discounted_total ?? 1) !== 0,
 	)
 	const allowCreditSale = computed(() =>
 		Boolean(settings.value.allow_credit_sale),
@@ -423,6 +430,7 @@ export const usePOSSettingsStore = defineStore("posSettings", () => {
 		discountPasswords,
 		allowItemDiscount,
 		disableRoundedTotal,
+		roundDiscountedTotal,
 		allowCreditSale,
 		allowCustomerCreditPayment,
 		allowReturn,

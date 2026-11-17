@@ -2483,6 +2483,8 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			(manualDiscountAmount.value || 0) > 0 ||
 			(complimentDiscountAmount.value || 0) > 0
 		if (!hasDiscount || base <= 0) return base
+		// POS Profile "Round Discounted Total to 100" unticked: charge the exact total.
+		if (!settingsStore.roundDiscountedTotal) return base
 		return Math.round(base / 100) * 100
 	})
 

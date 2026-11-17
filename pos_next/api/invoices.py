@@ -8,6 +8,7 @@ import math
 import frappe
 from frappe import _
 from frappe.utils import flt, cint, nowdate, nowtime, get_datetime, cstr, getdate
+from pos_next.api.utilities import round_discounted_total_enabled
 from erpnext.stock.doctype.batch.batch import get_batch_qty, get_batch_no
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 
@@ -1140,8 +1141,10 @@ def update_invoice(data):
                     invoice_doc.discount_amount = target_discount
                     invoice_doc.grand_total = ui_gt
                     invoice_doc.base_grand_total = ui_gt
-            else:
+            elif round_discounted_total_enabled(pos_profile):
                 # Fallback for bare offline invoices that don't send ui_grand_total.
+                # Skipped when the POS Profile turns off "Round Discounted Total
+                # to 100" — the POS then charges the exact total.
                 # Use round-half-up (matches JS Math.round on the frontend), NOT
                 # Python's built-in round() which uses banker's rounding.
                 rounded_gt = math.floor(gt / 100 + 0.5) * 100

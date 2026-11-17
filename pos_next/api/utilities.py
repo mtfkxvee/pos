@@ -212,3 +212,21 @@ def is_wallet_payment_mode(mode_of_payment):
 		return False
 
 	return cint(frappe.get_cached_value("Mode of Payment", mode_of_payment, "is_wallet_payment"))
+
+
+def round_discounted_total_enabled(pos_profile):
+	"""Whether a discounted POS total is rounded to the nearest 100.
+
+	Read from POS Profile.custom_round_discounted_total (a doc or a name).
+	Defaults to on when the field is unset or not installed yet, which is
+	how POS Next has always behaved.
+	"""
+	if not pos_profile:
+		return 1
+	if isinstance(pos_profile, str):
+		if not frappe.db.has_column("POS Profile", "custom_round_discounted_total"):
+			return 1
+		value = frappe.db.get_value("POS Profile", pos_profile, "custom_round_discounted_total")
+	else:
+		value = pos_profile.get("custom_round_discounted_total")
+	return 1 if value is None else cint(value)
