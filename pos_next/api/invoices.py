@@ -1868,6 +1868,57 @@ def _build_grand_total_mismatch_breakdown(invoice_doc, data, ui_grand_total, sys
     return "\n".join(lines), classification
 
 
+# Rupiah-level slack: the client sums per-unit rate_with_tax while ERPNext
+# recomputes grand_total from items + taxes, so they can drift by a few cents
+# (the post-submit refund normalisation absorbs that drift).
+_RETURN_REFUND_TOLERANCE = 1.0
+
+
+def _validate_return_refund(invoice_doc, payments):
+    """Refuse a POS return that hands back less cash than was collected.
+
+    A return first eats into whatever the original invoice still owes;
+    anything beyond that outstanding balance was paid by the customer and must
+    be refunded through the return's payments. Without this, a client that
+    misreads a piutang settled by Payment Entry as an unpaid credit sale can
+    submit a return with no refund rows — the post-submit reconciliation then
+    forces outstanding back to 0 and the cash given back is never booked.
+    """
+    original = frappe.db.get_value(
+        "Sales Invoice",
+        invoice_doc.return_against,
+        ["outstanding_amount", "docstatus"],
+        as_dict=True,
+    )
+    if not original or cint(original.docstatus) != 1:
+        return
+
+    return_amount = abs(flt(invoice_doc.grand_total))
+    still_owed = max(0.0, flt(original.outstanding_amount))
+    required = max(0.0, return_amount - still_owed)
+
+    refunded = 0.0
+    for p in payments or []:
+        mop = p.get("mode_of_payment") if isinstance(p, dict) else getattr(p, "mode_of_payment", None)
+        amt = flt(p.get("amount", 0) if isinstance(p, dict) else getattr(p, "amount", 0))
+        if mop:
+            refunded += abs(amt)
+
+    if refunded + _RETURN_REFUND_TOLERANCE < required:
+        frappe.throw(
+            _(
+                "Retur ini harus disertai refund {0}, karena invoice {1} sudah dibayar "
+                "(refund yang diisi: {2}). Pilih cara refund, misalnya CASH, lalu simpan ulang. "
+                "Kalau pilihan Refund Payment Methods tidak muncul, update aplikasi POS ke versi terbaru."
+            ).format(
+                frappe.format_value(required, {"fieldtype": "Currency"}),
+                invoice_doc.return_against,
+                frappe.format_value(refunded, {"fieldtype": "Currency"}),
+            ),
+            title=_("Refund Retur Belum Diisi"),
+        )
+
+
 @frappe.whitelist()
 def submit_invoice(invoice=None, data=None):
     """Submit the invoice (Step 2)."""
@@ -2353,8 +2404,23 @@ def submit_invoice(invoice=None, data=None):
         # Save before submit
         invoice_doc.flags.ignore_permissions = True
         frappe.flags.ignore_account_permission = True
+        _guard_refund = bool(
+            doctype == "Sales Invoice"
+            and invoice_doc.get("is_return")
+            and invoice_doc.get("return_against")
+        )
+        if _guard_refund:
+            frappe.db.savepoint("pos_next_return_refund")
         invoice_doc.save()
 
+        # Needs the grand_total that save() just computed; roll back to the
+        # savepoint so a refused return never lingers as a draft.
+        if _guard_refund:
+            try:
+                _validate_return_refund(invoice_doc, invoice.get("payments"))
+            except frappe.ValidationError:
+                frappe.db.rollback(save_point="pos_next_return_refund")
+                raise
 
         invoice_doc.submit()
         invoice_submitted = True
